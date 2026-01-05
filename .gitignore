@@ -1,0 +1,53 @@
+arm-axion-optimizations/vllm-integration/venv/
+__pycache__/
+
+# Log and temporary files
+test-output.txt
+*.log
+nohup.out
+compilation.log
+server.log
+*.backup
+
+
+# Virtual environments
+**/venv/
+**/__pycache__/
+*.pyc
+
+
+# Virtual environments
+**/venv/
+**/__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+
+# Large model files and datasets
+**/models/
+**/model_weights/
+**/checkpoints/
+**/datasets/
+*.bin
+*.safetensors
+*.pth
+*.ckpt
+*.pt
+
+
+# Log files
+*.log
+*.out
+nohup.out
+*.tmp
+*.temp
+
+
+# System and temporary files
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+

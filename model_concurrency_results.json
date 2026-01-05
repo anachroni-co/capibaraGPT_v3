@@ -1,0 +1,2920 @@
+{
+  "phi4_fast": [
+    {
+      "model": "phi4_fast",
+      "num_users": 1,
+      "successful_requests": 6,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 14.0,
+      "final_memory": 14.0,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 1.5833333333333333,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.6,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.6,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.59,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_3",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.58,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_4",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.57,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_5",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.56,
+          "tokens": 65,
+          "memory_usage": 14.0
+        }
+      ]
+    },
+    {
+      "model": "phi4_fast",
+      "num_users": 2,
+      "successful_requests": 12,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 14.0,
+      "final_memory": 14.0,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 1.7250000000000003,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.58,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 3.17,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.59,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.63,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.6,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.57,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_3",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.57,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_3",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.55,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_4",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.63,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_4",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.62,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_5",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.59,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_5",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.6,
+          "tokens": 65,
+          "memory_usage": 14.0
+        }
+      ]
+    },
+    {
+      "model": "phi4_fast",
+      "num_users": 4,
+      "successful_requests": 17,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 14.0,
+      "final_memory": 14.0,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 3.5282352941176467,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.58,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 3.21,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 4.83,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 6.42,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 3.44,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 3.4,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 3.41,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.4,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 3.39,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 3.4,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_2",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 3.38,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_2",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.36,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_3",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 3.37,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_3",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 3.37,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_3",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 3.34,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_3",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.35,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_4",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 3.33,
+          "tokens": 65,
+          "memory_usage": 14.0
+        }
+      ]
+    },
+    {
+      "model": "phi4_fast",
+      "num_users": 8,
+      "successful_requests": 21,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 14.0,
+      "final_memory": 14.0,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 8.852857142857143,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.61,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 3.21,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 4.82,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 6.42,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 8.04,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 9.62,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 11.24,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 12.83,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 9.83,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 9.85,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 9.84,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 9.85,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 9.85,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 9.87,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 9.9,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 9.92,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 9.91,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_2",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 9.86,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 9.84,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_2",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 9.83,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_2",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 9.77,
+          "tokens": 65,
+          "memory_usage": 14.0
+        }
+      ]
+    },
+    {
+      "model": "phi4_fast",
+      "num_users": 12,
+      "successful_requests": 25,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 14.0,
+      "final_memory": 14.0,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 13.4872,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.62,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 3.22,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 4.83,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 6.47,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 8.11,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 9.69,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 11.28,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 12.89,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_9_conv_0",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 14.5,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_12_conv_0",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 16.1,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_11_conv_0",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 17.67,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_10_conv_0",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 19.26,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 16.27,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 16.28,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 16.28,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 16.26,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 16.22,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 16.25,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 16.25,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 16.24,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_9_conv_1",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 16.26,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_12_conv_1",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 16.28,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_11_conv_1",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 16.35,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_10_conv_1",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 16.33,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 16.27,
+          "tokens": 65,
+          "memory_usage": 14.0
+        }
+      ]
+    },
+    {
+      "model": "phi4_fast",
+      "num_users": 16,
+      "successful_requests": 29,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 14.0,
+      "final_memory": 14.0,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 17.58551724137931,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.61,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 3.2,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 4.77,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 6.33,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 7.91,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_9_conv_0",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 9.51,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 11.11,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 12.69,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 14.3,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_10_conv_0",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 15.88,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_12_conv_0",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 17.47,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_11_conv_0",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 19.08,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_15_conv_0",
+          "user_id": 15,
+          "status": "success",
+          "response_time": 20.72,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_13_conv_0",
+          "user_id": 13,
+          "status": "success",
+          "response_time": 22.29,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_14_conv_0",
+          "user_id": 14,
+          "status": "success",
+          "response_time": 23.88,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_16_conv_0",
+          "user_id": 16,
+          "status": "success",
+          "response_time": 25.49,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 22.48,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 22.5,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 22.55,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 22.57,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 22.58,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_9_conv_1",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 22.64,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 22.64,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 22.68,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 22.66,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_10_conv_1",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 22.65,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_12_conv_1",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 22.64,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_11_conv_1",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 22.6,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_15_conv_1",
+          "user_id": 15,
+          "status": "success",
+          "response_time": 22.55,
+          "tokens": 65,
+          "memory_usage": 14.0
+        }
+      ]
+    },
+    {
+      "model": "phi4_fast",
+      "num_users": 20,
+      "successful_requests": 33,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 14.0,
+      "final_memory": 14.0,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 22.191818181818178,
+      "results": [
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.64,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 4.61,
+          "tokens": 60,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 4.61,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 6.22,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 7.81,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 9.43,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 10.98,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_9_conv_0",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 12.57,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 14.19,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_12_conv_0",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 15.76,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_10_conv_0",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 17.35,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_14_conv_0",
+          "user_id": 14,
+          "status": "success",
+          "response_time": 18.96,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_11_conv_0",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 20.54,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_13_conv_0",
+          "user_id": 13,
+          "status": "success",
+          "response_time": 22.13,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_15_conv_0",
+          "user_id": 15,
+          "status": "success",
+          "response_time": 23.71,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_16_conv_0",
+          "user_id": 16,
+          "status": "success",
+          "response_time": 25.61,
+          "tokens": 65,
+          "memory_usage": 14.1
+        },
+        {
+          "conversation_id": "user_17_conv_0",
+          "user_id": 17,
+          "status": "success",
+          "response_time": 28.35,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_18_conv_0",
+          "user_id": 18,
+          "status": "success",
+          "response_time": 29.96,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_19_conv_0",
+          "user_id": 19,
+          "status": "success",
+          "response_time": 31.55,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_20_conv_0",
+          "user_id": 20,
+          "status": "success",
+          "response_time": 33.1,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 30.09,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 28.7,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 30.34,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 30.33,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 30.38,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 30.4,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 30.45,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_9_conv_1",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 30.43,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 30.4,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_12_conv_1",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 30.43,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_10_conv_1",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 30.47,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_14_conv_1",
+          "user_id": 14,
+          "status": "success",
+          "response_time": 30.4,
+          "tokens": 65,
+          "memory_usage": 14.0
+        },
+        {
+          "conversation_id": "user_11_conv_1",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 30.43,
+          "tokens": 65,
+          "memory_usage": 14.0
+        }
+      ]
+    }
+  ],
+  "qwen_coder": [
+    {
+      "model": "qwen_coder",
+      "num_users": 1,
+      "successful_requests": 7,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 20.5,
+      "final_memory": 20.5,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 0.9457142857142856,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_3",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_4",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_5",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.93,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_6",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        }
+      ]
+    },
+    {
+      "model": "qwen_coder",
+      "num_users": 2,
+      "successful_requests": 14,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 20.5,
+      "final_memory": 20.5,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 1.022857142857143,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.89,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_3",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_3",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_4",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_4",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.97,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_5",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.97,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_5",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.99,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_6",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.93,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_6",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        }
+      ]
+    },
+    {
+      "model": "qwen_coder",
+      "num_users": 4,
+      "successful_requests": 26,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 20.5,
+      "final_memory": 20.5,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 1.1246153846153848,
+      "results": [
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.93,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 1.64,
+          "tokens": 68,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 2.61,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.54,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.73,
+          "tokens": 69,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 0.98,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 0.99,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.98,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_2",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_2",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 0.97,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_3",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_3",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 0.93,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_3",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_3",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_4",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.93,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_4",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_4",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.97,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_4",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_5",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_5",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 0.98,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_5",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.92,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_5",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 0.94,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_6",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_6",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 0.72,
+          "tokens": 68,
+          "memory_usage": 20.5
+        }
+      ]
+    },
+    {
+      "model": "qwen_coder",
+      "num_users": 8,
+      "successful_requests": 31,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 20.5,
+      "final_memory": 20.5,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 4.474193548387096,
+      "results": [
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.93,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 3.77,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.77,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 3.77,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 4.73,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 5.67,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 6.61,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 7.58,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 4.6,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 2.69,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.65,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 4.61,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 4.59,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 4.58,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 4.6,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 4.58,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 4.59,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_2",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 4.61,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_2",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 4.6,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 4.62,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_2",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 4.6,
+          "tokens": 75,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_2",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 4.6,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_2",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 4.59,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_2",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 4.57,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_3",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 4.45,
+          "tokens": 72,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_3",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 4.45,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_3",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 4.44,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_3",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 4.43,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_3",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 4.48,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_3",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 4.47,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_3",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 4.47,
+          "tokens": 76,
+          "memory_usage": 20.5
+        }
+      ]
+    },
+    {
+      "model": "qwen_coder",
+      "num_users": 12,
+      "successful_requests": 35,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 20.5,
+      "final_memory": 20.5,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 7.400857142857144,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.88,
+          "tokens": 73,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 1.8,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 2.75,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.71,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 4.64,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 5.47,
+          "tokens": 72,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 6.0,
+          "tokens": 62,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 6.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_10_conv_0",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 7.9,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_9_conv_0",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 8.86,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_11_conv_0",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 9.81,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_12_conv_0",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 10.75,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 7.83,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 7.87,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 7.9,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 7.87,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 7.87,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 7.97,
+          "tokens": 75,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 8.38,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 8.38,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_10_conv_1",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 8.37,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_9_conv_1",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 8.38,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_11_conv_1",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 8.41,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_12_conv_1",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 8.4,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 8.39,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 8.38,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_2",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 8.32,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_2",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 8.34,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_2",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 8.33,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_2",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 8.34,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_2",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 8.35,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_2",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 8.33,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_10_conv_2",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 8.39,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_9_conv_2",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 8.37,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_11_conv_2",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 8.33,
+          "tokens": 78,
+          "memory_usage": 20.5
+        }
+      ]
+    },
+    {
+      "model": "qwen_coder",
+      "num_users": 16,
+      "successful_requests": 39,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 20.5,
+      "final_memory": 20.5,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 10.177435897435895,
+      "results": [
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 0.97,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 1.93,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 2.45,
+          "tokens": 62,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 3.42,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 4.21,
+          "tokens": 71,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 5.2,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 6.15,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 7.1,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_12_conv_0",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 8.07,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_9_conv_0",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 9.05,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_10_conv_0",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 9.97,
+          "tokens": 77,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_15_conv_0",
+          "user_id": 15,
+          "status": "success",
+          "response_time": 10.92,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_11_conv_0",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 11.88,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_13_conv_0",
+          "user_id": 13,
+          "status": "success",
+          "response_time": 12.82,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_14_conv_0",
+          "user_id": 14,
+          "status": "success",
+          "response_time": 13.79,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_16_conv_0",
+          "user_id": 16,
+          "status": "success",
+          "response_time": 14.74,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 11.7,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 11.68,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 12.1,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 12.1,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 12.09,
+          "tokens": 70,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 12.05,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 12.06,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 12.09,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_12_conv_1",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 12.05,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_9_conv_1",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 12.06,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_10_conv_1",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 12.08,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_15_conv_1",
+          "user_id": 15,
+          "status": "success",
+          "response_time": 12.09,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_11_conv_1",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 12.09,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_13_conv_1",
+          "user_id": 13,
+          "status": "success",
+          "response_time": 11.76,
+          "tokens": 67,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_14_conv_1",
+          "user_id": 14,
+          "status": "success",
+          "response_time": 11.75,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_16_conv_1",
+          "user_id": 16,
+          "status": "success",
+          "response_time": 11.74,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 11.74,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 11.76,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_2",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 11.76,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_2",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 11.75,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_2",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 11.95,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_2",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 11.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_2",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 11.84,
+          "tokens": 73,
+          "memory_usage": 20.5
+        }
+      ]
+    },
+    {
+      "model": "qwen_coder",
+      "num_users": 20,
+      "successful_requests": 43,
+      "error_requests": 0,
+      "timeout_requests": 0,
+      "exception_requests": 0,
+      "initial_memory": 20.5,
+      "final_memory": 20.5,
+      "memory_limit_reached": false,
+      "server_responsive": true,
+      "avg_response_time": 12.874651162790695,
+      "results": [
+        {
+          "conversation_id": "user_1_conv_0",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 0.96,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_0",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 2.84,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_0",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 2.84,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_0",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 3.78,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_0",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 4.74,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_0",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 5.69,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_0",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 6.66,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_0",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 7.64,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_9_conv_0",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 8.58,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_10_conv_0",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 9.39,
+          "tokens": 73,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_11_conv_0",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 10.36,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_12_conv_0",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 11.3,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_13_conv_0",
+          "user_id": 13,
+          "status": "success",
+          "response_time": 12.25,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_18_conv_0",
+          "user_id": 18,
+          "status": "success",
+          "response_time": 13.21,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_16_conv_0",
+          "user_id": 16,
+          "status": "success",
+          "response_time": 14.16,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_14_conv_0",
+          "user_id": 14,
+          "status": "success",
+          "response_time": 15.13,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_15_conv_0",
+          "user_id": 15,
+          "status": "success",
+          "response_time": 16.1,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_17_conv_0",
+          "user_id": 17,
+          "status": "success",
+          "response_time": 17.04,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_19_conv_0",
+          "user_id": 19,
+          "status": "success",
+          "response_time": 18.03,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_20_conv_0",
+          "user_id": 20,
+          "status": "success",
+          "response_time": 18.75,
+          "tokens": 71,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_1",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 15.76,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_1",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 14.83,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_1",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 15.78,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_4_conv_1",
+          "user_id": 4,
+          "status": "success",
+          "response_time": 15.8,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_6_conv_1",
+          "user_id": 6,
+          "status": "success",
+          "response_time": 15.8,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_5_conv_1",
+          "user_id": 5,
+          "status": "success",
+          "response_time": 15.85,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_7_conv_1",
+          "user_id": 7,
+          "status": "success",
+          "response_time": 15.55,
+          "tokens": 67,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_8_conv_1",
+          "user_id": 8,
+          "status": "success",
+          "response_time": 15.51,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_9_conv_1",
+          "user_id": 9,
+          "status": "success",
+          "response_time": 15.51,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_10_conv_1",
+          "user_id": 10,
+          "status": "success",
+          "response_time": 15.65,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_11_conv_1",
+          "user_id": 11,
+          "status": "success",
+          "response_time": 15.64,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_12_conv_1",
+          "user_id": 12,
+          "status": "success",
+          "response_time": 15.63,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_13_conv_1",
+          "user_id": 13,
+          "status": "success",
+          "response_time": 15.15,
+          "tokens": 61,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_18_conv_1",
+          "user_id": 18,
+          "status": "success",
+          "response_time": 15.12,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_16_conv_1",
+          "user_id": 16,
+          "status": "success",
+          "response_time": 15.12,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_14_conv_1",
+          "user_id": 14,
+          "status": "success",
+          "response_time": 15.12,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_15_conv_1",
+          "user_id": 15,
+          "status": "success",
+          "response_time": 15.08,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_17_conv_1",
+          "user_id": 17,
+          "status": "success",
+          "response_time": 15.1,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_19_conv_1",
+          "user_id": 19,
+          "status": "success",
+          "response_time": 15.06,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_20_conv_1",
+          "user_id": 20,
+          "status": "success",
+          "response_time": 15.26,
+          "tokens": 78,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_1_conv_2",
+          "user_id": 1,
+          "status": "success",
+          "response_time": 15.27,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_3_conv_2",
+          "user_id": 3,
+          "status": "success",
+          "response_time": 15.29,
+          "tokens": 76,
+          "memory_usage": 20.5
+        },
+        {
+          "conversation_id": "user_2_conv_2",
+          "user_id": 2,
+          "status": "success",
+          "response_time": 15.28,
+          "tokens": 76,
+          "memory_usage": 20.5
+        }
+      ]
+    }
+  ]
+}

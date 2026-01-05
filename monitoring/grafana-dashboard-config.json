@@ -1,0 +1,468 @@
+{
+  "dashboard": {
+    "title": "Capibara6 - Sistema Completo",
+    "tags": ["capibara6", "rag", "performance"],
+    "timezone": "browser",
+    "schemaVersion": 16,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Visión General del Sistema",
+        "type": "row",
+        "collapsed": false,
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 1
+        }
+      },
+      {
+        "id": 2,
+        "title": "Requests por Segundo",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{job}} - {{handler}}"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 1,
+          "w": 8,
+          "h": 8
+        },
+        "yaxes": [
+          {
+            "label": "req/s",
+            "format": "short"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Latencia de Respuesta (p95, p99)",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99"
+          }
+        ],
+        "gridPos": {
+          "x": 8,
+          "y": 1,
+          "w": 8,
+          "h": 8
+        },
+        "yaxes": [
+          {
+            "label": "seconds",
+            "format": "s"
+          }
+        ],
+        "alert": {
+          "name": "Alta Latencia",
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [2],
+                "type": "gt"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              }
+            }
+          ],
+          "frequency": "60s",
+          "message": "⚠️ Latencia p99 > 2 segundos",
+          "noDataState": "no_data",
+          "notifications": []
+        }
+      },
+      {
+        "id": 4,
+        "title": "Tasa de Errores",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\"}[5m])",
+            "legendFormat": "Errors 5xx"
+          },
+          {
+            "expr": "rate(http_requests_total{status=~\"4..\"}[5m])",
+            "legendFormat": "Errors 4xx"
+          }
+        ],
+        "gridPos": {
+          "x": 16,
+          "y": 1,
+          "w": 8,
+          "h": 8
+        },
+        "alert": {
+          "name": "Alta Tasa de Errores",
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [10],
+                "type": "gt"
+              },
+              "query": {
+                "params": ["A", "5m", "now"]
+              }
+            }
+          ],
+          "frequency": "60s",
+          "message": "⚠️ Tasa de errores > 10/s",
+          "noDataState": "no_data"
+        }
+      },
+      {
+        "id": 5,
+        "title": "Sistema RAG - Milvus & Nebula",
+        "type": "row",
+        "collapsed": false,
+        "gridPos": {
+          "x": 0,
+          "y": 9,
+          "w": 24,
+          "h": 1
+        }
+      },
+      {
+        "id": 6,
+        "title": "Milvus - Búsquedas Vectoriales",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(milvus_search_requests_total[5m])",
+            "legendFormat": "Búsquedas/s"
+          },
+          {
+            "expr": "milvus_collection_size",
+            "legendFormat": "Vectores almacenados"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 10,
+          "w": 12,
+          "h": 8
+        }
+      },
+      {
+        "id": 7,
+        "title": "Nebula Graph - Consultas",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(nebula_query_requests_total[5m])",
+            "legendFormat": "Consultas/s"
+          },
+          {
+            "expr": "nebula_vertex_count",
+            "legendFormat": "Vértices"
+          },
+          {
+            "expr": "nebula_edge_count",
+            "legendFormat": "Aristas"
+          }
+        ],
+        "gridPos": {
+          "x": 12,
+          "y": 10,
+          "w": 12,
+          "h": 8
+        }
+      },
+      {
+        "id": 8,
+        "title": "Router Semántico & E2B",
+        "type": "row",
+        "collapsed": false,
+        "gridPos": {
+          "x": 0,
+          "y": 18,
+          "w": 24,
+          "h": 1
+        }
+      },
+      {
+        "id": 9,
+        "title": "Router - Distribución de Modelos",
+        "type": "piechart",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "sum by (model) (router_model_selections_total)"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 19,
+          "w": 8,
+          "h": 8
+        }
+      },
+      {
+        "id": 10,
+        "title": "E2B Sandboxes - Estado",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "e2b_sandbox_active_count",
+            "legendFormat": "Sandboxes Activos"
+          },
+          {
+            "expr": "rate(e2b_sandbox_created_total[5m])",
+            "legendFormat": "Creación/s"
+          },
+          {
+            "expr": "rate(e2b_sandbox_destroyed_total[5m])",
+            "legendFormat": "Destrucción/s"
+          }
+        ],
+        "gridPos": {
+          "x": 8,
+          "y": 19,
+          "w": 8,
+          "h": 8
+        },
+        "alert": {
+          "name": "Demasiados Sandboxes Activos",
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [4],
+                "type": "gt"
+              }
+            }
+          ],
+          "frequency": "60s",
+          "message": "⚠️ Sandboxes activos > 4 (límite: 5)"
+        }
+      },
+      {
+        "id": 11,
+        "title": "E2B - Tiempo de Ejecución",
+        "type": "heatmap",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(e2b_execution_duration_seconds_bucket[5m])"
+          }
+        ],
+        "gridPos": {
+          "x": 16,
+          "y": 19,
+          "w": 8,
+          "h": 8
+        }
+      },
+      {
+        "id": 12,
+        "title": "RQ Workers & Cache",
+        "type": "row",
+        "collapsed": false,
+        "gridPos": {
+          "x": 0,
+          "y": 27,
+          "w": 24,
+          "h": 1
+        }
+      },
+      {
+        "id": 13,
+        "title": "RQ Workers - Cola de Tareas",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rq_queue_length",
+            "legendFormat": "Tareas en cola"
+          },
+          {
+            "expr": "rq_workers_active",
+            "legendFormat": "Workers activos"
+          },
+          {
+            "expr": "rate(rq_jobs_completed_total[5m])",
+            "legendFormat": "Jobs completados/s"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 28,
+          "w": 12,
+          "h": 8
+        }
+      },
+      {
+        "id": 14,
+        "title": "Cache - Hit Rate",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m])) * 100",
+            "legendFormat": "Hit Rate %"
+          }
+        ],
+        "gridPos": {
+          "x": 12,
+          "y": 28,
+          "w": 12,
+          "h": 8
+        },
+        "yaxes": [
+          {
+            "label": "%",
+            "format": "percent"
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "Recursos del Sistema",
+        "type": "row",
+        "collapsed": false,
+        "gridPos": {
+          "x": 0,
+          "y": 36,
+          "w": 24,
+          "h": 1
+        }
+      },
+      {
+        "id": 16,
+        "title": "CPU Usage",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "gridPos": {
+          "x": 0,
+          "y": 37,
+          "w": 8,
+          "h": 8
+        },
+        "alert": {
+          "name": "Alto Uso de CPU",
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [80],
+                "type": "gt"
+              }
+            }
+          ],
+          "frequency": "60s",
+          "message": "⚠️ CPU > 80%"
+        }
+      },
+      {
+        "id": 17,
+        "title": "Memory Usage",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "100 * (1 - ((node_memory_MemAvailable_bytes) / (node_memory_MemTotal_bytes)))",
+            "legendFormat": "{{instance}}"
+          }
+        ],
+        "gridPos": {
+          "x": 8,
+          "y": 37,
+          "w": 8,
+          "h": 8
+        },
+        "alert": {
+          "name": "Alta Memoria",
+          "conditions": [
+            {
+              "evaluator": {
+                "params": [85],
+                "type": "gt"
+              }
+            }
+          ],
+          "frequency": "60s",
+          "message": "⚠️ Memoria > 85%"
+        }
+      },
+      {
+        "id": 18,
+        "title": "Disk I/O",
+        "type": "graph",
+        "datasource": "Prometheus",
+        "targets": [
+          {
+            "expr": "rate(node_disk_read_bytes_total[5m])",
+            "legendFormat": "Read {{device}}"
+          },
+          {
+            "expr": "rate(node_disk_written_bytes_total[5m])",
+            "legendFormat": "Write {{device}}"
+          }
+        ],
+        "gridPos": {
+          "x": 16,
+          "y": 37,
+          "w": 8,
+          "h": 8
+        }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "instance",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(up, instance)",
+          "multi": false,
+          "includeAll": false
+        },
+        {
+          "name": "job",
+          "type": "query",
+          "datasource": "Prometheus",
+          "query": "label_values(up, job)",
+          "multi": true,
+          "includeAll": true
+        }
+      ]
+    },
+    "annotations": {
+      "list": [
+        {
+          "datasource": "Prometheus",
+          "enable": true,
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "name": "Alertas Activas",
+          "tagKeys": "alertname",
+          "titleFormat": "Alert"
+        }
+      ]
+    }
+  }
+}

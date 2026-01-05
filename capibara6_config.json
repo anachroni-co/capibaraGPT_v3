@@ -1,0 +1,55 @@
+{
+  "models": {
+    "fast_response": {
+      "name": "phi-4-mini",
+      "local_path": "/home/elect/models/phi-4-mini",
+      "description": "Modelo más rápido para respuestas simples",
+      "max_tokens": 512,
+      "timeout": 8000,
+      "use_case": ["preguntas simples", "respuestas rápidas", "saludos", "respuestas directas"],
+      "dtype": "float16",
+      "quantization": "awq"
+    },
+    "balanced": {
+      "name": "qwen2.5-coder-1.5b",
+      "local_path": "/home/elect/models/qwen2.5-coder-1.5b",
+      "description": "Modelo experto en código y tareas técnicas",
+      "max_tokens": 1024,
+      "timeout": 20000,
+      "use_case": ["explicaciones", "análisis intermedio", "redacción", "programación", "análisis técnico"],
+      "dtype": "float16",
+      "quantization": "awq"
+    },
+    "general": {
+      "name": "mistral-7b-instruct-v0.2",
+      "local_path": "/home/elect/models/mistral-7b-instruct-v0.2",
+      "description": "Modelo general para tareas intermedias",
+      "max_tokens": 2048,
+      "timeout": 30000,
+      "use_case": ["explicaciones generales", "redacción", "análisis básico", "tareas técnicas simples"],
+      "dtype": "float16",
+      "quantization": "awq"
+    },
+    "multimodal": {
+      "name": "gemma-3-27b-it-awq",
+      "local_path": "/home/elect/models/gemma-3-27b-it-awq",
+      "description": "Modelo multimodal para contexto largo y análisis profundo",
+      "max_tokens": 32768,
+      "timeout": 60000,
+      "use_case": ["análisis profundo", "razonamiento complejo", "análisis multimodal", "contexto largo"],
+      "dtype": "bfloat16",
+      "quantization": null
+    }
+  },
+  "consensus_enabled": true,
+  "fallback_strategy": {
+    "enabled": true,
+    "order": ["fast_response", "general", "balanced", "multimodal"]
+  },
+  "api_settings": {
+    "default_model": "phi-4-mini",
+    "max_concurrent_requests": 3,
+    "streaming_enabled": true,
+    "port": 8080
+  }
+}

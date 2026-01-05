@@ -1,0 +1,328 @@
+groups:
+  - name: capibara6_system
+    interval: 30s
+    rules:
+      # ========== Sistema General ==========
+
+      - alert: HighRequestLatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "Alta latencia en requests (p99 > 2s)"
+          description: "La latencia p99 es {{ $value }}s en {{ $labels.instance }}"
+
+      - alert: CriticalRequestLatency
+        expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "⚠️ Latencia crítica (p99 > 5s)"
+          description: "La latencia p99 es {{ $value }}s en {{ $labels.instance }}"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 10
+        for: 3m
+        labels:
+          severity: warning
+          component: backend
+        annotations:
+          summary: "Alta tasa de errores 5xx"
+          description: "{{ $value }} errores/s en {{ $labels.instance }}"
+
+      - alert: CriticalErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 50
+        for: 1m
+        labels:
+          severity: critical
+          component: backend
+        annotations:
+          summary: "⚠️ Tasa crítica de errores 5xx"
+          description: "{{ $value }} errores/s en {{ $labels.instance }}"
+
+      # ========== Recursos del Sistema ==========
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Alto uso de CPU"
+          description: "CPU al {{ $value }}% en {{ $labels.instance }}"
+
+      - alert: CriticalCPUUsage
+        expr: 100 - (avg by (instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "⚠️ CPU crítico"
+          description: "CPU al {{ $value }}% en {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: 100 * (1 - ((node_memory_MemAvailable_bytes) / (node_memory_MemTotal_bytes))) > 85
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Alta memoria utilizada"
+          description: "Memoria al {{ $value }}% en {{ $labels.instance }}"
+
+      - alert: CriticalMemoryUsage
+        expr: 100 * (1 - ((node_memory_MemAvailable_bytes) / (node_memory_MemTotal_bytes))) > 95
+        for: 2m
+        labels:
+          severity: critical
+          component: infrastructure
+        annotations:
+          summary: "⚠️ Memoria crítica"
+          description: "Memoria al {{ $value }}% en {{ $labels.instance }}"
+
+      - alert: DiskSpaceLow
+        expr: 100 - ((node_filesystem_avail_bytes{mountpoint="/"} * 100) / node_filesystem_size_bytes{mountpoint="/"}) > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: infrastructure
+        annotations:
+          summary: "Espacio en disco bajo"
+          description: "Disco al {{ $value }}% en {{ $labels.instance }}"
+
+  - name: capibara6_rag
+    interval: 30s
+    rules:
+      # ========== Milvus ==========
+
+      - alert: MilvusHighLatency
+        expr: histogram_quantile(0.95, rate(milvus_search_duration_seconds_bucket[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+          component: milvus
+        annotations:
+          summary: "Búsquedas Milvus lentas"
+          description: "Latencia p95 de {{ $value }}s en búsquedas vectoriales"
+
+      - alert: MilvusDown
+        expr: up{job="milvus"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: milvus
+        annotations:
+          summary: "⚠️ Milvus no disponible"
+          description: "Milvus está DOWN en {{ $labels.instance }}"
+
+      - alert: MilvusCollectionGrowing
+        expr: rate(milvus_collection_size[1h]) > 10000
+        for: 10m
+        labels:
+          severity: info
+          component: milvus
+        annotations:
+          summary: "Colección Milvus creciendo rápidamente"
+          description: "{{ $value }} vectores/hora agregados"
+
+      # ========== Nebula Graph ==========
+
+      - alert: NebulaHighQueryLatency
+        expr: histogram_quantile(0.95, rate(nebula_query_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          component: nebula
+        annotations:
+          summary: "Consultas Nebula lentas"
+          description: "Latencia p95 de {{ $value }}s en consultas de grafo"
+
+      - alert: NebulaDown
+        expr: up{job="nebula-graphd"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: nebula
+        annotations:
+          summary: "⚠️ Nebula Graph no disponible"
+          description: "Nebula Graph está DOWN en {{ $labels.instance }}"
+
+      - alert: NebulaClusterUnhealthy
+        expr: nebula_cluster_healthy_nodes < 3
+        for: 2m
+        labels:
+          severity: critical
+          component: nebula
+        annotations:
+          summary: "⚠️ Cluster Nebula no saludable"
+          description: "Solo {{ $value }}/3 nodos activos"
+
+  - name: capibara6_router_e2b
+    interval: 30s
+    rules:
+      # ========== Router Semántico ==========
+
+      - alert: RouterHighComplexity
+        expr: avg(router_query_complexity) > 0.8
+        for: 10m
+        labels:
+          severity: info
+          component: router
+        annotations:
+          summary: "Queries muy complejas"
+          description: "Complejidad promedio: {{ $value }}"
+
+      - alert: RouterCacheHitRateLow
+        expr: rate(router_cache_hits_total[5m]) / (rate(router_cache_hits_total[5m]) + rate(router_cache_misses_total[5m])) < 0.3
+        for: 10m
+        labels:
+          severity: warning
+          component: router
+        annotations:
+          summary: "Baja tasa de hit en cache del router"
+          description: "Hit rate: {{ $value | humanizePercentage }}"
+
+      # ========== E2B Sandboxes ==========
+
+      - alert: E2BSandboxesNearLimit
+        expr: e2b_sandbox_active_count >= 4
+        for: 2m
+        labels:
+          severity: warning
+          component: e2b
+        annotations:
+          summary: "Sandboxes E2B cerca del límite"
+          description: "{{ $value }}/5 sandboxes activos"
+
+      - alert: E2BHighFailureRate
+        expr: rate(e2b_sandbox_failed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: e2b
+        annotations:
+          summary: "Alta tasa de fallos en E2B"
+          description: "{{ $value }} fallos/s en sandboxes"
+
+      - alert: E2BLongExecutionTime
+        expr: histogram_quantile(0.95, rate(e2b_execution_duration_seconds_bucket[5m])) > 60
+        for: 5m
+        labels:
+          severity: info
+          component: e2b
+        annotations:
+          summary: "Ejecuciones E2B muy largas"
+          description: "p95: {{ $value }}s (timeout: 300s)"
+
+  - name: capibara6_workers
+    interval: 30s
+    rules:
+      # ========== RQ Workers ==========
+
+      - alert: RQQueueBacklog
+        expr: rq_queue_length > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: workers
+        annotations:
+          summary: "Cola RQ con backlog"
+          description: "{{ $value }} tareas pendientes"
+
+      - alert: RQWorkerDown
+        expr: rq_workers_active < 2
+        for: 2m
+        labels:
+          severity: critical
+          component: workers
+        annotations:
+          summary: "⚠️ Workers RQ insuficientes"
+          description: "Solo {{ $value }}/3 workers activos"
+
+      - alert: RQJobFailureRate
+        expr: rate(rq_jobs_failed_total[5m]) / rate(rq_jobs_completed_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: workers
+        annotations:
+          summary: "Alta tasa de fallos en jobs RQ"
+          description: "{{ $value | humanizePercentage }} de jobs fallando"
+
+  - name: capibara6_databases
+    interval: 30s
+    rules:
+      # ========== PostgreSQL ==========
+
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: postgres
+        annotations:
+          summary: "⚠️ PostgreSQL no disponible"
+          description: "PostgreSQL está DOWN"
+
+      - alert: PostgreSQLConnectionsHigh
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+          component: postgres
+        annotations:
+          summary: "Muchas conexiones PostgreSQL"
+          description: "{{ $value }} conexiones activas"
+
+      # ========== Redis ==========
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: redis
+        annotations:
+          summary: "⚠️ Redis no disponible"
+          description: "Redis está DOWN"
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / redis_memory_max_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: redis
+        annotations:
+          summary: "Memoria Redis alta"
+          description: "{{ $value | humanizePercentage }} de memoria usada"
+
+  - name: capibara6_toon_optimization
+    interval: 60s
+    rules:
+      # ========== TOON Optimization ==========
+
+      - alert: TOONSavingsLow
+        expr: avg(toon_token_savings_percent) < 20
+        for: 15m
+        labels:
+          severity: info
+          component: toon
+        annotations:
+          summary: "Ahorro TOON bajo de lo esperado"
+          description: "Solo {{ $value }}% ahorro (esperado: 30-60%)"
+
+      - alert: TOONDisabled
+        expr: toon_enabled == 0
+        for: 1m
+        labels:
+          severity: info
+          component: toon
+        annotations:
+          summary: "TOON deshabilitado"
+          description: "Sistema de optimización TOON no está activo"

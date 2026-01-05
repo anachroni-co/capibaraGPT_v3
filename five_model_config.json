@@ -1,0 +1,50 @@
+{
+  "models": {
+    "fast_response": {
+      "name": "phi4:mini",
+      "description": "Modelo más rápido para respuestas simples",
+      "max_tokens": 512,
+      "timeout": 8000,
+      "use_case": ["preguntas simples", "respuestas rápidas", "chistes", "saludos", "respuestas directas"]
+    },
+    "balanced": {
+      "name": "qwen2.5-coder-1.5b",
+      "description": "Modelo experto en código y tareas técnicas",
+      "max_tokens": 1024,
+      "timeout": 20000,
+      "use_case": ["explicaciones", "análisis intermedio", "redacción", "resumen corto", "programación", "análisis técnico"]
+    },
+    "complex": {
+      "name": "gpt-oss-20b",
+      "description": "Modelo más potente para tareas complejas",
+      "max_tokens": 2048,
+      "timeout": 240000,
+      "use_case": ["análisis profundo", "razonamiento complejo", "planificación", "análisis técnico"]
+    },
+    "multimodal": {
+      "name": "gemma-3-27b-it-awq",
+      "description": "Modelo multimodal para contexto largo y análisis profundo",
+      "max_tokens": 32768,
+      "timeout": 60000,
+      "use_case": ["análisis profundo", "razonamiento complejo", "análisis multimodal", "contexto largo"]
+    },
+    "general": {
+      "name": "mistral-7b-instruct-v0.2",
+      "description": "Modelo general para tareas intermedias",
+      "max_tokens": 2048,
+      "timeout": 30000,
+      "use_case": ["explicaciones generales", "redacción", "análisis básico", "tareas técnicas simples"]
+    }
+  },
+  "consensus_enabled": true,
+  "fallback_strategy": {
+    "enabled": true,
+    "order": ["fast_response", "general", "balanced", "multimodal", "complex"]
+  },
+  "api_settings": {
+    "vllm_endpoint": "http://34.12.166.76:8000/v1",
+    "default_model": "phi4:mini",
+    "max_concurrent_requests": 5,
+    "streaming_enabled": true
+  }
+}

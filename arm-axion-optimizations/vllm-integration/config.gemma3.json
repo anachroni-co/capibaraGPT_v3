@@ -1,0 +1,190 @@
+{
+  "experts": [
+    {
+      "expert_id": "phi4_fast",
+      "model_path": "/home/elect/models/phi-4-mini",
+      "domain": "general",
+      "description": "Modelo rápido para respuestas simples y directas",
+      "priority": 4,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.90,
+      "max_num_seqs": 512,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 16384,
+      "max_model_len": 4096,
+      "use_cases": [
+        "preguntas simples",
+        "respuestas rápidas",
+        "chistes",
+        "saludos",
+        "respuestas directas"
+      ]
+    },
+    {
+      "expert_id": "mistral_balanced",
+      "model_path": "/home/elect/models/mistral-7b-instruct-v0.2",
+      "domain": "technical",
+      "description": "Modelo equilibrado para tareas técnicas intermedias",
+      "priority": 3,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.85,
+      "max_num_seqs": 256,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 8192,
+      "max_model_len": 8192,
+      "use_cases": [
+        "explicaciones técnicas",
+        "código y programación",
+        "análisis intermedio",
+        "redacción",
+        "documentación"
+      ]
+    },
+    {
+      "expert_id": "qwen_coder",
+      "model_path": "/home/elect/models/qwen2.5-coder-1.5b",
+      "domain": "coding",
+      "description": "Modelo especializado en código y programación",
+      "priority": 2,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.85,
+      "max_num_seqs": 256,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 8192,
+      "max_model_len": 8192,
+      "use_cases": [
+        "generación de código",
+        "debugging",
+        "explicaciones técnicas",
+        "refactoring",
+        "documentación de código"
+      ]
+    },
+    {
+      "expert_id": "gemma3_multimodal",
+      "model_path": "/home/elect/models/gemma-3-27b-it",
+      "domain": "multimodal_expert",
+      "description": "Modelo multimodal para texto + imágenes, análisis complejo y contexto largo",
+      "priority": 1,
+      "quantization": "awq",
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.80,
+      "max_num_seqs": 128,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "enable_flash_attention": true,
+      "max_num_batched_tokens": 8192,
+      "max_model_len": 32768,
+      "trust_remote_code": true,
+      "dtype": "auto",
+      "use_cases": [
+        "análisis profundo",
+        "razonamiento complejo",
+        "análisis multimodal",
+        "imágenes + texto",
+        "contexto largo (>8K tokens)",
+        "multilingüe avanzado (140+ idiomas)",
+        "research y documentación extensa",
+        "análisis de PDFs con imágenes"
+      ],
+      "neon_optimizations": {
+        "rmsnorm": true,
+        "rope": true,
+        "swiglu": true,
+        "flash_attention": true,
+        "matmul_8x8": true,
+        "softmax_fast_exp": true,
+        "quantization_q4": true
+      },
+      "flash_attention_config": {
+        "block_size": 64,
+        "enable_for_seq_len_above": 512,
+        "max_seq_len": 131072
+      }
+    }
+  ],
+  "lazy_loading": {
+    "enabled": true,
+    "warmup_pool_size": 2,
+    "max_loaded_experts": 4,
+    "memory_threshold": 0.85,
+    "auto_unload_after_s": 300
+  },
+  "embedding_model": {
+    "model_name": "all-MiniLM-L6-v2",
+    "cache_size": 10000,
+    "use_neon": true
+  },
+  "rag": {
+    "enabled": true,
+    "bridge_url": "http://localhost:8001",
+    "collection": "capibara_docs",
+    "detection_threshold": 0.5,
+    "max_context_tokens": 1000,
+    "notes": "Parallel RAG fetching: -40% latency on RAG queries"
+  },
+  "speculative_routing": {
+    "enabled": true,
+    "speculation_threshold": 0.85,
+    "max_speculation_time": 0.5,
+    "notes": "Start generation on high-confidence first chunk: -20-30% TTFT on obvious queries"
+  },
+  "enable_consensus": false,
+  "consensus_model": null,
+  "chunk_size": 64,
+  "routing_threshold": 0.7,
+  "use_fast_classifier": true,
+  "server_config": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "log_level": "info",
+    "allow_credentials": true
+  },
+  "performance_tuning": {
+    "swap_space": 4,
+    "cpu_offload_gb": 0,
+    "enforce_eager": false,
+    "max_context_len_to_capture": 8192
+  },
+  "notes": {
+    "deployment": "Optimizado para Google Cloud ARM Axion C4A-standard-32 (europe-southwest1-b)",
+    "vm_name": "models-europe",
+    "memory_estimation": {
+      "phi4": "~1.5 GB",
+      "mistral": "~3.5 GB",
+      "qwen": "~4 GB",
+      "gemma3_awq": "~14 GB",
+      "total": "~23 GB (caben 4 expertos en 128GB RAM con margen de 105GB)"
+    },
+    "expected_performance": {
+      "phi4_ttft": "~0.2s",
+      "mistral_ttft": "~0.4s",
+      "qwen_ttft": "~0.5s",
+      "gemma3_ttft": "~0.6-0.8s (con NEON: 40-60% mejora vs baseline)",
+      "gemma3_ttft_long_context": "~1.5s (8K tokens con Flash Attention)",
+      "gemma3_max_context": "32K-128K tokens (Flash Attention habilitado)",
+      "throughput_combined": "180-220 req/min"
+    },
+    "neon_kernels_impact": {
+      "matmul_speedup": "1.3x (8x8 tiles + prefetching)",
+      "attention_speedup": "1.5x (Flash Attention para seq_len > 512)",
+      "swiglu_speedup": "1.35x (fusionado)",
+      "rmsnorm_speedup": "4x (vectorizado)",
+      "softmax_speedup": "1.4x (fast exp)",
+      "rope_speedup": "1.25x (vectorizado)",
+      "global_speedup": "1.4-1.6x (40-60% mejora total)"
+    },
+    "migration_notes": {
+      "replaced_model": "gpt-oss-20b",
+      "reason": "Gemma 3 27B ofrece: +multimodal, +128K context, +140 idiomas, mejor performance con NEON",
+      "migration_date": "2025-11-24",
+      "rollback_plan": "Restaurar config.production.json.backup y reiniciar servicio"
+    }
+  }
+}

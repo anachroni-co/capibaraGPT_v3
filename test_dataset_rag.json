@@ -1,0 +1,171 @@
+{
+  "conversations": [
+    {
+      "id": 1,
+      "user": "Explícame qué es machine learning",
+      "assistant": "Machine Learning es una rama de la inteligencia artificial que permite a las computadoras aprender patrones de datos sin ser programadas explícitamente. Utiliza algoritmos estadísticos para encontrar patrones y hacer predicciones. Los tipos principales son: supervisado (con etiquetas), no supervisado (sin etiquetas) y por refuerzo (aprendizaje por recompensas).",
+      "timestamp": "2025-11-01T10:30:00",
+      "tags": ["machine-learning", "ia", "fundamentos"],
+      "similarity_score": 0.95
+    },
+    {
+      "id": 2,
+      "user": "¿Qué son los embeddings vectoriales?",
+      "assistant": "Los embeddings son representaciones vectoriales de datos (texto, imágenes, etc.) en un espacio multidimensional. Capturan relaciones semánticas: palabras con significado similar tienen vectores cercanos. Se generan con redes neuronales como Word2Vec, BERT o OpenAI embeddings. Son fundamentales para búsqueda semántica y sistemas RAG.",
+      "timestamp": "2025-11-01T11:15:00",
+      "tags": ["embeddings", "vectores", "nlp"],
+      "similarity_score": 0.92
+    },
+    {
+      "id": 3,
+      "user": "Explica cómo funciona un sistema RAG",
+      "assistant": "RAG (Retrieval-Augmented Generation) combina búsqueda de información con generación de texto. Proceso: 1) El usuario hace una pregunta, 2) Se buscan documentos relevantes en una base vectorial, 3) Los documentos se agregan al contexto del LLM, 4) El modelo genera una respuesta basada en esos documentos. Ventajas: respuestas actualizadas, reducción de alucinaciones, conocimiento específico del dominio.",
+      "timestamp": "2025-11-02T09:20:00",
+      "tags": ["rag", "retrieval", "generation", "llm"],
+      "similarity_score": 0.94
+    },
+    {
+      "id": 4,
+      "user": "¿Qué bases de datos vectoriales recomiendas?",
+      "assistant": "Para producción recomiendo: Milvus (escalable, open-source, usado por Alibaba), Pinecone (managed, fácil de usar), Qdrant (rápido, Rust), Weaviate (GraphQL, búsqueda híbrida) y ChromaDB (simple, ideal para prototipos). La elección depende de: volumen de datos, latencia requerida, presupuesto y complejidad del proyecto.",
+      "timestamp": "2025-11-02T14:45:00",
+      "tags": ["bases-de-datos", "vectoriales", "milvus", "pinecone"],
+      "similarity_score": 0.89
+    },
+    {
+      "id": 5,
+      "user": "¿Cómo optimizar el uso de tokens en LLMs?",
+      "assistant": "Estrategias de optimización: 1) Comprimir el contexto con formatos como TOON (30-60% ahorro), 2) Usar modelos más pequeños para tareas simples, 3) Implementar cache de respuestas frecuentes, 4) Resumir documentos largos antes de enviarlos, 5) Usar técnicas de prompt engineering eficientes, 6) Implementar chunking inteligente de documentos. El objetivo es maximizar relevancia minimizando tokens.",
+      "timestamp": "2025-11-03T16:10:00",
+      "tags": ["optimizacion", "tokens", "toon", "llm"],
+      "similarity_score": 0.91
+    },
+    {
+      "id": 6,
+      "user": "¿Qué es el fine-tuning de modelos?",
+      "assistant": "Fine-tuning es adaptar un modelo pre-entrenado a una tarea específica usando datos adicionales. Proceso: 1) Se parte de un modelo base (ej: GPT, BERT), 2) Se entrena con dataset específico del dominio, 3) Se ajustan los pesos con learning rate bajo. Ventajas: mejor rendimiento en tareas específicas, menos datos que entrenar desde cero. Tipos: full fine-tuning, LoRA, QLoRA (más eficientes).",
+      "timestamp": "2025-11-04T10:25:00",
+      "tags": ["fine-tuning", "entrenamiento", "lora", "modelos"],
+      "similarity_score": 0.88
+    },
+    {
+      "id": 7,
+      "user": "¿Cómo medir la calidad de un sistema RAG?",
+      "assistant": "Métricas principales: 1) Relevancia de retrieval (Precision@K, Recall@K, MRR), 2) Calidad de generación (BLEU, ROUGE, coherencia), 3) Latencia end-to-end, 4) Tasa de alucinaciones (verificación factual), 5) Satisfacción del usuario (feedback explícito). También importante: diversidad de resultados, cobertura del conocimiento y robustez ante queries ambiguas.",
+      "timestamp": "2025-11-04T13:40:00",
+      "tags": ["metricas", "evaluacion", "rag", "calidad"],
+      "similarity_score": 0.87
+    },
+    {
+      "id": 8,
+      "user": "¿Qué es el prompt engineering?",
+      "assistant": "Prompt engineering es el arte de diseñar instrucciones efectivas para LLMs. Técnicas: 1) Few-shot learning (ejemplos en el prompt), 2) Chain-of-thought (razonamiento paso a paso), 3) Role prompting (asignar un rol al modelo), 4) Delimitadores claros, 5) Especificar formato de salida. Un buen prompt es claro, específico, contextualizado y estructurado. Puede mejorar resultados dramáticamente.",
+      "timestamp": "2025-11-05T11:00:00",
+      "tags": ["prompt-engineering", "llm", "tecnicas"],
+      "similarity_score": 0.90
+    },
+    {
+      "id": 9,
+      "user": "¿Cuál es la diferencia entre GPT-3.5 y GPT-4?",
+      "assistant": "Diferencias principales: GPT-4 tiene 10x más parámetros (~1.7T vs ~175B), mejor razonamiento complejo, menos alucinaciones, soporta imágenes como input, contexto más largo (32K vs 4K tokens), mejor en matemáticas y código. GPT-4 es significativamente más caro pero más preciso. GPT-3.5 sigue siendo excelente para tareas simples y es más rápido/económico.",
+      "timestamp": "2025-11-05T15:30:00",
+      "tags": ["gpt", "openai", "modelos", "comparacion"],
+      "similarity_score": 0.86
+    },
+    {
+      "id": 10,
+      "user": "¿Qué es la cuantización de modelos?",
+      "assistant": "Cuantización reduce la precisión numérica de los pesos del modelo (de 32-bit float a 8-bit o 4-bit int) para reducir tamaño y acelerar inferencia. Tipos: post-training quantization (después de entrenar) y quantization-aware training (durante entrenamiento). Trade-offs: menor uso de memoria y más velocidad, pero potencial pérdida de precisión. Técnicas modernas como GGUF permiten cuantización con mínima degradación.",
+      "timestamp": "2025-11-06T09:15:00",
+      "tags": ["cuantizacion", "optimizacion", "gguf", "modelos"],
+      "similarity_score": 0.85
+    },
+    {
+      "id": 11,
+      "user": "¿Cómo implementar búsqueda híbrida?",
+      "assistant": "Búsqueda híbrida combina búsqueda vectorial (semántica) con búsqueda por palabras clave (BM25, TF-IDF). Implementación: 1) Ejecutar ambas búsquedas en paralelo, 2) Normalizar scores de cada método, 3) Combinar resultados con fusión ponderada (ej: 70% vectorial, 30% keyword), 4) Re-rankear con modelo especializado. Ventaja: captura tanto similitud semántica como matches exactos de términos importantes.",
+      "timestamp": "2025-11-06T14:20:00",
+      "tags": ["busqueda-hibrida", "bm25", "vectorial", "reranking"],
+      "similarity_score": 0.88
+    },
+    {
+      "id": 12,
+      "user": "¿Qué son los Transformers en NLP?",
+      "assistant": "Transformers son arquitecturas de redes neuronales basadas en mecanismos de atención. Revolucionaron NLP en 2017. Componentes clave: 1) Self-attention (captura relaciones entre palabras), 2) Multi-head attention (múltiples perspectivas), 3) Positional encoding (orden de secuencia), 4) Feed-forward networks. Ventajas: paralelización, captura de dependencias largas. Base de BERT, GPT, T5 y modelos modernos.",
+      "timestamp": "2025-11-07T10:45:00",
+      "tags": ["transformers", "nlp", "attention", "arquitectura"],
+      "similarity_score": 0.93
+    },
+    {
+      "id": 13,
+      "user": "¿Qué es el chunking en sistemas RAG?",
+      "assistant": "Chunking es dividir documentos largos en fragmentos manejables para embeddings y retrieval. Estrategias: 1) Chunking fijo (ej: 512 tokens), 2) Chunking semántico (por párrafos/secciones), 3) Chunking con overlap (contexto compartido), 4) Chunking jerárquico (resumen + detalles). Tamaño óptimo: 256-512 tokens. Importante: mantener coherencia semántica en cada chunk.",
+      "timestamp": "2025-11-07T16:00:00",
+      "tags": ["chunking", "rag", "documentos", "preprocessing"],
+      "similarity_score": 0.89
+    },
+    {
+      "id": 14,
+      "user": "¿Cómo funciona el re-ranking en RAG?",
+      "assistant": "Re-ranking es refinar resultados de búsqueda inicial con un modelo más sofisticado. Proceso: 1) Retrieval inicial obtiene top-100 candidatos (rápido), 2) Modelo de re-ranking (ej: CrossEncoder) evalúa relevancia query-documento (lento pero preciso), 3) Se seleccionan top-5 re-rankeados para contexto. Modelos populares: Cohere rerank, BGE-reranker, ColBERT. Mejora significativamente calidad del contexto.",
+      "timestamp": "2025-11-08T11:30:00",
+      "tags": ["reranking", "rag", "cross-encoder", "retrieval"],
+      "similarity_score": 0.87
+    },
+    {
+      "id": 15,
+      "user": "¿Qué es RLHF en el contexto de LLMs?",
+      "assistant": "RLHF (Reinforcement Learning from Human Feedback) es técnica para alinear modelos con preferencias humanas. Proceso: 1) Pre-entrenar modelo base, 2) Fine-tune supervisado con ejemplos de calidad, 3) Entrenar modelo de recompensa con rankings humanos, 4) Optimizar con PPO usando ese modelo de recompensa. Usado en ChatGPT, Claude. Resultado: respuestas más útiles, seguras y alineadas con valores humanos.",
+      "timestamp": "2025-11-08T15:20:00",
+      "tags": ["rlhf", "alignment", "reinforcement-learning", "safety"],
+      "similarity_score": 0.84
+    },
+    {
+      "id": 16,
+      "user": "¿Qué son los agentes de IA?",
+      "assistant": "Agentes de IA son sistemas que pueden planificar, usar herramientas y tomar acciones autónomamente para cumplir objetivos. Componentes: 1) LLM como cerebro, 2) Herramientas externas (búsqueda, código, APIs), 3) Memoria (corto y largo plazo), 4) Planificación (ReAct, Tree-of-Thoughts). Ejemplos: AutoGPT, LangChain agents, GPT-4 con plugins. Capacidad: razonamiento multi-paso, corrección de errores, uso de contexto.",
+      "timestamp": "2025-11-09T10:00:00",
+      "tags": ["agentes", "autonomos", "react", "herramientas"],
+      "similarity_score": 0.91
+    },
+    {
+      "id": 17,
+      "user": "¿Cómo funciona el caching en sistemas LLM?",
+      "assistant": "Caching optimiza rendimiento guardando respuestas reutilizables. Niveles: 1) Prompt caching (cachear contexto común), 2) Embedding caching (vectores pre-calculados), 3) Response caching (respuestas completas), 4) Prefix caching (compartir prefijos de prompts). Estrategias: LRU, TTL, invalidación semántica. Ahorra: costos, latencia y compute. Importante: considerar freshness de datos.",
+      "timestamp": "2025-11-09T14:15:00",
+      "tags": ["caching", "optimizacion", "performance", "latencia"],
+      "similarity_score": 0.86
+    },
+    {
+      "id": 18,
+      "user": "¿Qué es el graph RAG?",
+      "assistant": "Graph RAG extiende RAG tradicional usando grafos de conocimiento para capturar relaciones entre entidades. Ventajas: 1) Navegación multi-hop (seguir conexiones), 2) Contexto estructurado (entidades + relaciones), 3) Razonamiento sobre conexiones implícitas. Implementación: combinar búsqueda vectorial inicial con traversal de grafo (Neo4j, Neptune, Nebula). Ideal para dominios con relaciones complejas (medicina, finanzas).",
+      "timestamp": "2025-11-10T09:30:00",
+      "tags": ["graph-rag", "knowledge-graph", "neo4j", "relaciones"],
+      "similarity_score": 0.90
+    },
+    {
+      "id": 19,
+      "user": "¿Qué es el hallucination detection?",
+      "assistant": "Detección de alucinaciones identifica cuando un LLM genera información incorrecta o inventada. Métodos: 1) Fact-checking contra fuentes verificadas, 2) Self-consistency (múltiples generaciones), 3) Modelos especializados de verificación, 4) Confidence scoring, 5) Citation tracking (RAG). Técnicas: NLI (Natural Language Inference), entailment checking. Crítico para aplicaciones de alta confiabilidad.",
+      "timestamp": "2025-11-10T13:45:00",
+      "tags": ["alucinaciones", "deteccion", "verificacion", "confiabilidad"],
+      "similarity_score": 0.85
+    },
+    {
+      "id": 20,
+      "user": "¿Cómo evaluar embeddings?",
+      "assistant": "Evaluación de embeddings: 1) Tareas downstream (clasificación, clustering), 2) Similitud semántica (comparar scores con juicio humano), 3) Analogías (king - man + woman = queen), 4) Retrieval quality (Precision@K en búsqueda), 5) Visualización (t-SNE, UMAP). Benchmarks: STS-B, GLUE, MTEB. Métricas: cosine similarity, euclidean distance. Importante: evaluar en dominio específico de aplicación.",
+      "timestamp": "2025-11-11T10:20:00",
+      "tags": ["evaluacion", "embeddings", "metricas", "benchmarks"],
+      "similarity_score": 0.88
+    }
+  ],
+  "metadata": {
+    "dataset_name": "AI_ML_RAG_Conversations",
+    "total_conversations": 20,
+    "date_created": "2025-11-11",
+    "domain": "Artificial Intelligence, Machine Learning, RAG Systems",
+    "purpose": "Testing TOON-RAG integration with real data"
+  }
+}

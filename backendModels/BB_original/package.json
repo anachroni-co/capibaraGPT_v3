@@ -1,0 +1,23 @@
+{
+  "name": "bb-ai-integration",
+  "version": "1.0.0",
+  "description": "Integración de múltiples modelos de IA con Ollama",
+  "main": "ai_endpoint.js",
+  "scripts": {
+    "start": "node ai_endpoint.js",
+    "dev": "nodemon ai_endpoint.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.5.0"
+  },
+  "keywords": [
+    "ai",
+    "ollama",
+    "gpt-oss",
+    "phi3",
+    "mistral"
+  ],
+  "author": "gmarko",
+  "license": "MIT"
+}

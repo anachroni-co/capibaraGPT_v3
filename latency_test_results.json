@@ -1,0 +1,70 @@
+[
+  {
+    "model_id": "phi4_fast",
+    "latencies": [],
+    "tokens_per_second_values": [],
+    "success_count": 0,
+    "total_attempts": 3,
+    "avg_latency": 0,
+    "min_latency": 0,
+    "max_latency": 0,
+    "std_dev_latency": 0,
+    "avg_tokens_per_second": 0
+  },
+  {
+    "model_id": "mistral_balanced",
+    "latencies": [],
+    "tokens_per_second_values": [],
+    "success_count": 0,
+    "total_attempts": 3,
+    "avg_latency": 0,
+    "min_latency": 0,
+    "max_latency": 0,
+    "std_dev_latency": 0,
+    "avg_tokens_per_second": 0
+  },
+  {
+    "model_id": "qwen_coder",
+    "latencies": [],
+    "tokens_per_second_values": [],
+    "success_count": 0,
+    "total_attempts": 3,
+    "avg_latency": 0,
+    "min_latency": 0,
+    "max_latency": 0,
+    "std_dev_latency": 0,
+    "avg_tokens_per_second": 0
+  },
+  {
+    "model_id": "gemma3_multimodal",
+    "latencies": [],
+    "tokens_per_second_values": [],
+    "success_count": 0,
+    "total_attempts": 3,
+    "avg_latency": 0,
+    "min_latency": 0,
+    "max_latency": 0,
+    "std_dev_latency": 0,
+    "avg_tokens_per_second": 0
+  },
+  {
+    "model_id": "aya_expanse_multilingual",
+    "latencies": [
+      58.77745079994202,
+      4.537696599960327,
+      4.536169052124023
+    ],
+    "tokens_per_second_values": [
+      0.8506663579232552,
+      11.018806325755042,
+      11.022516891558068
+    ],
+    "success_count": 3,
+    "total_attempts": 3,
+    "avg_latency": 22.61710548400879,
+    "min_latency": 4.536169052124023,
+    "max_latency": 58.77745079994202,
+    "std_dev_latency": 31.31577766252981,
+    "avg_tokens_per_second": 7.630663191745455
+  }
+]

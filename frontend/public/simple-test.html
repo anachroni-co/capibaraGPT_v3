@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Simple GPT-OSS-20B</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: #fff; 
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .container { 
+            background: #2a2a2a; 
+            padding: 20px; 
+            border-radius: 10px; 
+            margin: 20px 0;
+        }
+        button { 
+            padding: 12px 24px; 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        input, textarea { 
+            padding: 12px; 
+            width: 100%; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            border: 1px solid #555; 
+            background: #333;
+            color: #fff;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .result { 
+            margin-top: 20px; 
+            padding: 15px; 
+            background: #333; 
+            border-radius: 5px; 
+            white-space: pre-wrap;
+            min-height: 100px;
+            border-left: 4px solid #007bff;
+        }
+        .success { border-left-color: #28a745; }
+        .error { border-left-color: #dc3545; }
+        .status { 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success { background: #28a745; color: white; }
+        .status.error { background: #dc3545; color: white; }
+        .status.info { background: #17a2b8; color: white; }
+    </style>
+</head>
+<body>
+    <h1>🤖 Test Simple GPT-OSS-20B</h1>
+    
+    <div class="container">
+        <h3>🔍 Health Check</h3>
+        <button onclick="testHealth()" id="healthBtn">Probar Conexión</button>
+        <div id="healthStatus"></div>
+    </div>
+    
+    <div class="container">
+        <h3>💬 Test de Chat</h3>
+        <textarea id="messageInput" rows="3" placeholder="Escribe tu mensaje aquí...">Hola, ¿cómo estás? Explica brevemente qué es la inteligencia artificial.</textarea>
+        <br>
+        <button onclick="testChat()" id="chatBtn">Enviar Mensaje</button>
+        <button onclick="clearResults()" style="background: #6c757d;">Limpiar</button>
+        <div id="chatStatus"></div>
+        <div id="chatResult" class="result">Resultado aparecerá aquí...</div>
+    </div>
+    
+    <div class="container">
+        <h3>📊 Información de la API</h3>
+        <p><strong>URL:</strong> http://localhost:5000/api/chat (proxy CORS)</p>
+        <p><strong>VM:</strong> http://34.175.215.109/api/chat</p>
+        <p><strong>CORS:</strong> ✅ Habilitado</p>
+        <p><strong>Timeout:</strong> 5 minutos</p>
+        <p><strong>Modelo:</strong> GPT-OSS-20B</p>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:5000/api/chat';
+        const HEALTH_URL = 'http://localhost:5000/health';
+        
+        async function testHealth() {
+            const btn = document.getElementById('healthBtn');
+            const status = document.getElementById('healthStatus');
+            
+            btn.disabled = true;
+            btn.textContent = 'Probando...';
+            status.innerHTML = '<div class="status info">🔄 Probando conexión...</div>';
+            
+            try {
+                const response = await fetch(HEALTH_URL, {
+                    method: 'GET',
+                    timeout: 10000
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = `<div class="status success">✅ Conexión OK: ${JSON.stringify(data)}</div>`;
+                } else {
+                    status.innerHTML = `<div class="status error">❌ Error: ${response.status} - ${response.statusText}</div>`;
+                }
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Error de conexión: ${error.message}</div>`;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Probar Conexión';
+        }
+        
+        async function testChat() {
+            const message = document.getElementById('messageInput').value.trim();
+            const btn = document.getElementById('chatBtn');
+            const status = document.getElementById('chatStatus');
+            const result = document.getElementById('chatResult');
+            
+            if (!message) {
+                alert('Por favor, escribe un mensaje.');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            status.innerHTML = '<div class="status info">🔄 Enviando mensaje...</div>';
+            result.textContent = 'Esperando respuesta...';
+            
+            try {
+                const startTime = Date.now();
+                
+                const response = await fetch(API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        max_tokens: 200
+                    })
+                });
+                
+                const endTime = Date.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(2);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = `<div class="status success">✅ Respuesta recibida en ${duration}s</div>`;
+                    
+                    result.innerHTML = `
+🤖 <strong>Respuesta del modelo:</strong>
+${data.response}
+
+📊 <strong>Información:</strong>
+• Modelo: ${data.model}
+• Tokens: ${data.tokens}
+• Tiempo: ${duration}s
+• Mensaje original: "${message}"
+                    `;
+                    result.className = 'result success';
+                } else {
+                    const errorText = await response.text();
+                    status.innerHTML = `<div class="status error">❌ Error del servidor: ${response.status}</div>`;
+                    result.textContent = `Error: ${response.status} - ${response.statusText}\n\nDetalles: ${errorText}`;
+                    result.className = 'result error';
+                }
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Error de conexión: ${error.message}</div>`;
+                result.textContent = `Error de conexión: ${error.message}`;
+                result.className = 'result error';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Enviar Mensaje';
+        }
+        
+        function clearResults() {
+            document.getElementById('healthStatus').innerHTML = '';
+            document.getElementById('chatStatus').innerHTML = '';
+            document.getElementById('chatResult').textContent = 'Resultado aparecerá aquí...';
+            document.getElementById('chatResult').className = 'result';
+        }
+        
+        // Auto-probar health check al cargar
+        window.onload = () => {
+            console.log('🚀 Test Simple GPT-OSS-20B cargado');
+            console.log('📍 API URL:', API_URL);
+        };
+    </script>
+</body>
+</html>

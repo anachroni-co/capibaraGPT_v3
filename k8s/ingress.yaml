@@ -1,0 +1,112 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: capibara6-ingress
+  namespace: capibara6
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - api.capibara6.com
+    - graphql.capibara6.com
+    - monitoring.capibara6.com
+    - n8n.capibara6.com
+    secretName: capibara6-tls
+  rules:
+  - host: api.capibara6.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: capibara6-api-service
+            port:
+              number: 8000
+  - host: graphql.capibara6.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: capibara6-graphql-service
+            port:
+              number: 8001
+  - host: monitoring.capibara6.com
+    http:
+      paths:
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana-service
+            port:
+              number: 3000
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus-service
+            port:
+              number: 9090
+  - host: n8n.capibara6.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: n8n-service
+            port:
+              number: 5678
+---
+# Ingress adicional para n8n con configuración especial de WebSocket
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: capibara6-n8n-ingress
+  namespace: capibara6
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # WebSocket support para n8n (REQUERIDO)
+    nginx.ingress.kubernetes.io/websocket-services: "n8n-service"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+      proxy_cache_bypass $http_upgrade;
+    # Rate limiting para webhooks
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - n8n.capibara6.com
+    secretName: capibara6-n8n-tls
+  rules:
+  - host: n8n.capibara6.com
+    http:
+      paths:
+      - path: /webhook/
+        pathType: Prefix
+        backend:
+          service:
+            name: n8n-service
+            port:
+              number: 5678

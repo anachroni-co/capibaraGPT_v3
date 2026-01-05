@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Conexión Frontend-Backend | Capibara6</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            font-weight: bold;
+            text-align: center;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .button-container {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 15px 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        textarea {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 14px;
+            resize: vertical;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+        .test-section {
+            margin: 25px 0;
+            padding: 20px;
+            background: white;
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+        }
+        .endpoint-info {
+            background: #e8f4fc;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Prueba de Conexión Frontend-Backend</h1>
+        <p style="text-align: center; color: #666;">Capibara6 - Sistema de IA con Router Semántico y E2B Integration</p>
+
+        <!-- Status Section -->
+        <div class="test-section">
+            <h2>📡 Estado del Servidor</h2>
+            <div id="server-status" class="status warning">Verificando conexión con el backend...</div>
+            <div class="button-container">
+                <button onclick="checkHealth()">Verificar Salud del Servidor</button>
+                <button onclick="checkAllEndpoints()">Verificar Todos los Endpoints</button>
+            </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="test-section">
+            <h2>🤖 Prueba de Chat</h2>
+            <input type="text" id="chat-input" placeholder="Escribe un mensaje para enviar al modelo...">
+            <div class="button-container">
+                <button onclick="sendChatMessage()">Enviar Mensaje</button>
+                <button onclick="sendComplexQuestion()">Enviar Pregunta Compleja</button>
+            </div>
+            <div id="chat-result"></div>
+        </div>
+
+        <!-- Code Execution Section -->
+        <div class="test-section">
+            <h2>🔧 Prueba de Ejecución de Código (E2B)</h2>
+            <textarea id="code-input" rows="6" placeholder="Escribe código Python para ejecutar (ej: print('Hola mundo'))">print('Hello from E2B!')
+print('Executing Python code securely in sandbox...')
+x = [1, 2, 3, 4, 5]
+print(f'Sum of numbers: {sum(x)}')</textarea>
+            <div class="button-container">
+                <button onclick="executeCode()">Ejecutar Código</button>
+                <button onclick="executeMathCode()">Código Matemático</button>
+            </div>
+            <div id="code-result"></div>
+        </div>
+
+        <!-- TTS Section -->
+        <div class="test-section">
+            <h2>🔊 Prueba de Síntesis de Voz (TTS)</h2>
+            <textarea id="tts-input" rows="3" placeholder="Escribe texto para convertir a voz...">Esta es una prueba de síntesis de voz usando el sistema Kyutai TTS integrado con Capibara6.</textarea>
+            <div class="button-container">
+                <button onclick="textToSpeech()">Convertir a Voz</button>
+            </div>
+            <div id="tts-result"></div>
+        </div>
+
+        <!-- Results -->
+        <div id="result"></div>
+    </div>
+
+    <script src="./api-client.js"></script>
+    <script>
+        // Inicializar el cliente API
+        const apiClient = new ApiClient();
+
+        // Verificar conexión con el servidor
+        async function checkHealth() {
+            const statusDiv = document.getElementById('server-status');
+            statusDiv.textContent = 'Verificando conexión con el backend...';
+            statusDiv.className = 'status info';
+
+            try {
+                const result = await apiClient.healthCheck();
+                statusDiv.innerHTML = `
+                    <div class="success">✅ Conexión con backend exitosa</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/health</div>
+                    <div><strong>Estado:</strong> ${result.status}</div>
+                    <div><strong>Componentes:</strong> ${JSON.stringify(result.components)}</div>
+                    <div><strong>Timestamp:</strong> ${result.timestamp}</div>
+                `;
+            } catch (error) {
+                statusDiv.innerHTML = `
+                    <div class="error">❌ Error de conexión</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/health</div>
+                    <div>Error: ${error.message}</div>
+                `;
+            }
+        }
+
+        async function checkAllEndpoints() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>Verificando todos los endpoints...</p>';
+
+            try {
+                // Testear diferentes endpoints
+                const endpoints = [
+                    { name: 'Health', url: '/health', method: 'GET' },
+                    { name: 'Chat', url: '/api/chat', method: 'POST', data: { prompt: 'test' } }
+                ];
+
+                let results = {};
+                for (const endpoint of endpoints) {
+                    try {
+                        if (endpoint.method === 'GET') {
+                            const response = await fetch(`${apiClient.baseUrl}${endpoint.url}`, {
+                                method: endpoint.method,
+                                headers: apiClient.defaultHeaders
+                            });
+                            results[endpoint.name] = { 
+                                status: response.status, 
+                                ok: response.ok,
+                                data: response.ok ? await response.json() : null
+                            };
+                        } else if (endpoint.method === 'POST' && endpoint.data) {
+                            const response = await fetch(`${apiClient.baseUrl}${endpoint.url}`, {
+                                method: endpoint.method,
+                                headers: apiClient.defaultHeaders,
+                                body: JSON.stringify(endpoint.data)
+                            });
+                            results[endpoint.name] = { 
+                                status: response.status, 
+                                ok: response.ok,
+                                data: response.ok ? await response.json() : null
+                            };
+                        }
+                    } catch (error) {
+                        results[endpoint.name] = { 
+                            status: 'error', 
+                            ok: false,
+                            error: error.message
+                        };
+                    }
+                }
+
+                resultDiv.innerHTML = `
+                    <h3>Status de Endpoints</h3>
+                    <pre>${JSON.stringify(results, null, 2)}</pre>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `<div class="error">Error verificando endpoints: ${error.message}</div>`;
+            }
+        }
+
+        async function sendChatMessage() {
+            const message = document.getElementById('chat-input').value;
+            if (!message.trim()) {
+                alert('Por favor escribe un mensaje');
+                return;
+            }
+
+            const resultDiv = document.getElementById('chat-result');
+            resultDiv.innerHTML = '<div class="status info">🤖 Procesando mensaje...</div>';
+
+            try {
+                const response = await apiClient.sendMessage(message);
+                resultDiv.innerHTML = `
+                    <div class="status success">✅ Respuesta recibida</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/api/chat</div>
+                    <div><strong>Modelo usado:</strong> ${response.model_used || 'N/A'}</div>
+                    <div><strong>Contenido:</strong> ${response.content ? response.content.substring(0, 500) + '...' : response.response ? response.response.substring(0, 500) + '...' : 'N/A'}</div>
+                    <div><strong>Detalles:</strong> <pre>${JSON.stringify(response, null, 2)}</pre></div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ Error: ${error.message}</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/api/chat</div>
+                `;
+            }
+        }
+
+        async function sendComplexQuestion() {
+            document.getElementById('chat-input').value = 'Explica qué es la inteligencia artificial y cómo puede afectar a la sociedad en los próximos 10 años, incluyendo aspectos técnicos, éticos y sociales.';
+            await sendChatMessage();
+        }
+
+        async function executeCode() {
+            const code = document.getElementById('code-input').value;
+            if (!code.trim()) {
+                alert('Por favor escribe código para ejecutar');
+                return;
+            }
+
+            const resultDiv = document.getElementById('code-result');
+            resultDiv.innerHTML = '<div class="status info">🔧 Ejecutando código en sandbox...</div>';
+
+            try {
+                // En realidad no podemos ejecutar código real desde el navegador
+                // debido a las políticas CORS, pero simularemos la funcionalidad
+                const response = await apiClient.executeCode(code);
+                resultDiv.innerHTML = `
+                    <div class="status success">✅ Código ejecutado (simulado)</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/api/e2b/execute</div>
+                    <div><strong>Código enviado:</strong></div>
+                    <pre><code>${escapeHtml(code)}</code></pre>
+                    <div><strong>Salida simulada:</strong></div>
+                    <pre>${response.output}</pre>
+                    <div><strong>Resultado:</strong> <pre>${JSON.stringify(response, null, 2)}</pre></div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ Error: ${error.message}</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/api/e2b/execute</div>
+                `;
+            }
+        }
+
+        async function executeMathCode() {
+            document.getElementById('code-input').value = `# Código matemático de ejemplo
+import math
+
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
+
+print("Secuencia de Fibonacci hasta n=10:")
+for i in range(10):
+    print(f"F({i}) = {fibonacci(i)}")
+
+# Cálculo de raíz cuadrada
+numbers = [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+sqrt_results = [math.sqrt(n) for n in numbers]
+print("\\nRaíces cuadradas:")
+for n, sqrt_n in zip(numbers, sqrt_results):
+    print(f"√{n} = {sqrt_n:.2f}")
+`;
+            await executeCode();
+        }
+
+        async function textToSpeech() {
+            const text = document.getElementById('tts-input').value;
+            if (!text.trim()) {
+                alert('Por favor escribe texto para convertir a voz');
+                return;
+            }
+
+            const resultDiv = document.getElementById('tts-result');
+            resultDiv.innerHTML = '<div class="status info">🔊 Convirtiendo texto a voz...</div>';
+
+            try {
+                const response = await apiClient.textToSpeech(text);
+                resultDiv.innerHTML = `
+                    <div class="status success">✅ Síntesis completada</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/api/tts/speak</div>
+                    <div><strong>Texto:</strong> ${text.substring(0, 100)}...</div>
+                    <div><strong>Resultado:</strong> <pre>${JSON.stringify(response, null, 2)}</pre></div>
+                    <div><small>En un entorno real, aquí se reproduciría el audio generado</small></div>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">❌ Error: ${error.message}</div>
+                    <div class="endpoint-info">Endpoint: ${apiClient.baseUrl}/api/tts/speak</div>
+                `;
+            }
+        }
+
+        // Función de utilidad para escapar HTML
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // Iniciar la verificación cuando se carga la página
+        document.addEventListener('DOMContentLoaded', function() {
+            checkHealth();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+=== CAPIBARA6 - DATOS DE USUARIO ===
+
+Fecha: 2025-11-10 20:57:11
+Email: user@capibara6.chat
+IP: 159.147.89.54
+
+--- CONVERSACIONES ---
+
+[2025-11-10T20:57:11.625Z]
+None
+
