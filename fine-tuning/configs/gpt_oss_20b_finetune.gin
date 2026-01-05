@@ -1,0 +1,127 @@
+############################
+# gpt_oss_20b_finetune.gin
+# Template para T5X + SeqIO en TPU v5-64 (mesh 8x8)
+# Reemplaza los <placeholders>
+############################
+
+########################
+# Entradas generales
+########################
+TRAINER = @t5x.train.Trainer()
+
+# Directorios
+TRAINER.model_dir = "<gs://BUCKET/path/to/gpt_oss_20b_finetune_model_dir>"
+TRAINER.init_checkpoint = "<gs://BUCKET/path/to/initial_flax_checkpoint_or_empty>"
+TRAINER.checkpoint_save_interval_steps = 500
+TRAINER.checkpoint_keep = 10
+
+# Checkpointing / TensorStore
+TRAINER.checkpointer_class = @t5x.checkpoints.tensorstore_checkpointer.TensorstoreCheckpointer()
+TRAINER.checkpointer_class.path = TRAINER.model_dir
+
+########################
+# Runtime / TPU / Mesh
+########################
+# JAX/XLA backend settings (these variables are read by the launcher script)
+# (no need deponer aquí si las exportas como env vars, las dejo para trazabilidad)
+TPU_MESH_SHAPE = (8, 8)  # 8x8 = 64 chips, model_parallel x data_parallel
+
+# dtype
+TRAINER.compute_dtype = 'bfloat16'   # precisión recomendada en v5
+
+# pjit/GSPMD partitioning defaults
+# Lógica: mapear ejes lógicos a ('model','data') en la definición del modelo
+TRAINER.parameter_partition_spec = '2d'   # usar 2D parameter partitioning (ZeRO-like)
+TRAINER.activation_partition_spec = '2d'  # 2D activation partitioning
+
+# gradient accumulation for effective large batches
+TRAINER.gradient_accumulation_steps = 4
+
+########################
+# Modelo
+########################
+# Debes tener una implementación Flax del GPT-OSS-20B y registrarla
+# como, por ejemplo, models.GPTOSS20BModel (ajusta el nombre si es distinto).
+TRAINER.model_ctor = @models.GPTOSS20BModel
+TRAINER.model_ctor.vocab_size = <VOCAB_SIZE>          # ej. 50257 o tu vocab real
+TRAINER.model_ctor.d_model = <D_MODEL>                # ejemplo: 2048
+TRAINER.model_ctor.n_layers = <N_LAYERS>              # ejemplo: 36
+TRAINER.model_ctor.n_heads = <N_HEADS>                # ejemplo: 32
+TRAINER.model_ctor.dropout_rate = 0.0
+TRAINER.model_ctor.init_scale = 0.02
+
+########################
+# Optimizer & LR schedule
+########################
+# Usamos Adafactor, estable en entrenamiento a escala
+TRAINER.optimizer_ctor = @t5x.optimizers.Adafactor
+TRAINER.optimizer_ctor.learning_rate = 1e-4
+TRAINER.optimizer_ctor.beta2 = 0.999
+TRAINER.optimizer_ctor.weight_decay = 0.0
+TRAINER.optimizer_ctor.eps = 1e-30
+TRAINER.optimizer_ctor.clipping_threshold = 1.0
+
+# Scheduler: warmup (1% steps), luego decay hasta 1e-5
+TRAINER.lr_schedule = @t5x.lr_schedules.PolynomialDecaySchedule
+TRAINER.lr_schedule.init_value = 1e-4
+TRAINER.lr_schedule.end_value = 1e-5
+TRAINER.lr_schedule.decay_steps = <TOTAL_TRAINING_STEPS>
+TRAINER.lr_schedule.warmup_steps = int(0.01 * <TOTAL_TRAINING_STEPS>)
+
+########################
+# Pérdida y métricas
+########################
+TRAINER.loss_fn = @t5x.losses.cross_entropy_loss
+TRAINER.loss_fn.label_smoothing = 0.0
+TRAINER.eval_metrics_fns = @t5x.metrics.default_metrics_fns
+
+########################
+# Datos (SeqIO)
+########################
+# Nombre de la task/mixture registrada en SeqIO
+TRAINER.train_task_name = "gpt_oss_20b_finetune:train"
+TRAINER.eval_task_name = "gpt_oss_20b_finetune:validation"
+
+# SeqIO: determinismo y sharding
+TRAINER.seqio_deterministic = True
+TRAINER.seqio_shard_type = "mod"   # lectura sharded by index mod num_files
+
+# Global batch: tokens por paso (ajusta según tokenization)
+TRAINER.global_batch_size = 1024  # tokens globales por paso (ajustar si usas tokens por ejemplo)
+TRAINER.eval_batch_size = 512
+
+########################
+# Data mixture weights (nuevo dataset = 0.8% => 0.008)
+# Esto es referencial: la mezcla debe definirse en tu registro de SeqIO.
+########################
+# En el registro de SeqIO (Python) deberías definir algo así:
+# seqio.MixtureRegistry.add("finetune_mixture",
+#     ["original_corpus", "new_dataset"],
+#     default_rate=lambda name: 0.008 if name == "new_dataset" else 0.992)
+#
+# Y en TRAINER.train_task_name apuntar a "finetune_mixture:train"
+
+########################
+# Logging / eval
+########################
+TRAINER.log_eval_steps = 1000
+TRAINER.eval_interval_steps = 2000
+TRAINER.save_eval_checkpoints = True
+TRAINER.profile = False
+
+########################
+# I/O y rendimiento
+########################
+TRAINER.prefetch_to_device = 2
+TRAINER.tf_data_service = None
+
+########################
+# Addicional: flags de compilación para XLA (se consumen en la launcher)
+# - Asegúrate la versión de JAX/XLA soporta TPU v5 y GSPMD
+########################
+# ENV suggestion (no parte del gin):
+# export XLA_FLAGS="--xla_backend=host --xla_tpu_mesh_shape=(8,8) --xla_gspmd_enable=true"
+
+########################
+# FIN del archivo .gin
+########################

@@ -1,0 +1,152 @@
+{
+  "experts": [
+    {
+      "expert_id": "phi4_fast",
+      "model_path": "/home/elect/models/phi-4-mini",
+      "domain": "general",
+      "description": "Modelo rápido para respuestas simples y directas",
+      "priority": 4,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.90,
+      "max_num_seqs": 512,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 16384,
+      "max_model_len": 4096,
+      "use_cases": [
+        "preguntas simples",
+        "respuestas rápidas",
+        "chistes",
+        "saludos",
+        "respuestas directas"
+      ]
+    },
+    {
+      "expert_id": "mistral_balanced",
+      "model_path": "/home/elect/models/mistral-7b-instruct-v0.2",
+      "domain": "technical",
+      "description": "Modelo equilibrado para tareas técnicas intermedias",
+      "priority": 3,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.85,
+      "max_num_seqs": 256,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 8192,
+      "max_model_len": 8192,
+      "use_cases": [
+        "explicaciones técnicas",
+        "código y programación",
+        "análisis intermedio",
+        "redacción",
+        "documentación"
+      ]
+    },
+    {
+      "expert_id": "qwen_coder",
+      "model_path": "/home/elect/models/qwen2.5-coder-1.5b",
+      "domain": "coding",
+      "description": "Modelo especializado en código y programación",
+      "priority": 2,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.85,
+      "max_num_seqs": 256,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 8192,
+      "max_model_len": 8192,
+      "use_cases": [
+        "generación de código",
+        "debugging",
+        "explicaciones técnicas",
+        "refactoring",
+        "documentación de código"
+      ]
+    },
+    {
+      "expert_id": "gptoss_complex",
+      "model_path": "/home/elect/models/gpt-oss-20b",
+      "domain": "expert",
+      "description": "Modelo grande para razonamiento complejo",
+      "priority": 1,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.80,
+      "max_num_seqs": 128,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 4096,
+      "max_model_len": 4096,
+      "use_cases": [
+        "análisis profundo",
+        "razonamiento complejo",
+        "planificación",
+        "análisis técnico avanzado",
+        "research"
+      ]
+    }
+  ],
+  "lazy_loading": {
+    "enabled": true,
+    "warmup_pool_size": 2,
+    "max_loaded_experts": 3,
+    "memory_threshold": 0.80,
+    "auto_unload_after_s": 300
+  },
+  "embedding_model": {
+    "model_name": "all-MiniLM-L6-v2",
+    "cache_size": 10000,
+    "use_neon": true
+  },
+  "rag": {
+    "enabled": true,
+    "bridge_url": "http://localhost:8001",
+    "collection": "capibara_docs",
+    "detection_threshold": 0.5,
+    "max_context_tokens": 1000,
+    "notes": "Parallel RAG fetching: -40% latency on RAG queries"
+  },
+  "speculative_routing": {
+    "enabled": true,
+    "speculation_threshold": 0.85,
+    "max_speculation_time": 0.5,
+    "notes": "Start generation on high-confidence first chunk: -20-30% TTFT on obvious queries"
+  },
+  "enable_consensus": false,
+  "consensus_model": null,
+  "chunk_size": 64,
+  "routing_threshold": 0.7,
+  "use_fast_classifier": true,
+  "server_config": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "log_level": "info",
+    "allow_credentials": true
+  },
+  "performance_tuning": {
+    "swap_space": 4,
+    "cpu_offload_gb": 0,
+    "enforce_eager": false,
+    "max_context_len_to_capture": 8192
+  },
+  "notes": {
+    "deployment": "Optimizado para Google Cloud ARM Axion C4A",
+    "memory_estimation": {
+      "phi4_awq": "~1.5 GB",
+      "mistral_awq": "~3.5 GB",
+      "qwen_q4": "~4 GB",
+      "gptoss_q4": "~10 GB",
+      "total": "~19 GB (caben 4 expertos en una C4A-standard-32 con 128GB RAM)"
+    },
+    "expected_performance": {
+      "phi4_ttft": "~0.2s",
+      "mistral_ttft": "~0.4s",
+      "qwen_ttft": "~0.5s",
+      "gptoss_ttft": "~0.8s",
+      "throughput_combined": "150-200 req/min"
+    }
+  }
+}

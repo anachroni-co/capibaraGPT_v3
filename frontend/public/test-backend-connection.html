@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Prueba de conexión con Backend</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <h1>Prueba de conexión con Backend Capibara6</h1>
+    <div id="status">Cargando...</div>
+    <div id="result"></div>
+    
+    <script>
+        document.getElementById('status').textContent = 'Probando conexión...';
+
+        // Probar conexión con el backend
+        fetch('http://localhost:5001/health')
+            .then(response => response.json())
+            .then(healthData => {
+                document.getElementById('status').innerHTML = 
+                    '<p>✅ Conexion con backend exitosa</p>' +
+                    '<p>Estatus del servidor: ' + healthData.status + '</p>' +
+                    '<p>Componentes disponibles:</p><ul>';
+                
+                for (const [component, status] of Object.entries(healthData.components)) {
+                    document.getElementById('status').innerHTML += 
+                        '<li>' + component + ': ' + status + '</li>';
+                }
+                document.getElementById('status').innerHTML += '</ul>';
+                
+                // Ahora probar el endpoint de chat
+                return fetch('http://localhost:5001/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: '¿Qué es un modelo de lenguaje?',
+                        category: 'general'
+                    })
+                });
+            })
+            .then(response => response.json())
+            .then(chatData => {
+                document.getElementById('result').innerHTML = 
+                    '<h3>Respuesta del modelo:</h3>' +
+                    '<p><strong>Contenido:</strong> ' + chatData.content.substring(0, 300) + '...</p>' +
+                    '<p><strong>Modelo usado:</strong> ' + chatData.model_used + '</p>' +
+                    '<p><strong>Token usage:</strong> ' + JSON.stringify(chatData.token_usage) + '</p>';
+            })
+            .catch(error => {
+                document.getElementById('status').textContent = '❌ Error: ' + error.message;
+                console.error('Error:', error);
+            });
+
+        // Inicializar íconos de Lucide
+        lucide.createIcons();
+    </script>
+</body>
+</html>

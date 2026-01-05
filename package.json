@@ -1,0 +1,26 @@
+{
+  "name": "capibara6-web",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Capibara6 - IA Conversacional con Gemma 3-12B, Smart MCP y Kyutai TTS",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'Static site - no build needed'",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "ai",
+    "chatbot",
+    "gemma",
+    "llm",
+    "kyutai",
+    "tts",
+    "mcp"
+  ],
+  "author": "Anachroni s.coop",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

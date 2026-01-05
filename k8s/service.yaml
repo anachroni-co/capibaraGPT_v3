@@ -1,0 +1,135 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: capibara6-api-service
+  namespace: capibara6
+  labels:
+    app: capibara6-api
+spec:
+  selector:
+    app: capibara6-api
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: capibara6-graphql-service
+  namespace: capibara6
+  labels:
+    app: capibara6-graphql
+spec:
+  selector:
+    app: capibara6-graphql
+  ports:
+  - name: http
+    port: 8001
+    targetPort: 8001
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: capibara6
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb-service
+  namespace: capibara6
+  labels:
+    app: timescaledb
+spec:
+  selector:
+    app: timescaledb
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: capibara6
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus-service
+  namespace: capibara6
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: http
+    port: 9090
+    targetPort: 9090
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-service
+  namespace: capibara6
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-service
+  namespace: capibara6
+  labels:
+    app: capibara6-n8n
+spec:
+  selector:
+    app: capibara6-n8n
+  ports:
+  - name: http
+    port: 5678
+    targetPort: 5678
+    protocol: TCP
+  type: ClusterIP

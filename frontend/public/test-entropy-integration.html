@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Integración Entropía</title>
+    <link rel="stylesheet" href="chat.css">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body style="background: #171717; padding: 40px; font-family: sans-serif;">
+    <div style="max-width: 800px; margin: 0 auto;">
+        <h1 style="color: #ececec;">🧪 Test de Integración - Monitor de Entropía</h1>
+        
+        <div style="background: #212121; border: 1px solid #3d3d3d; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #ececec;">Verificación de Scripts:</h3>
+            <div id="script-check" style="color: #8e8e8e; font-family: monospace;"></div>
+        </div>
+
+        <div style="background: #212121; border: 1px solid #3d3d3d; border-radius: 12px; padding: 20px; margin: 20px 0;">
+            <h3 style="color: #ececec;">Test de Funciones:</h3>
+            <div id="function-check" style="color: #8e8e8e; font-family: monospace;"></div>
+        </div>
+
+        <button onclick="testEntropy()" style="background: #10a37f; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin: 10px 0;">
+            🧪 Probar Cálculo de Entropía
+        </button>
+
+        <div id="messages" style="margin-top: 20px;">
+            <div class="message assistant-message" style="margin-bottom: 20px;">
+                <div class="message-avatar">
+                    <i data-lucide="sparkles"></i>
+                </div>
+                <div class="message-content">
+                    <div class="message-text">
+                        <p>Esta es una respuesta de prueba para verificar que el monitor de entropía funciona correctamente.</p>
+                    </div>
+                    <div class="message-stats">
+                        <span class="stat-item">
+                            <i data-lucide="clock"></i>
+                            2.3s
+                        </span>
+                        <span class="stat-item">
+                            <i data-lucide="zap"></i>
+                            45 gen
+                        </span>
+                        <span class="stat-item">
+                            <i data-lucide="gauge"></i>
+                            capibara6
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="entropy-monitor.js"></script>
+    <script src="entropy-auto-inject.js"></script>
+    <script>
+        // Verificar scripts cargados
+        const scriptCheck = document.getElementById('script-check');
+        const functionCheck = document.getElementById('function-check');
+
+        // Verificar funciones
+        let checks = [];
+        checks.push(`✓ calculateEntropy: ${typeof calculateEntropy === 'function' ? '✅' : '❌'}`);
+        checks.push(`✓ getEntropyClass: ${typeof getEntropyClass === 'function' ? '✅' : '❌'}`);
+        checks.push(`✓ createEntropyHTML: ${typeof createEntropyHTML === 'function' ? '✅' : '❌'}`);
+        checks.push(`✓ Lucide: ${typeof lucide !== 'undefined' ? '✅' : '❌'}`);
+
+        scriptCheck.innerHTML = checks.join('<br>');
+
+        // Test de entropía
+        function testEntropy() {
+            const testText = "Esta es una prueba de cálculo de entropía para verificar que todo funciona correctamente.";
+            const entropy = calculateEntropy(testText, 0.6);
+            const entropyClass = getEntropyClass(entropy);
+            const html = createEntropyHTML(entropy);
+            
+            let results = [];
+            results.push(`Texto: "${testText}"`);
+            results.push(`Entropía calculada: ${entropy.toFixed(2)} H`);
+            results.push(`Clase CSS: ${entropyClass}`);
+            results.push(`HTML generado: ${html.length} caracteres`);
+            
+            functionCheck.innerHTML = results.join('<br>');
+            
+            console.log('📊 Test de entropía:', {
+                text: testText,
+                entropy,
+                entropyClass,
+                html
+            });
+        }
+
+        // Inicializar iconos
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
+
+        // Ejecutar test automáticamente
+        setTimeout(testEntropy, 1000);
+    </script>
+</body>
+</html>

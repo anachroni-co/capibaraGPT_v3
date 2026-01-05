@@ -1,0 +1,42 @@
+{
+  "models": {
+    "fast_response": {
+      "name": "phi3:mini",
+      "description": "Modelo más rápido para respuestas simples",
+      "max_tokens": 512,
+      "timeout": 5000,
+      "use_case": ["preguntas simples", "respuestas rápidas", "chistes", "saludos", "respuestas directas"]
+    },
+    "balanced": {
+      "name": "mistral",
+      "description": "Modelo equilibrado para tareas intermedias",
+      "max_tokens": 1024,
+      "timeout": 10000,
+      "use_case": ["explicaciones", "análisis intermedio", "redacción", "resumen corto"]
+    },
+    "complex": {
+      "name": "gpt-oss:20b",
+      "description": "Modelo más potente para tareas complejas",
+      "max_tokens": 2048,
+      "timeout": 120000,
+      "use_case": ["análisis profundo", "razonamiento complejo", "planificación", "análisis técnico"]
+    }
+  },
+  "fallback_strategy": {
+    "enabled": true,
+    "order": ["fast_response", "balanced", "complex"]
+  },
+  "load_balancing": {
+    "enable_preloading": true,
+    "models_to_keep_loaded": ["phi3:mini", "mistral"],
+    "max_loaded_models": 2,
+    "cache_enabled": true,
+    "cache_ttl_seconds": 3600
+  },
+  "api_settings": {
+    "ollama_endpoint": "http://localhost:11434",
+    "default_model": "phi3:mini",
+    "max_concurrent_requests": 4,
+    "streaming_enabled": true
+  }
+}

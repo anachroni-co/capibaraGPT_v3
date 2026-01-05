@@ -1,0 +1,252 @@
+{
+  "experts": [
+    {
+      "expert_id": "phi4_fast",
+      "model_path": "/home/elect/models/phi-4-mini",
+      "domain": "general",
+      "description": "Modelo rápido para respuestas simples y directas - Optimizado para ARM Axion",
+      "priority": 5,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.85,
+      "max_num_seqs": 1024,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 32768,
+      "max_model_len": 4096,
+      "enforce_eager": false,
+      "kv_cache_dtype": "auto",
+      "use_v2_block_manager": true,
+      "enable_prefix_caching": true,
+      "device": "auto",
+      "dtype": "float16",
+      "use_captured_graph": true,
+      "swap_space": 4,
+      "cpu_offload_gb": 0,
+      "neon_optimizations": {
+        "matmul_8x8": true,
+        "flash_attention": true,
+        "rmsnorm": true,
+        "rope": true,
+        "swiglu": true,
+        "softmax_fast_exp": true
+      },
+      "use_cases": [
+        "preguntas simples",
+        "respuestas rápidas",
+        "chistes",
+        "saludos",
+        "respuestas directas"
+      ]
+    },
+    {
+      "expert_id": "mistral_balanced",
+      "model_path": "/home/elect/models/mistral-7b-instruct-v0.2",
+      "domain": "technical",
+      "description": "Modelo equilibrado para tareas técnicas intermedias - Optimizado para ARM Axion",
+      "priority": 4,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.8,
+      "max_num_seqs": 512,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 16384,
+      "max_model_len": 8192,
+      "enforce_eager": false,
+      "kv_cache_dtype": "auto",
+      "use_v2_block_manager": true,
+      "enable_prefix_caching": true,
+      "device": "auto",
+      "dtype": "float16",
+      "use_captured_graph": true,
+      "swap_space": 4,
+      "cpu_offload_gb": 0,
+      "neon_optimizations": {
+        "matmul_8x8": true,
+        "flash_attention": true,
+        "rmsnorm": true,
+        "rope": true,
+        "swiglu": true,
+        "softmax_fast_exp": true
+      },
+      "use_cases": [
+        "explicaciones técnicas",
+        "código y programación",
+        "análisis intermedio",
+        "redacción",
+        "documentación"
+      ]
+    },
+    {
+      "expert_id": "qwen_coder",
+      "model_path": "/home/elect/models/qwen2.5-coder-1.5b",
+      "domain": "coding",
+      "description": "Modelo especializado en código y programación - Optimizado para ARM Axion",
+      "priority": 3,
+      "quantization": null,
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.8,
+      "max_num_seqs": 512,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 16384,
+      "max_model_len": 8192,
+      "enforce_eager": false,
+      "kv_cache_dtype": "auto",
+      "use_v2_block_manager": true,
+      "enable_prefix_caching": true,
+      "device": "auto",
+      "dtype": "float16",
+      "use_captured_graph": true,
+      "swap_space": 4,
+      "cpu_offload_gb": 0,
+      "neon_optimizations": {
+        "matmul_8x8": true,
+        "flash_attention": true,
+        "rmsnorm": true,
+        "rope": true,
+        "swiglu": true,
+        "softmax_fast_exp": true
+      },
+      "use_cases": [
+        "generación de código",
+        "debugging",
+        "explicaciones técnicas",
+        "refactoring",
+        "documentación de código"
+      ]
+    },
+    {
+      "expert_id": "gemma3_multimodal",
+      "model_path": "/home/elect/models/gemma-3-27b-it-awq",
+      "domain": "multimodal_expert",
+      "description": "Modelo multimodal para texto + imágenes, análisis complejo y contexto largo - Optimizado para ARM Axion",
+      "priority": 2,
+      "quantization": "awq",
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.75,
+      "max_num_seqs": 256,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "enable_flash_attention": true,
+      "max_num_batched_tokens": 16384,
+      "max_model_len": 65536,
+      "trust_remote_code": true,
+      "dtype": "float16",
+      "enforce_eager": false,
+      "kv_cache_dtype": "auto",
+      "use_v2_block_manager": true,
+      "enable_prefix_caching": true,
+      "device": "auto",
+      "use_captured_graph": true,
+      "swap_space": 8,
+      "cpu_offload_gb": 0,
+      "neon_optimizations": {
+        "rmsnorm": true,
+        "rope": true,
+        "swiglu": true,
+        "flash_attention": true,
+        "matmul_8x8": true,
+        "softmax_fast_exp": true,
+        "quantization_q4": true,
+        "acl_gemm": true
+      },
+      "flash_attention_config": {
+        "block_size": 64,
+        "enable_for_seq_len_above": 512,
+        "max_seq_len": 131072
+      },
+      "use_cases": [
+        "análisis profundo",
+        "razonamiento complejo",
+        "análisis multimodal",
+        "imágenes + texto",
+        "contexto largo (>8K tokens)",
+        "multilingüe avanzado (140+ idiomas)",
+        "research y documentación extensa",
+        "análisis de PDFs con imágenes"
+      ]
+    }
+  ],
+  "lazy_loading": {
+    "enabled": true,
+    "warmup_pool_size": 2,
+    "max_loaded_experts": 3,
+    "memory_threshold": 0.8,
+    "auto_unload_after_s": 300
+  },
+  "embedding_model": {
+    "model_name": "all-MiniLM-L6-v2",
+    "cache_size": 20000,
+    "use_neon": true
+  },
+  "rag": {
+    "enabled": true,
+    "bridge_url": "http://localhost:8001",
+    "collection": "capibara_docs",
+    "detection_threshold": 0.5,
+    "max_context_tokens": 2000,
+    "notes": "Parallel RAG fetching: -40% latency on RAG queries"
+  },
+  "speculative_routing": {
+    "enabled": true,
+    "speculation_threshold": 0.85,
+    "max_speculation_time": 0.5,
+    "notes": "Start generation on high-confidence first chunk: -20-30% TTFT on obvious queries"
+  },
+  "enable_consensus": false,
+  "consensus_model": null,
+  "chunk_size": 64,
+  "routing_threshold": 0.7,
+  "use_fast_classifier": true,
+  "server_config": {
+    "host": "0.0.0.0",
+    "port": 8080,
+    "log_level": "info",
+    "allow_credentials": true
+  },
+  "performance_tuning": {
+    "swap_space": 12,
+    "cpu_offload_gb": 0,
+    "enforce_eager": false,
+    "max_context_len_to_capture": 8192,
+    "enable_prefix_caching": true,
+    "use_v2_block_manager": true,
+    "num_scheduler_steps": 8,
+    "enable_chunked_prefill": true,
+    "max_num_cached_tokens": 32768
+  },
+  "optimization_flags": {
+    "arm_neon": true,
+    "acl_integrated": true,
+    "matmul_optimized": true,
+    "memory_efficient_sampling": true,
+    "batch_scheduler": "vllm_default"
+  },
+  "notes": {
+    "deployment": "Optimizado para Google Cloud ARM Axion C4A-standard-32 (128GB RAM, 32 vCores) - europe-southwest1-b",
+    "vm_name": "models-europe",
+    "hardware_optimization": {
+      "cpu_cores": 32,
+      "memory_gb": 128,
+      "architecture": "ARM-N1 high-CPU machine"
+    },
+    "memory_estimation": {
+      "phi4_awq": "~1.2 GB",
+      "mistral_awq": "~2.8 GB",
+      "qwen_awq": "~3.2 GB",
+      "gemma3_awq": "~12 GB",
+      "gptoss_original": "~20-25 GB",
+      "total_with_lazy_loading": "~30-40 GB con lazy loading activado"
+    },
+    "expected_performance_with_hardware": {
+      "phi4_ttft": "~0.15s (optimal con 32 vCores)",
+      "mistral_ttft": "~0.3s (optimal con 32 vCores)",
+      "qwen_ttft": "~0.4s (optimal con 32 vCores)",
+      "gemma3_ttft": "~0.5s (con NEON+ACL en 128GB system)",
+      "gptoss_moe_loading": "posible con ajustes especiales para MoE",
+      "throughput_total": "300-400 req/min con 5 modelos (ajustado para ARM-Axion)"
+    }
+  }
+}

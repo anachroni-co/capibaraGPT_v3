@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Servidor Integrado Capibara6</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #1a1a1a; 
+            color: #fff; 
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        .container { 
+            background: #2a2a2a; 
+            padding: 20px; 
+            border-radius: 10px; 
+            margin: 20px 0;
+        }
+        button { 
+            padding: 12px 24px; 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            border-radius: 5px; 
+            cursor: pointer; 
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #666; cursor: not-allowed; }
+        input, textarea { 
+            padding: 12px; 
+            width: 100%; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            border: 1px solid #555; 
+            background: #333;
+            color: #fff;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .result { 
+            margin-top: 20px; 
+            padding: 15px; 
+            background: #333; 
+            border-radius: 5px; 
+            white-space: pre-wrap;
+            min-height: 100px;
+            border-left: 4px solid #007bff;
+        }
+        .success { border-left-color: #28a745; }
+        .error { border-left-color: #dc3545; }
+        .status { 
+            padding: 10px; 
+            border-radius: 5px; 
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success { background: #28a745; color: white; }
+        .status.error { background: #dc3545; color: white; }
+        .status.info { background: #17a2b8; color: white; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 768px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Servidor Integrado Capibara6</h1>
+    
+    <div class="container">
+        <h3>🔍 Health Check Completo</h3>
+        <button onclick="testHealth()" id="healthBtn">Probar Todos los Servicios</button>
+        <div id="healthStatus"></div>
+    </div>
+    
+    <div class="grid">
+        <div class="container">
+            <h3>💬 Test Chat con MCP</h3>
+            <textarea id="chatInput" rows="3" placeholder="Escribe tu mensaje...">¿Cómo te llamas? ¿Quién te creó?</textarea>
+            <br>
+            <button onclick="testChat()" id="chatBtn">Enviar Mensaje</button>
+            <div id="chatStatus"></div>
+            <div id="chatResult" class="result">Resultado del chat aparecerá aquí...</div>
+        </div>
+        
+        <div class="container">
+            <h3>🧠 Test Smart MCP</h3>
+            <textarea id="mcpInput" rows="3" placeholder="Mensaje para analizar contexto...">¿Cuál es tu nombre?</textarea>
+            <br>
+            <button onclick="testMCP()" id="mcpBtn">Analizar Contexto</button>
+            <div id="mcpStatus"></div>
+            <div id="mcpResult" class="result">Análisis MCP aparecerá aquí...</div>
+        </div>
+    </div>
+    
+    <div class="grid">
+        <div class="container">
+            <h3>🎵 Test TTS</h3>
+            <textarea id="ttsInput" rows="2" placeholder="Texto para convertir a voz...">Hola, soy Capibara6</textarea>
+            <select id="voiceSelect">
+                <option value="sofia">Sofía (Femenina)</option>
+                <option value="ana">Ana (Femenina)</option>
+                <option value="carlos">Carlos (Masculina)</option>
+            </select>
+            <br>
+            <button onclick="testTTS()" id="ttsBtn">Generar Audio</button>
+            <div id="ttsStatus"></div>
+            <div id="ttsResult" class="result">Resultado TTS aparecerá aquí...</div>
+        </div>
+        
+        <div class="container">
+            <h3>📊 Información del Sistema</h3>
+            <button onclick="getSystemInfo()" id="infoBtn">Obtener Info</button>
+            <div id="infoStatus"></div>
+            <div id="infoResult" class="result">Información del sistema aparecerá aquí...</div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h3>📋 URLs del Servidor Integrado</h3>
+        <p><strong>Base URL:</strong> http://localhost:5000</p>
+        <p><strong>Chat:</strong> /api/chat (POST)</p>
+        <p><strong>Health:</strong> /health (GET)</p>
+        <p><strong>MCP:</strong> /api/mcp/analyze (POST)</p>
+        <p><strong>TTS:</strong> /api/tts/speak (POST)</p>
+        <p><strong>Voces:</strong> /api/tts/voices (GET)</p>
+    </div>
+
+    <script>
+        const BASE_URL = 'http://localhost:5000';
+        
+        async function testHealth() {
+            const btn = document.getElementById('healthBtn');
+            const status = document.getElementById('healthStatus');
+            
+            btn.disabled = true;
+            btn.textContent = 'Probando...';
+            status.innerHTML = '<div class="status info">🔄 Probando todos los servicios...</div>';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/health`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = `
+                        <div class="status success">✅ Todos los servicios funcionando</div>
+                        <div class="result success">
+Servidor: ${data.server}
+Componentes:
+${JSON.stringify(data.components, null, 2)}
+VM Status: ${JSON.stringify(data.vm_status, null, 2)}
+Timestamp: ${data.timestamp}
+                        </div>
+                    `;
+                } else {
+                    status.innerHTML = `<div class="status error">❌ Error: ${response.status}</div>`;
+                }
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Error de conexión: ${error.message}</div>`;
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Probar Todos los Servicios';
+        }
+        
+        async function testChat() {
+            const message = document.getElementById('chatInput').value.trim();
+            const btn = document.getElementById('chatBtn');
+            const status = document.getElementById('chatStatus');
+            const result = document.getElementById('chatResult');
+            
+            if (!message) {
+                alert('Por favor, escribe un mensaje.');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Enviando...';
+            status.innerHTML = '<div class="status info">🔄 Enviando mensaje con MCP...</div>';
+            result.textContent = 'Esperando respuesta...';
+            
+            try {
+                const startTime = Date.now();
+                
+                const response = await fetch(`${BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        message: message,
+                        max_tokens: 200
+                    })
+                });
+                
+                const endTime = Date.now();
+                const duration = ((endTime - startTime) / 1000).toFixed(2);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = `<div class="status success">✅ Respuesta recibida en ${duration}s</div>`;
+                    
+                    result.innerHTML = `
+🤖 Respuesta del modelo:
+${data.response}
+
+📊 Información:
+• Modelo: ${data.model}
+• Tokens: ${data.tokens}
+• Tiempo: ${duration}s
+• Mensaje: "${message}"
+                    `;
+                    result.className = 'result success';
+                } else {
+                    const errorText = await response.text();
+                    status.innerHTML = `<div class="status error">❌ Error del servidor: ${response.status}</div>`;
+                    result.textContent = `Error: ${response.status}\n${errorText}`;
+                    result.className = 'result error';
+                }
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Enviar Mensaje';
+        }
+        
+        async function testMCP() {
+            const message = document.getElementById('mcpInput').value.trim();
+            const btn = document.getElementById('mcpBtn');
+            const status = document.getElementById('mcpStatus');
+            const result = document.getElementById('mcpResult');
+            
+            if (!message) {
+                alert('Por favor, escribe un mensaje.');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Analizando...';
+            status.innerHTML = '<div class="status info">🔄 Analizando contexto MCP...</div>';
+            result.textContent = 'Analizando mensaje...';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/mcp/analyze`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: message })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = `<div class="status success">✅ Análisis MCP completado</div>`;
+                    
+                    result.innerHTML = `
+🧠 Análisis MCP:
+• Necesita contexto: ${data.needs_context ? 'Sí' : 'No'}
+• Contexto añadido: ${data.context || 'Ninguno'}
+
+📝 Mensaje mejorado:
+${data.enhanced_message}
+
+📊 Mensaje original:
+${message}
+                    `;
+                    result.className = 'result success';
+                } else {
+                    status.innerHTML = `<div class="status error">❌ Error: ${response.status}</div>`;
+                }
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Analizar Contexto';
+        }
+        
+        async function testTTS() {
+            const text = document.getElementById('ttsInput').value.trim();
+            const voice = document.getElementById('voiceSelect').value;
+            const btn = document.getElementById('ttsBtn');
+            const status = document.getElementById('ttsStatus');
+            const result = document.getElementById('ttsResult');
+            
+            if (!text) {
+                alert('Por favor, escribe un texto.');
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.textContent = 'Generando...';
+            status.innerHTML = '<div class="status info">🔄 Generando audio TTS...</div>';
+            result.textContent = 'Generando audio...';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/api/tts/speak`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: text,
+                        voice: voice
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    status.innerHTML = `<div class="status success">✅ TTS generado</div>`;
+                    
+                    result.innerHTML = `
+🎵 TTS Generado:
+• Estado: ${data.status}
+• Voz usada: ${data.voice_used}
+• Longitud del texto: ${data.text_length} caracteres
+• Nota: ${data.note}
+
+📝 Texto: "${text}"
+🎤 Voz: ${voice}
+                    `;
+                    result.className = 'result success';
+                } else {
+                    status.innerHTML = `<div class="status error">❌ Error: ${response.status}</div>`;
+                }
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Generar Audio';
+        }
+        
+        async function getSystemInfo() {
+            const btn = document.getElementById('infoBtn');
+            const status = document.getElementById('infoStatus');
+            const result = document.getElementById('infoResult');
+            
+            btn.disabled = true;
+            btn.textContent = 'Obteniendo...';
+            status.innerHTML = '<div class="status info">🔄 Obteniendo información del sistema...</div>';
+            result.textContent = 'Obteniendo información...';
+            
+            try {
+                const [modelsResponse, voicesResponse, contextResponse] = await Promise.all([
+                    fetch(`${BASE_URL}/api/models`),
+                    fetch(`${BASE_URL}/api/tts/voices`),
+                    fetch(`${BASE_URL}/api/mcp/context`)
+                ]);
+                
+                const models = await modelsResponse.json();
+                const voices = await voicesResponse.json();
+                const context = await contextResponse.json();
+                
+                status.innerHTML = `<div class="status success">✅ Información obtenida</div>`;
+                
+                result.innerHTML = `
+📊 Información del Sistema:
+
+🤖 Modelos Disponibles:
+${JSON.stringify(models.models, null, 2)}
+
+🎤 Voces TTS:
+${JSON.stringify(voices.voices, null, 2)}
+
+🧠 Contexto MCP:
+${JSON.stringify(context.knowledge_base, null, 2)}
+                `;
+                result.className = 'result success';
+                
+            } catch (error) {
+                status.innerHTML = `<div class="status error">❌ Error: ${error.message}</div>`;
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+            }
+            
+            btn.disabled = false;
+            btn.textContent = 'Obtener Info';
+        }
+        
+        // Auto-probar health check al cargar
+        window.onload = () => {
+            console.log('🧪 Test Servidor Integrado Capibara6 cargado');
+            console.log('📍 Base URL:', BASE_URL);
+        };
+    </script>
+</body>
+</html>

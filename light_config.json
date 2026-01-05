@@ -1,0 +1,160 @@
+{
+  "experts": [
+    {
+      "expert_id": "phi4_fast",
+      "model_path": "/home/elect/models/phi-4-mini",
+      "domain": "general",
+      "description": "Modelo r\u00e1pido para respuestas simples y directas - Optimizado para ARM Axion",
+      "priority": 5,
+      "quantization": "awq",
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.3,
+      "max_num_seqs": 16,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 8192,
+      "max_model_len": 2048,
+      "enforce_eager": false,
+      "kv_cache_dtype": "fp8",
+      "use_v2_block_manager": true,
+      "enable_prefix_caching": true,
+      "device": "cpu",
+      "dtype": "float16",
+      "use_captured_graph": true,
+      "swap_space": 2,
+      "cpu_offload_gb": 0,
+      "neon_optimizations": {
+        "matmul_8x8": true,
+        "flash_attention": false,
+        "rmsnorm": true,
+        "rope": true,
+        "swiglu": true,
+        "softmax_fast_exp": true
+      },
+      "use_cases": [
+        "preguntas simples",
+        "respuestas r\u00e1pidas",
+        "chistes",
+        "saludos",
+        "respuestas directas"
+      ],
+      "block_size": 8,
+      "num_gpu_blocks_override": 2048,
+      "max_context_len_to_capture": 2048,
+      "num_scheduler_steps": 2
+    },
+    {
+      "expert_id": "qwen_coder",
+      "model_path": "/home/elect/models/qwen2.5-coder-1.5b",
+      "domain": "coding",
+      "description": "Modelo especializado en c\u00f3digo y programaci\u00f3n - Optimizado para ARM Axion",
+      "priority": 3,
+      "quantization": "awq",
+      "tensor_parallel_size": 1,
+      "gpu_memory_utilization": 0.3,
+      "max_num_seqs": 16,
+      "enable_neon": true,
+      "enable_chunked_prefill": true,
+      "max_num_batched_tokens": 8192,
+      "max_model_len": 2048,
+      "enforce_eager": false,
+      "kv_cache_dtype": "fp8",
+      "use_v2_block_manager": true,
+      "enable_prefix_caching": true,
+      "device": "cpu",
+      "dtype": "float16",
+      "use_captured_graph": true,
+      "swap_space": 2,
+      "cpu_offload_gb": 0,
+      "neon_optimizations": {
+        "matmul_8x8": true,
+        "flash_attention": false,
+        "rmsnorm": true,
+        "rope": true,
+        "swiglu": true,
+        "softmax_fast_exp": true
+      },
+      "use_cases": [
+        "generaci\u00f3n de c\u00f3digo",
+        "debugging",
+        "explicaciones t\u00e9cnicas",
+        "refactoring",
+        "documentaci\u00f3n de c\u00f3digo"
+      ],
+      "block_size": 8,
+      "num_gpu_blocks_override": 2048,
+      "max_context_len_to_capture": 2048,
+      "num_scheduler_steps": 2
+    }
+  ],
+  "lazy_loading": {
+    "enabled": true,
+    "warmup_pool_size": 1,
+    "max_loaded_experts": 2,
+    "memory_threshold": 0.8,
+    "auto_unload_after_s": 120
+  },
+  "embedding_model": {
+    "model_name": "all-MiniLM-L6-v2",
+    "cache_size": 10000,
+    "use_neon": true
+  },
+  "rag": {
+    "enabled": false,
+    "bridge_url": "http://localhost:8001",
+    "collection": "capibara_docs",
+    "detection_threshold": 0.5,
+    "max_context_tokens": 1000,
+    "notes": "Parallel RAG fetching: -40% latency on RAG queries"
+  },
+  "speculative_routing": {
+    "enabled": false,
+    "speculation_threshold": 0.85,
+    "max_speculation_time": 0.5,
+    "notes": "Start generation on high-confidence first chunk: -20-30% TTFT on obvious queries"
+  },
+  "enable_consensus": false,
+  "consensus_model": "/home/elect/models/phi-4-mini",
+  "chunk_size": 32,
+  "routing_threshold": 0.7,
+  "use_fast_classifier": true,
+  "server_config": {
+    "host": "0.0.0.0",
+    "port": 8082,
+    "log_level": "info",
+    "allow_credentials": true
+  },
+  "performance_tuning": {
+    "swap_space": 4,
+    "cpu_offload_gb": 0,
+    "enforce_eager": false,
+    "max_context_len_to_capture": 2048,
+    "enable_prefix_caching": true,
+    "use_v2_block_manager": false,
+    "num_scheduler_steps": 2,
+    "enable_chunked_prefill": true,
+    "max_num_batched_tokens": 2048,
+    "use_captured_graph": true,
+    "max_num_batched_tokens": 2048
+  },
+  "optimization_flags": {
+    "arm_neon": true,
+    "acl_integrated": true,
+    "matmul_optimized": true,
+    "memory_efficient_sampling": true,
+    "batch_scheduler": "vllm_default"
+  },
+  "notes": {
+    "deployment": "Configuración ligera para pruebas de concurrencia",
+    "vm_name": "models-europe",
+    "memory_estimation": {
+      "phi4_awq": "~1.2 GB",
+      "qwen_awq": "~3.2 GB"
+    },
+    "expected_performance": {
+      "phi4_ttft": "~0.15s (con optimizaciones)",
+      "qwen_ttft": "~0.4s (con optimizaciones)",
+      "throughput_combined": "50-80 req/min (con 2 modelos)"
+    }
+  }
+}
