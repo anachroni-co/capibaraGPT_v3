@@ -1,93 +1,93 @@
-# Capibara6 Backend - Servidor de Chat con IA
+# CapibaraGPT Backend - AI Chat Server
 
-Backend Flask para el chat de IA Capibara6 con soporte para GPT-OSS-20B y subida de archivos.
+Flask backend for CapibaraGPT AI chat with support for multi-model inference and file uploads.
 
-## 🚀 Inicio Rápido
+## Quick Start
 
-### Prerequisitos
+### Prerequisites
 
 ```bash
-# Python 3.8 o superior
+# Python 3.8 or higher
 python3 --version
 
-# Instalar dependencias
+# Install dependencies
 pip install flask flask-cors requests python-dotenv
 ```
 
-### Configuración
+### Configuration
 
-1. **Crear archivo `.env` (opcional)**:
+1. **Create `.env` file (optional)**:
 ```bash
-# Configuración del modelo GPT-OSS-20B
+# Model configuration
 GPT_OSS_URL=http://34.175.215.109:8080
 GPT_OSS_TIMEOUT=60
 
-# Puerto del servidor (por defecto 5001)
+# Server port (default 5001)
 PORT=5001
 
-# Configuración SMTP (solo para server.py)
+# SMTP configuration (only for server.py)
 SMTP_SERVER=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=info@anachroni.co
-SMTP_PASSWORD=tu_password
+SMTP_PASSWORD=your_password
 FROM_EMAIL=info@anachroni.co
 ```
 
-### Ejecutar el Servidor
+### Running the Server
 
-**IMPORTANTE**: Para que el chat funcione, debes ejecutar `server_gptoss.py`:
+**IMPORTANT**: To enable chat functionality, run `server_gptoss.py`:
 
 ```bash
 cd backend
 python3 server_gptoss.py
 ```
 
-El servidor iniciará en `http://localhost:5001`
+Server will start at `http://localhost:5001`
 
-Verás este mensaje:
+You'll see:
 ```
-🦫 capibara6 Backend iniciado
-🤖 Modelo: GPT-OSS-20B
-🌐 URL del modelo: http://34.175.215.109:8080
+Backend started
+Model: GPT-OSS-20B
+Model URL: http://34.175.215.109:8080
  * Running on all addresses (0.0.0.0)
  * Running on http://127.0.0.1:5001
 ```
 
-### Acceder al Chat
+### Accessing the Chat
 
-1. Abre tu navegador
-2. Navega a: `file:///ruta/a/capibara6/web/chat.html`
-3. O usa un servidor web local:
+1. Open your browser
+2. Navigate to: `file:///path/to/capibaraGPT_v3/web/chat.html`
+3. Or use a local web server:
    ```bash
    cd web
    python3 -m http.server 8000
-   # Luego abre: http://localhost:8000/chat.html
+   # Then open: http://localhost:8000/chat.html
    ```
 
-## 📁 Servidores Disponibles
+## Available Servers
 
-### 1. `server_gptoss.py` ⭐ (RECOMENDADO PARA CHAT)
+### 1. `server_gptoss.py` (RECOMMENDED FOR CHAT)
 
-**Servidor principal para el chat con IA**
+**Main server for AI chat**
 
-**Características**:
-- ✅ Endpoint `/api/chat` para chat con GPT-OSS-20B
-- ✅ Soporte para subida de archivos (multipart/form-data)
-- ✅ Almacenamiento de archivos en `user_data/uploads/`
-- ✅ Conversaciones guardadas en JSON
-- ✅ Streaming de respuestas
-- ✅ Health check del modelo
+**Features**:
+- `/api/chat` endpoint for chat with AI models
+- File upload support (multipart/form-data)
+- File storage in `user_data/uploads/`
+- Conversations saved in JSON
+- Response streaming
+- Model health check
 
 **Endpoints**:
-- `POST /api/chat` - Chat principal (acepta JSON o FormData con archivos)
-- `POST /api/chat/stream` - Chat con streaming
-- `GET /api/health` - Estado del servidor y modelo
-- `GET /api/models` - Información del modelo
-- `POST /api/save-conversation` - Guardar conversación
+- `POST /api/chat` - Main chat (accepts JSON or FormData with files)
+- `POST /api/chat/stream` - Chat with streaming
+- `GET /api/health` - Server and model status
+- `GET /api/models` - Model information
+- `POST /api/save-conversation` - Save conversation
 
-**Puerto**: 5001
+**Port**: 5001
 
-**Cómo ejecutar**:
+**How to run**:
 ```bash
 cd backend
 python3 server_gptoss.py
@@ -95,162 +95,156 @@ python3 server_gptoss.py
 
 ### 2. `server.py`
 
-**Servidor para gestión de emails y guardado de conversaciones**
+**Server for email management and conversation saving**
 
-**Características**:
-- Envío de emails de confirmación
-- Guardado de conversaciones
-- NO tiene endpoint de chat
+**Features**:
+- Confirmation email sending
+- Conversation saving
+- NO chat endpoint
 
 **Endpoints**:
-- `POST /api/save-conversation` - Guardar y enviar emails
+- `POST /api/save-conversation` - Save and send emails
 - `GET /api/health` - Health check
 
-**Puerto**: 5000 (por defecto)
+**Port**: 5000 (default)
 
-**Nota**: ⚠️ Este servidor NO es suficiente para el chat. El frontend requiere `/api/chat`.
-
-**Cómo ejecutar**:
-```bash
-cd backend
-python3 server.py
-```
+**Note**: This server is NOT sufficient for chat. Frontend requires `/api/chat`.
 
 ### 3. `capibara6_integrated_server.py`
 
-**Servidor integrado con múltiples funcionalidades**
+**Integrated server with multiple functionalities**
 
-Si existe, incluye chat + TTS + MCP + E2B.
+Includes chat + TTS + MCP + E2B.
 
 ### 4. `main.py`
 
-**Servidor FastAPI**
+**FastAPI server**
 
-Si existe, puede tener endpoints diferentes (verifica el código).
+May have different endpoints (check the code).
 
-## 🔧 Solución de Problemas
+## Troubleshooting
 
-### ❌ El botón de enviar no funciona
+### Send button doesn't work
 
-**Causa**: El servidor no está ejecutándose o es el incorrecto.
+**Cause**: Server not running or wrong server.
 
-**Solución**:
+**Solution**:
 ```bash
-# 1. Verificar si hay un servidor corriendo
+# 1. Check if a server is running
 ps aux | grep python | grep server
 
-# 2. Si no hay ninguno, iniciar server_gptoss.py
+# 2. If none, start server_gptoss.py
 cd backend
 python3 server_gptoss.py
 
-# 3. Si hay uno incorrecto, detenerlo y ejecutar el correcto
-killall python3  # o Ctrl+C en la terminal del servidor
+# 3. If wrong server, stop and run correct one
+killall python3  # or Ctrl+C in server terminal
 python3 server_gptoss.py
 ```
 
-### ❌ Error: "No se pudo conectar con el modelo"
+### Error: "Could not connect to model"
 
-**Causa**: El servidor GPT-OSS-20B no está disponible.
+**Cause**: AI model server unavailable.
 
-**Soluciones**:
-1. Verifica que la IP en `.env` sea correcta
-2. Verifica conectividad: `curl http://34.175.215.109:8080/health`
-3. Cambia `GPT_OSS_URL` en `.env` si el servidor está en otra ubicación
+**Solutions**:
+1. Verify IP in `.env` is correct
+2. Check connectivity: `curl http://34.175.215.109:8080/health`
+3. Change `GPT_OSS_URL` in `.env` if server is elsewhere
 
-### ❌ Error de CORS
+### CORS Error
 
-**Causa**: Frontend y backend en dominios diferentes.
+**Cause**: Frontend and backend on different domains.
 
-**Solución**: El servidor ya tiene CORS habilitado. Si persiste:
-1. Usa un servidor web local para servir el frontend
-2. O abre `chrome` con: `--disable-web-security --user-data-dir=/tmp/chrome`
+**Solution**: Server has CORS enabled. If issue persists:
+1. Use local web server to serve frontend
+2. Or open Chrome with: `--disable-web-security --user-data-dir=/tmp/chrome`
 
-### ❌ Los archivos no se suben
+### Files not uploading
 
-**Causa**: Permisos o configuración incorrecta.
+**Cause**: Permissions or incorrect configuration.
 
-**Solución**:
+**Solution**:
 ```bash
-# Crear directorio de uploads
+# Create uploads directory
 mkdir -p backend/user_data/uploads
 chmod 755 backend/user_data/uploads
 
-# Verificar que el servidor tiene permisos de escritura
+# Verify server has write permissions
 ls -la backend/user_data/
 ```
 
-### ❌ Error: "Address already in use"
+### Error: "Address already in use"
 
-**Causa**: El puerto 5001 ya está en uso.
+**Cause**: Port 5001 already in use.
 
-**Solución**:
+**Solution**:
 ```bash
-# Ver qué proceso está usando el puerto
+# See which process is using the port
 lsof -i :5001
 
-# Matar el proceso
+# Kill the process
 kill -9 <PID>
 
-# O cambiar el puerto en .env
+# Or change port in .env
 PORT=5002
 ```
 
-## 📊 Estructura de Datos
+## Data Structure
 
-### Conversaciones guardadas
+### Saved Conversations
 
 ```json
 {
   "timestamp": "2025-01-01T12:00:00",
-  "user_message": "Hola, ¿cómo estás?",
-  "ai_response": "¡Hola! Estoy bien, gracias...",
-  "user_email": "usuario@example.com",
+  "user_message": "Hello, how are you?",
+  "ai_response": "Hello! I'm fine, thanks...",
+  "user_email": "user@example.com",
   "ip": "127.0.0.1",
   "user_agent": "Mozilla/5.0..."
 }
 ```
 
-Ubicación: `backend/user_data/conversations.json`
+Location: `backend/user_data/conversations.json`
 
-### Archivos subidos
+### Uploaded Files
 
-Los archivos se guardan en: `backend/user_data/uploads/`
+Files are saved in: `backend/user_data/uploads/`
 
-Formato del nombre: `YYYYMMDD_HHMMSS_nombre_original.ext`
+Filename format: `YYYYMMDD_HHMMSS_original_name.ext`
 
-Ejemplo: `20250110_143022_documento.pdf`
+Example: `20250110_143022_document.pdf`
 
-## 🔐 Seguridad
+## Security
 
-### Archivos permitidos
+### Allowed Files
 
-Por defecto, solo se permiten estos tipos:
-- Imágenes: `png, jpg, jpeg, gif`
-- Documentos: `pdf, doc, docx, txt`
-- Datos: `csv, xlsx, xls`
-- Presentaciones: `pptx, ppt`
-- Comprimidos: `zip, rar`
+By default, only these types are allowed:
+- Images: `png, jpg, jpeg, gif`
+- Documents: `pdf, doc, docx, txt`
+- Data: `csv, xlsx, xls`
+- Presentations: `pptx, ppt`
+- Archives: `zip, rar`
 
-### Tamaño máximo
+### Maximum Size
 
-10MB por archivo (configurable en `MAX_FILE_SIZE`)
+10MB per file (configurable in `MAX_FILE_SIZE`)
 
-### Validación
+### Validation
 
-- Nombres de archivos sanitizados (secure_filename)
-- Extensiones verificadas
-- Tamaño validado
+- Sanitized filenames (secure_filename)
+- Extension verification
+- Size validation
 
-## 📧 Configuración SMTP (solo server.py)
+## SMTP Configuration (server.py only)
 
-Si usas `server.py` para envío de emails:
+If using `server.py` for email sending:
 
 ### Gmail
-1. Ve a https://myaccount.google.com/apppasswords
-2. Genera una "Contraseña de aplicación"
-3. Usa esa contraseña en `SMTP_PASSWORD`
+1. Go to https://myaccount.google.com/apppasswords
+2. Generate an "App Password"
+3. Use that password in `SMTP_PASSWORD`
 
-### Otros proveedores
+### Other Providers
 
 **Outlook/Hotmail:**
 ```env
@@ -264,40 +258,38 @@ SMTP_SERVER=smtp.mail.yahoo.com
 SMTP_PORT=587
 ```
 
-## 🌐 Producción
+## Production
 
-Para producción, considera usar un servidor WSGI como Gunicorn:
+For production, consider using a WSGI server like Gunicorn:
 
 ```bash
-# Instalar gunicorn
+# Install gunicorn
 pip install gunicorn
 
-# Ejecutar en producción
+# Run in production
 gunicorn -w 4 -b 0.0.0.0:5001 server_gptoss:app
 ```
 
-O configurar Railway/Vercel según tus necesidades.
+Or configure Railway/Vercel as needed.
 
-## 📝 Logs
+## Logs
 
-Los logs se imprimen en la consola. Para guardarlos:
+Logs are printed to console. To save them:
 
 ```bash
 python3 server_gptoss.py 2>&1 | tee server.log
 ```
 
-## 🆘 Soporte
+## Support
 
-Si tienes problemas:
+If you have problems:
 
-1. Revisa los logs del servidor
-2. Verifica el network tab del navegador (DevTools > Network)
-3. Asegúrate de que el puerto 5001 esté libre: `lsof -i :5001`
-4. Verifica la consola del navegador (F12) para errores JavaScript
-5. Contacta con el equipo de Anachroni
+1. Check server logs
+2. Verify network tab in browser (DevTools > Network)
+3. Ensure port 5001 is free: `lsof -i :5001`
+4. Check browser console (F12) for JavaScript errors
 
 ---
 
-**Desarrollado por**: Anachroni s.coop
-**Modelo**: GPT-OSS-20B
-**Versión**: 1.0
+**Developed by**: Anachroni s.coop
+**Version**: 3.0

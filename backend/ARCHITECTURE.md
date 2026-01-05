@@ -1,33 +1,89 @@
-# Arquitectura del Sistema Capibara6
+# CapibaraGPT System Architecture
 
-## VM Bounty2 (esta máquina)
+## Distributed VM Architecture
 
-Esta VM aloja el servicio principal de chat para el modelo GPT-OSS-20B.
+### Models VM (`models-europe`)
 
-### Servicios Activos
-- `server_gptoss.py` - Servidor del chat con el modelo GPT-OSS-20B (puerto 5001)
-- `server_gptoss_CURRENT_WORKING.py` - Copia de seguridad del servidor funcionando
-- `config_gptoss.py` - Configuración del servidor y modelo
-- `start_gptoss_server.py` - Script de inicio del servidor
-- `models_config.py` - Configuración de modelos
-- `gpt_oss_optimized_config.py` - Configuración específica para GPT-OSS-20B
+This VM hosts the AI inference services.
 
-### Otros Servidores Disponibles (no activos actualmente)
-- `capibara6_integrated_server.py` - Servidor integrado con soporte TOON (en otro directorio)
-- Otros servidores especializados para funcionalidades específicas
+**Active Services**:
+- `multi_model_server.py` - Multi-model server with semantic routing (port 8082)
+- 5 specialized AI models with ARM-Axion optimizations
+- Semantic router for intelligent query distribution
 
-## VM gpt-oss-20b (otra máquina)
+**Configuration**:
+- VM Type: ARM Axion C4A-standard-32
+- vCPUs: 32 cores
+- RAM: 125 GB
+- Location: europe-southwest1-b
 
-Esta VM aloja otros servicios como:
-- TTS (Text-to-Speech)
-- MCP (Model Context Propagation)
-- Sistema n8n
-- Otros microservicios
+### Services VM (`services`)
 
-## VM rag3 (otra máquina)
+This VM hosts backend services and coordination.
 
-Esta VM aloja el sistema completo de RAG (Retrieval-Augmented Generation)
+**Active Services**:
+- `capibara6_integrated_server.py` - Main backend server
+- `mcp_server.py` - Model Context Protocol (port 5003)
+- `kyutai_tts_server.py` - Text-to-Speech (port 5002)
+- `smart_mcp_server.py` - Alternative MCP server (port 5010)
 
-## Integración Futura
+### RAG VM (`rag3`)
 
-Los servicios de ambas VMs están destinados a integrarse para proporcionar una experiencia unificada.
+This VM hosts the complete RAG (Retrieval-Augmented Generation) system.
+
+**Services**:
+- Vector database
+- Embedding generation
+- Semantic search
+- Document processing
+
+## Service Communication
+
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Frontend  │────▶│   Services  │────▶│   Models    │
+│   (Vercel)  │     │     VM      │     │     VM      │
+└─────────────┘     └──────┬──────┘     └─────────────┘
+                          │
+                          ▼
+                   ┌─────────────┐
+                   │   RAG VM    │
+                   └─────────────┘
+```
+
+## Backend Servers
+
+### `server_gptoss.py`
+- Main chat server for AI models
+- Port: 5001
+- Handles chat requests and file uploads
+
+### `capibara6_integrated_server.py`
+- Integrated server with all features
+- Supports: Chat, TTS, MCP, E2B
+- Production ready
+
+### `gateway_server.py`
+- Gateway for routing requests
+- Load balancing
+- Health monitoring
+
+## Configuration Files
+
+| File | Purpose |
+|------|---------|
+| `config_gptoss.py` | GPT-OSS model configuration |
+| `models_config.py` | Multi-model configuration |
+| `production_config.py` | Production environment settings |
+| `gpt_oss_optimized_config.py` | Optimized GPT-OSS settings |
+
+## Integration Architecture
+
+The system integrates multiple components:
+
+1. **Chat Interface** - Web frontend for user interaction
+2. **Backend API** - REST API for chat and services
+3. **Model Server** - Multi-model inference with routing
+4. **RAG System** - Knowledge retrieval and augmentation
+5. **TTS Service** - Text-to-speech conversion
+6. **MCP Server** - Extended tool capabilities

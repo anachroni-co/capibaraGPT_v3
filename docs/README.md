@@ -1,46 +1,56 @@
-# Documentación Capibara6
+# CapibaraGPT Documentation
 
-## Índice de Documentación
+## Documentation Index
 
-### Documentación Principal
-- [Acontext Integration](./Acontext_Integration.md) - Integración completa del sistema de contexto persistente
-- [System Architecture](../SYSTEM_ARCHITECTURE.md) - Arquitectura de microservicios distribuidos
-- [Models Reference](../MODELS_REFERENCE.md) - Referencia de modelos de IA disponibles
+### Main Documentation
+- [Acontext Integration](./Acontext_Integration.md) - Complete persistent context system integration
+- [System Architecture](./ARCHITECTURE.md) - Distributed microservices architecture
+- [Backend Documentation](./BACKEND_README.md) - Backend setup and configuration
 
-### Documentación Técnica
-- [Core Operations](../CORE_OPERATIONS.md) - Operaciones fundamentales del sistema
-- [Router System Guide](../ROUTER_SYSTEM_GUIDE.md) - Guía del sistema de routing semántico
-- [Frontend Vercel Setup](../FRONTEND_VERCEL_SETUP.md) - Configuración del frontend en Vercel
+### Technical Documentation
+- [CORS Configuration](./CORS_FIX.md) - CORS setup and troubleshooting
+- [Endpoint Fixes](./FIXES_ENDPOINTS.md) - API endpoint documentation
+- [Infrastructure](./INFRASTRUCTURE_FINDINGS.md) - Infrastructure details
 
-### Estado y Actualizaciones
-- [Actual Status Acontext](./ACTUAL_STATUS_ACONTEXT.md) - Estado actual del sistema con Acontext
+### n8n Workflows
+- [n8n README](./n8n/README.md) - n8n integration overview
+- [n8n Deployment](./n8n/DEPLOYMENT.md) - Deployment guide
+- [n8n Templates](./n8n/TEMPLATES.md) - Workflow templates
 
-## Documentos depracados
-Los siguientes documentos han sido movidos a la carpeta `deprecated/` ya que contienen información obsoleta o duplicada:
-- COMANDOS_VERIFICACION.md
-- PLAN_ACCION_PRIORITARIO.md
-- START_SERVICES_QUICK.md
-- RESUMEN_EJECUTIVO.md
-- SYSTEM_STATUS.md
+### Status and Updates
+- [Acontext Status](./ACTUAL_STATUS_ACONTEXT.md) - Current system status with Acontext
 
-## Estructura de la Documentación
+## Deprecated Documents
+
+The following documents have been moved to `deprecated/` as they contain outdated or duplicated information:
+
+- Historical implementation documents
+- Old status reports
+- Legacy configuration guides
+
+## Documentation Structure
 
 ```
 docs/
-├── Acontext_Integration.md     # Nueva integración de contexto persistente
-├── ACTUAL_STATUS_ACONTEXT.md   # Estado actual del sistema con Acontext
-├── README.md                   # Este archivo
-└── deprecated/                 # Documentos antiguos
-    ├── COMANDOS_VERIFICACION.md
-    ├── PLAN_ACCION_PRIORITARIO.md
-    ├── START_SERVICES_QUICK.md
-    ├── RESUMEN_EJECUTIVO.md
-    └── SYSTEM_STATUS.md
+├── README.md                    # This file
+├── ARCHITECTURE.md              # System architecture
+├── BACKEND_README.md            # Backend documentation
+├── CORS_FIX.md                  # CORS configuration
+├── FIXES_ENDPOINTS.md           # Endpoint documentation
+├── INFRASTRUCTURE_FINDINGS.md   # Infrastructure details
+├── Acontext_Integration.md      # Persistent context integration
+├── ACTUAL_STATUS_ACONTEXT.md    # Current status
+├── n8n/                         # n8n documentation
+│   ├── README.md
+│   ├── DEPLOYMENT.md
+│   └── TEMPLATES.md
+└── deprecated/                  # Archived documents
 ```
 
-## Convenciones de Documentación
+## Documentation Conventions
 
-- Todos los documentos principales usan formato Markdown
-- Se siguen estándares de redacción para mantener consistencia
-- Las actualizaciones se registran con fechas y autores
-- Documentos con más de 6 meses sin actualización se consideran candidatos a revisión
+- All main documents use Markdown format
+- Writing standards are followed for consistency
+- Updates are recorded with dates and authors
+- Documents older than 6 months without updates are candidates for review
+- New documentation should be written in English

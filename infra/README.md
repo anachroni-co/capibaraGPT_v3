@@ -1,36 +1,153 @@
-# Pila RAG Contenerizada
+# Containerized RAG Stack
 
-Este directorio contiene la infraestructura dockerizada de la pila RAG (PostgreSQL, SQLite, Redis, ChromaDB, Milvus y Nebula Graph).
+This directory contains the dockerized infrastructure for the RAG stack (PostgreSQL, SQLite, Redis, ChromaDB, Milvus, and Nebula Graph).
 
-## Pasos rÃ¡pidos
+## Quick Steps
 
-1. Copia  como  y ajusta credenciales.
-2. Revisa los scripts en  antes del primer arranque.
-3. Levanta PostgreSQL y Redis () y verifica logs.
-4. Activa el resto de servicios ().
-5. Ejecuta los scripts de inicializaciÃ³n:
-   - PostgreSQL: 
-   - Milvus: 
-   - Nebula: 
+1. Copy `.env.example` as `.env` and adjust credentials.
+2. Review scripts in `scripts/` before first startup.
+3. Start PostgreSQL and Redis and verify logs.
+4. Activate remaining services.
+5. Run initialization scripts:
+   - PostgreSQL: `scripts/init_postgres.sh`
+   - Milvus: `scripts/init_milvus.sh`
+   - Nebula: `scripts/init_nebula.sh`
 
-## Directorios clave
+## Key Directories
 
-- : definiciÃ³n de todos los servicios.
-- : plantilla de variables de entorno.
-- : scripts de bootstrap para cada motor.
-- : se generarÃ¡ automÃ¡ticamente para persistencia (monta volÃºmenes locales).
+- `docker-compose.yml`: Definition of all services.
+- `.env.example`: Environment variables template.
+- `scripts/`: Bootstrap scripts for each engine.
+- `data/`: Generated automatically for persistence (mounts local volumes).
 
-## Conexiones dentro de la red Docker
+## Connections within Docker Network
 
-- PostgreSQL: 
-- Redis: 
-- ChromaDB: 
-- Milvus: 
-- Nebula Graph: 
-- SQLite: archivos bajo 
+| Service | Connection |
+|---------|------------|
+| PostgreSQL | `postgres:5432` |
+| Redis | `redis:6379` |
+| ChromaDB | `chromadb:8000` |
+| Milvus | `milvus:19530` |
+| Nebula Graph | `nebula:9669` |
+| SQLite | Files under `data/sqlite/` |
 
-## PrÃ³ximos pasos sugeridos
+## Services Overview
 
-- Construir pipelines de ingestiÃ³n que inserten en SQL, vectores y grafo.
-- AÃ±adir monitoreo (Prometheus/Grafana) y alertas.
-- Establecer backups para PostgreSQL, MinIO y Nebula.
+### PostgreSQL
+- Relational database for structured data
+- Stores user data, conversations, metadata
+
+### Redis
+- In-memory cache
+- Session management
+- Rate limiting
+
+### ChromaDB
+- Vector database
+- Embedding storage
+- Similarity search
+
+### Milvus
+- Scalable vector database
+- High-performance similarity search
+- Production-ready vector storage
+
+### Nebula Graph
+- Graph database
+- Knowledge graph storage
+- Relationship queries
+
+## Suggested Next Steps
+
+- Build ingestion pipelines that insert into SQL, vectors, and graph.
+- Add monitoring (Prometheus/Grafana) and alerts.
+- Establish backups for PostgreSQL, MinIO, and Nebula.
+
+## Usage
+
+### Start All Services
+
+```bash
+docker-compose up -d
+```
+
+### Check Service Status
+
+```bash
+docker-compose ps
+```
+
+### View Logs
+
+```bash
+docker-compose logs -f [service_name]
+```
+
+### Stop All Services
+
+```bash
+docker-compose down
+```
+
+### Reset Data
+
+```bash
+docker-compose down -v
+rm -rf data/
+```
+
+## Configuration
+
+### Environment Variables
+
+Copy and modify the template:
+
+```bash
+cp .env.example .env
+```
+
+Key variables:
+- `POSTGRES_PASSWORD`: PostgreSQL password
+- `REDIS_PASSWORD`: Redis password (optional)
+- `MILVUS_HOST`: Milvus connection host
+
+### Resource Allocation
+
+Adjust in `docker-compose.yml`:
+
+```yaml
+services:
+  milvus:
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+```
+
+## Troubleshooting
+
+### Service won't start
+```bash
+# Check logs
+docker-compose logs [service_name]
+
+# Verify ports are free
+lsof -i :5432  # PostgreSQL
+lsof -i :6379  # Redis
+```
+
+### Data persistence issues
+```bash
+# Verify volume mounts
+docker volume ls
+docker volume inspect [volume_name]
+```
+
+### Connection refused
+```bash
+# Verify service is healthy
+docker-compose ps
+docker-compose exec [service] healthcheck
+```
