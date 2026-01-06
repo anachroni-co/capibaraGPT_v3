@@ -1,35 +1,35 @@
 # capibara/training - Training System
 
-El módulo **training** implementa el sistema de entrenamiento avanzado de capibaraGPT-v2, incluyendo **Meta-Consensus**, **TPU v6e optimization**, y múltiples estrategias de training distribuido.
+The **training** module implements the advanced training system for capibaraGPT-v2, including **Meta-Consensus**, **TPU v6e optimization**, and multiple distributed training strategies.
 
-## 📋 Tabla de Contenidos
+## Table of Contents
 
-1. [Visión General](#visión-general)
-2. [Componentes Principales](#componentes-principales)
+1. [Overview](#overview)
+2. [Main Components](#main-components)
 3. [Meta-Consensus System](#meta-consensus-system)
 4. [Training Strategies](#training-strategies)
 5. [TPU v6e Training](#tpu-v6e-training)
 6. [Quick Start](#quick-start)
-7. [Configuración Avanzada](#configuración-avanzada)
-8. [Optimizaciones](#optimizaciones)
+7. [Advanced Configuration](#advanced-configuration)
+8. [Optimizations](#optimizations)
 
 ---
 
-## 🎯 Visión General
+## Overview
 
-El sistema de training de capibaraGPT-v2 implementa estrategias avanzadas para entrenar modelos de lenguaje de alta calidad:
+The capibaraGPT-v2 training system implements advanced strategies for training high-quality language models:
 
-### Características Principales
+### Key Features
 
-- ⚡ **TPU v6e Optimized**: Training ultra-rápido en Google Cloud TPU v6e-64/256
-- 🧠 **Meta-Consensus**: Sistema de consenso para combinar múltiples modelos/estrategias
-- 🌐 **Distributed Training**: Data parallelism + Model parallelism + Expert parallelism
-- 📊 **Multiple Strategies**: Hierarchical, Convexity, Incremental Soup, HuggingFace Integration
-- 🔄 **Consensus Algorithms**: Byzantine-tolerant, Convex optimization, Federated learning
-- ⚙️ **Cython Kernels**: Kernels C++ optimizados para operaciones críticas
-- 📈 **Advanced Monitoring**: Dashboard en tiempo real con métricas detalladas
+- **TPU v6e Optimized**: Ultra-fast training on Google Cloud TPU v6e-64/256
+- **Meta-Consensus**: Consensus system for combining multiple models/strategies
+- **Distributed Training**: Data parallelism + Model parallelism + Expert parallelism
+- **Multiple Strategies**: Hierarchical, Convexity, Incremental Soup, HuggingFace Integration
+- **Consensus Algorithms**: Byzantine-tolerant, Convex optimization, Federated learning
+- **Cython Kernels**: Optimized C++ kernels for critical operations
+- **Advanced Monitoring**: Real-time dashboard with detailed metrics
 
-### Arquitectura del Sistema
+### System Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────┐
@@ -60,47 +60,47 @@ El sistema de training de capibaraGPT-v2 implementa estrategias avanzadas para e
 
 ---
 
-## 🏗️ Componentes Principales
+## Main Components
 
-| Componente | Archivo | Propósito |
+| Component | File | Purpose |
 |------------|---------|-----------|
-| **Meta-Consensus System** | `meta_consensus_system.py` | Coordina training distribuido con consenso |
-| **TPU v6e Trainer** | `tpu_v6e_trainer.py` | Trainer optimizado para TPU v6e |
-| **TPU v6e Config** | `tpu_v6e_config.py` | Configuración TPU v6e específica |
-| **Consensus Algorithms** | `advanced_consensus_algorithms.py` | Algoritmos Byzantine-tolerant |
-| **Hierarchical Strategy** | `hierarchical_training_strategy.py` | Training jerárquico multi-nivel |
-| **Convexity Strategy** | `convexity_training_strategy.py` | Optimización convexa para training |
-| **Incremental Soup** | `incremental_soup_strategy.py` | Model soups incrementales |
-| **HuggingFace Integration** | `huggingface_consensus_strategy.py` | Integración con HF Transformers |
-| **Hybrid Expert Router** | `hybrid_expert_router.py` | Routing de expertos durante training |
-| **Monitoring Dashboard** | `monitoring_dashboard.py` | Dashboard de métricas en vivo |
-| **Cython Kernels** | `cython_kernels/` | Kernels C++ optimizados |
-| **Federated Consensus** | `federated_consensus/` | Federated learning distribuido |
+| **Meta-Consensus System** | `meta_consensus_system.py` | Coordinates distributed training with consensus |
+| **TPU v6e Trainer** | `tpu_v6e_trainer.py` | Optimized trainer for TPU v6e |
+| **TPU v6e Config** | `tpu_v6e_config.py` | TPU v6e specific configuration |
+| **Consensus Algorithms** | `advanced_consensus_algorithms.py` | Byzantine-tolerant algorithms |
+| **Hierarchical Strategy** | `hierarchical_training_strategy.py` | Multi-level hierarchical training |
+| **Convexity Strategy** | `convexity_training_strategy.py` | Convex optimization for training |
+| **Incremental Soup** | `incremental_soup_strategy.py` | Incremental model soups |
+| **HuggingFace Integration** | `huggingface_consensus_strategy.py` | Integration with HF Transformers |
+| **Hybrid Expert Router** | `hybrid_expert_router.py` | Expert routing during training |
+| **Monitoring Dashboard** | `monitoring_dashboard.py` | Live metrics dashboard |
+| **Cython Kernels** | `cython_kernels/` | Optimized C++ kernels |
+| **Federated Consensus** | `federated_consensus/` | Distributed federated learning |
 
 ---
 
-## 🧠 Meta-Consensus System
+## Meta-Consensus System
 
-El **Meta-Consensus System** es el núcleo del training distribuido, permitiendo entrenar múltiples variantes del modelo y combinarlas mediante consenso.
+The **Meta-Consensus System** is the core of distributed training, enabling training of multiple model variants and combining them through consensus.
 
-### Arquitectura Meta-Consensus
+### Meta-Consensus Architecture
 
 ```python
 from capibara.training import MetaConsensusSystem, ConsensusConfig
 
-# Configurar sistema de consenso
+# Configure consensus system
 consensus_config = ConsensusConfig(
-    num_nodes=8,              # 8 TPUs participando
+    num_nodes=8,              # 8 TPUs participating
     voting_strategy="byzantine_tolerant",
     merge_strategy="weighted_average",
-    quality_threshold=0.85,   # Mínimo quality score
-    consensus_threshold=0.75  # 75% de nodos deben acordar
+    quality_threshold=0.85,   # Minimum quality score
+    consensus_threshold=0.75  # 75% of nodes must agree
 )
 
-# Crear sistema
+# Create system
 consensus_system = MetaConsensusSystem(consensus_config)
 
-# Entrenar con consenso
+# Train with consensus
 results = consensus_system.train(
     data_path="gs://capibara-data/",
     num_epochs=10,
@@ -108,27 +108,27 @@ results = consensus_system.train(
 )
 ```
 
-### Algoritmos de Consenso Disponibles
+### Available Consensus Algorithms
 
 #### 1. Byzantine-Tolerant Voting
 
-Tolera hasta (n-1)/3 nodos fallidos o maliciosos:
+Tolerates up to (n-1)/3 failed or malicious nodes:
 
 ```python
 from capibara.training.advanced_consensus_algorithms import ByzantineConsensus
 
 consensus = ByzantineConsensus(
-    fault_tolerance=0.33,  # Tolera hasta 33% nodos fallidos
+    fault_tolerance=0.33,  # Tolerates up to 33% failed nodes
     verification_rounds=3
 )
 
-# Votación bizantina
+# Byzantine voting
 consensus_model = consensus.vote(models=[model1, model2, model3])
 ```
 
 #### 2. Convex Optimization Consensus
 
-Optimización convexa para merging de modelos:
+Convex optimization for model merging:
 
 ```python
 from capibara.training.convexity_controller import ConvexityController
@@ -138,7 +138,7 @@ controller = ConvexityController(
     max_iterations=100
 )
 
-# Encontrar combinación óptima
+# Find optimal combination
 optimal_weights = controller.optimize(
     models=models,
     validation_data=val_data
@@ -149,18 +149,18 @@ merged_model = controller.merge(models, optimal_weights)
 
 #### 3. Federated Consensus
 
-Federated learning con differential privacy:
+Federated learning with differential privacy:
 
 ```python
 from capibara.training.federated_consensus import FederatedConsensusStrategy
 
 federated = FederatedConsensusStrategy(
     num_clients=20,
-    privacy_budget=1.0,  # Epsilon para differential privacy
+    privacy_budget=1.0,  # Epsilon for differential privacy
     aggregation_method="fedavg"
 )
 
-# Round de federated training
+# Federated training round
 global_model = federated.train_round(
     global_model=model,
     client_data=client_datasets
@@ -169,16 +169,16 @@ global_model = federated.train_round(
 
 ---
 
-## 📚 Training Strategies
+## Training Strategies
 
 ### 1. Hierarchical Training Strategy
 
-Training multi-nivel con especialización por nivel:
+Multi-level training with level-specific specialization:
 
 ```python
 from capibara.training.hierarchical_strategy import HierarchicalTrainingPipeline
 
-# Configurar pipeline jerárquico
+# Configure hierarchical pipeline
 pipeline = HierarchicalTrainingPipeline(
     levels=[
         {  # Level 1: General knowledge
@@ -199,13 +199,13 @@ pipeline = HierarchicalTrainingPipeline(
     ]
 )
 
-# Ejecutar training jerárquico
+# Execute hierarchical training
 final_model = pipeline.train(base_model)
 ```
 
 ### 2. Convexity Training Strategy
 
-Optimización con garantías de convexidad:
+Optimization with convexity guarantees:
 
 ```python
 from capibara.training import ConvexityTrainingStrategy
@@ -216,7 +216,7 @@ strategy = ConvexityTrainingStrategy(
     use_proximal_gradient=True
 )
 
-# Training con convexity constraints
+# Training with convexity constraints
 model = strategy.train(
     model=model,
     train_data=train_data,
@@ -226,7 +226,7 @@ model = strategy.train(
 
 ### 3. Incremental Soup Strategy
 
-Model soups incrementales (combina checkpoints):
+Incremental model soups (combines checkpoints):
 
 ```python
 from capibara.training import IncrementalSoupStrategy
@@ -236,18 +236,18 @@ soup = IncrementalSoupStrategy(
     evaluation_metric="perplexity"
 )
 
-# Agregar checkpoints al soup
+# Add checkpoints to soup
 soup.add_checkpoint("checkpoint_epoch_1.pkl")
 soup.add_checkpoint("checkpoint_epoch_2.pkl")
 soup.add_checkpoint("checkpoint_epoch_3.pkl")
 
-# Crear modelo soup
+# Create soup model
 souped_model = soup.merge(validation_data=val_data)
 ```
 
 ### 4. HuggingFace Consensus Strategy
 
-Integración con HuggingFace Transformers:
+Integration with HuggingFace Transformers:
 
 ```python
 from capibara.training import HuggingFaceConsensusStrategy
@@ -258,7 +258,7 @@ hf_strategy = HuggingFaceConsensusStrategy(
     merge_method="weighted_average"
 )
 
-# Training con HF integration
+# Training with HF integration
 model = hf_strategy.train(
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
@@ -268,17 +268,17 @@ model = hf_strategy.train(
 
 ---
 
-## ⚡ TPU v6e Training
+## TPU v6e Training
 
-### Configuración TPU v6e-64
+### TPU v6e-64 Configuration
 
 ```python
 from capibara.training import TPUv6eTrainer, TPUv6eConfig
 
-# Configurar TPU v6e
+# Configure TPU v6e
 tpu_config = TPUv6eConfig(
     tpu_type="v6e-64",
-    mesh_shape=(8, 8),  # 64 chips en mesh 8x8
+    mesh_shape=(8, 8),  # 64 chips in 8x8 mesh
     batch_size=128,
     use_bf16=True,
     enable_flash_attention=True,
@@ -288,10 +288,10 @@ tpu_config = TPUv6eConfig(
     }
 )
 
-# Crear trainer
+# Create trainer
 trainer = TPUv6eTrainer(tpu_config)
 
-# Training en TPU
+# Training on TPU
 results = trainer.train(
     model=model,
     train_data="gs://capibara-data/training/",
@@ -301,12 +301,12 @@ results = trainer.train(
 )
 ```
 
-### Optimizaciones TPU v6e
+### TPU v6e Optimizations
 
 ```python
 from capibara.training import TPUv6ConsensusOptimizer
 
-# Optimizer especializado para TPU v6e
+# Specialized optimizer for TPU v6e
 optimizer = TPUv6ConsensusOptimizer(
     learning_rate=3e-4,
     use_bf16_accumulation=True,
@@ -314,35 +314,35 @@ optimizer = TPUv6ConsensusOptimizer(
     enable_xla_fusion=True
 )
 
-# Características:
-# - BFloat16 accumulation nativa
-# - XLA fusion automática
-# - Collective operations optimizadas
+# Features:
+# - Native BFloat16 accumulation
+# - Automatic XLA fusion
+# - Optimized collective operations
 # - Memory-efficient gradient checkpointing
 ```
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
-### Training Básico (CPU/GPU)
+### Basic Training (CPU/GPU)
 
 ```python
 from capibara.training import UnifiedTrainer
 from capibara.core import ModularCapibaraModel, ModularConfig
 
-# 1. Configurar modelo
+# 1. Configure model
 config = ModularConfig.from_toml("config/development/config.toml")
 model = ModularCapibaraModel(config)
 
-# 2. Crear trainer
+# 2. Create trainer
 trainer = UnifiedTrainer(
     model=model,
     learning_rate=3e-4,
     batch_size=32
 )
 
-# 3. Entrenar
+# 3. Train
 trainer.train(
     train_data="data/train/",
     eval_data="data/eval/",
@@ -351,22 +351,22 @@ trainer.train(
 )
 ```
 
-### Training con Meta-Consensus (TPU)
+### Training with Meta-Consensus (TPU)
 
 ```python
 from capibara.training import MetaConsensusSystem, ConsensusConfig
 
-# 1. Configurar consenso
+# 1. Configure consensus
 consensus_config = ConsensusConfig(
     num_nodes=8,  # 8 TPUs
     voting_strategy="byzantine_tolerant",
     merge_strategy="convex_optimization"
 )
 
-# 2. Crear sistema de consenso
+# 2. Create consensus system
 consensus = MetaConsensusSystem(consensus_config)
 
-# 3. Training distribuido con consenso
+# 3. Distributed training with consensus
 results = consensus.train(
     model=model,
     data_path="gs://capibara-data/",
@@ -374,20 +374,20 @@ results = consensus.train(
     num_epochs=20
 )
 
-# 4. Obtener modelo consensuado
+# 4. Get consensus model
 final_model = results.consensus_model
 ```
 
 ---
 
-## ⚙️ Configuración Avanzada
+## Advanced Configuration
 
-### Training con Todas las Estrategias
+### Training with All Strategies
 
 ```python
 from capibara.training import IntegratedConsensusStrategy
 
-# Integrar múltiples estrategias
+# Integrate multiple strategies
 integrated = IntegratedConsensusStrategy(
     strategies={
         "hierarchical": {
@@ -406,7 +406,7 @@ integrated = IntegratedConsensusStrategy(
     consensus_threshold=0.8
 )
 
-# Training integrado
+# Integrated training
 model = integrated.train(
     base_model=model,
     train_data=train_data,
@@ -414,15 +414,15 @@ model = integrated.train(
 )
 ```
 
-### Monitoring en Tiempo Real
+### Real-Time Monitoring
 
 ```python
 from capibara.training import MonitoringDashboard
 
-# Crear dashboard
+# Create dashboard
 dashboard = MonitoringDashboard(
     port=8080,
-    update_frequency=10,  # segundos
+    update_frequency=10,  # seconds
     metrics=[
         "loss",
         "perplexity",
@@ -433,14 +433,14 @@ dashboard = MonitoringDashboard(
     ]
 )
 
-# Iniciar dashboard
+# Start dashboard
 dashboard.start()
 
-# Training con monitoring
+# Training with monitoring
 trainer = UnifiedTrainer(model=model, dashboard=dashboard)
 trainer.train(...)
 
-# Ver dashboard en http://localhost:8080
+# View dashboard at http://localhost:8080
 ```
 
 ### Data Preprocessing
@@ -455,7 +455,7 @@ preprocessor = DataPreprocessor(
     num_workers=8
 )
 
-# Preprocesar datos
+# Preprocess data
 processed_data = preprocessor.process(
     input_path="data/raw/",
     output_path="data/processed/",
@@ -465,11 +465,11 @@ processed_data = preprocessor.process(
 
 ---
 
-## 🔧 Optimizaciones
+## Optimizations
 
 ### Cython Kernels
 
-Kernels C++ optimizados para operaciones críticas:
+Optimized C++ kernels for critical operations:
 
 ```python
 from capibara.training.cython_kernels import (
@@ -478,25 +478,25 @@ from capibara.training.cython_kernels import (
     sparse_softmax
 )
 
-# Usar kernels optimizados
-# 10-50x más rápido que implementaciones Python puras
+# Use optimized kernels
+# 10-50x faster than pure Python implementations
 attn_output = fast_attention(q, k, v)
 ```
 
 ### Gradient Checkpointing
 
-Reduce memoria a costa de un poco de cómputo:
+Reduces memory at the cost of some computation:
 
 ```python
 from capibara.training import enable_gradient_checkpointing
 
-# Habilitar gradient checkpointing
+# Enable gradient checkpointing
 model = enable_gradient_checkpointing(
     model=model,
     checkpoint_every_n_layers=2
 )
 
-# Reduce memoria ~50% con ~20% más cómputo
+# Reduces memory ~50% with ~20% more computation
 ```
 
 ### Mixed Precision Training
@@ -511,14 +511,14 @@ trainer = MixedPrecisionTrainer(
     dynamic_loss_scale=True
 )
 
-# 2-3x faster training, ~50% menos memoria
+# 2-3x faster training, ~50% less memory
 ```
 
 ---
 
-## 📊 Métricas y Evaluación
+## Metrics and Evaluation
 
-### Métricas Disponibles
+### Available Metrics
 
 ```python
 from capibara.training import TrainingMetrics
@@ -536,16 +536,16 @@ metrics = TrainingMetrics(
     ]
 )
 
-# Registrar durante training
+# Log during training
 for batch in dataloader:
     loss = train_step(batch)
     metrics.log(loss=loss, step=step)
 
-# Exportar métricas
+# Export metrics
 metrics.export("metrics.json")
 ```
 
-### Integration con Weights & Biases
+### Integration with Weights & Biases
 
 ```python
 import wandb
@@ -554,26 +554,26 @@ from capibara.training import WandbIntegration
 # Setup W&B
 wandb.init(project="capibaraGPT-v2", name="tpu-training-run-001")
 
-# Integrar con trainer
+# Integrate with trainer
 trainer = UnifiedTrainer(
     model=model,
     wandb_project="capibaraGPT-v2"
 )
 
-# Métricas se loggean automáticamente a W&B
+# Metrics are automatically logged to W&B
 ```
 
 ---
 
-## 🔍 Debugging y Troubleshooting
+## Debugging and Troubleshooting
 
 ### Error: "TPU not found"
 
 ```bash
-# Verificar TPU disponible
+# Verify TPU availability
 python -c "import jax; print(jax.devices())"
 
-# Configurar variables de entorno
+# Configure environment variables
 export JAX_PLATFORMS=tpu
 export TPU_NAME=your-tpu-name
 ```
@@ -581,61 +581,61 @@ export TPU_NAME=your-tpu-name
 ### Error: "Consensus timeout"
 
 ```python
-# Aumentar timeout
+# Increase timeout
 consensus_config = ConsensusConfig(
-    consensus_timeout=600,  # 10 minutos
+    consensus_timeout=600,  # 10 minutes
     max_retries=5
 )
 ```
 
 ### Error: "Out of memory"
 
-Soluciones:
-1. Reducir `batch_size`
-2. Habilitar `gradient_checkpointing`
-3. Usar `accumulation_steps` para simular batch size más grande
-4. Reducir `sequence_length`
+Solutions:
+1. Reduce `batch_size`
+2. Enable `gradient_checkpointing`
+3. Use `accumulation_steps` to simulate larger batch size
+4. Reduce `sequence_length`
 
 ```python
 trainer = UnifiedTrainer(
-    batch_size=16,  # Reducir de 128
-    gradient_accumulation_steps=8,  # Simula batch_size=128
+    batch_size=16,  # Reduced from 128
+    gradient_accumulation_steps=8,  # Simulates batch_size=128
     use_gradient_checkpointing=True
 )
 ```
 
 ---
 
-## 📁 Subdirectorios
+## Subdirectories
 
-- **`cython_kernels/`**: Kernels C++/Cython optimizados
-- **`data_lineage/`**: Tracking de linaje de datos
-- **`data_preprocessing/`**: Preprocesamiento de datos
+- **`cython_kernels/`**: Optimized C++/Cython kernels
+- **`data_lineage/`**: Data lineage tracking
+- **`data_preprocessing/`**: Data preprocessing
 - **`federated_consensus/`**: Federated learning
-- **`hierarchical_strategy/`**: Training jerárquico
-- **`optimizations/`**: Optimizaciones de training
+- **`hierarchical_strategy/`**: Hierarchical training
+- **`optimizations/`**: Training optimizations
 
 ---
 
-## 📚 Referencias
+## References
 
-- [TPU v6e Trainer](tpu_v6e_trainer.py) - Trainer para TPU v6e
-- [Meta-Consensus System](meta_consensus_system.py) - Sistema de consenso
-- [Consensus Algorithms](advanced_consensus_algorithms.py) - Algoritmos bizantinos
-- [Monitoring Dashboard](monitoring_dashboard.py) - Dashboard de métricas
-- [Config Manager](config_manager.py) - Gestión de configuración
-
----
-
-## 🆘 Soporte
-
-Para problemas con training:
-1. Revisa logs en `logs/training.log`
-2. Verifica dashboard de monitoring
-3. Consulta métricas de consenso
-4. Abre issue en GitHub con logs completos
+- [TPU v6e Trainer](tpu_v6e_trainer.py) - TPU v6e trainer
+- [Meta-Consensus System](meta_consensus_system.py) - Consensus system
+- [Consensus Algorithms](advanced_consensus_algorithms.py) - Byzantine algorithms
+- [Monitoring Dashboard](monitoring_dashboard.py) - Metrics dashboard
+- [Config Manager](config_manager.py) - Configuration management
 
 ---
 
-**Última actualización**: 2025-11-16
-**Versión del sistema**: v2.0.0
+## Support
+
+For training issues:
+1. Check logs in `logs/training.log`
+2. Verify monitoring dashboard
+3. Check consensus metrics
+4. Open GitHub issue with complete logs
+
+---
+
+**Last updated**: 2025-11-16
+**System version**: v2.0.0
