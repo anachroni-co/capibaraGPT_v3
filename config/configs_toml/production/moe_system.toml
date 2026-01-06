@@ -1,0 +1,152 @@
+# Dynamic MoE System Configuration for Capibara-6
+# Optimized for TPU v6e-64 deployment
+
+[moe]
+# Core MoE parameters
+num_experts = 32
+num_active_experts = 4
+expert_capacity_factor = 1.25
+routing_temperature = 1.0
+load_balancing_weight = 0.01
+expert_dropout = 0.1
+
+# Hidden dimensions
+hidden_size = 768
+expert_hidden_size = 3072  # 4x hidden_size
+
+# TPU optimization
+tpu_optimized = true
+use_bf16_experts = true
+enable_expert_parallelism = true
+
+[specialization]
+# Expert specialization settings
+enable_expert_specialization = true
+expert_types = [
+    "reasoning", "coding", "mathematics", 
+    "creative", "factual", "multimodal", 
+    "linguistic", "scientific", "technical",
+    "analytical", "conversational", "general"
+]
+
+# Specialization weights
+specialization_weights = {
+    reasoning = 1.2,
+    coding = 1.3,
+    mathematics = 1.3,
+    creative = 1.1,
+    factual = 1.0,
+    multimodal = 1.1,
+    linguistic = 1.1,
+    scientific = 1.2,
+    technical = 1.2,
+    analytical = 1.2,
+    conversational = 0.9,
+    general = 1.0
+}
+
+[routing]
+# Routing configuration
+use_adaptive_routing = true
+routing_cache_size = 1000
+enable_dynamic_capacity = true
+routing_entropy_threshold = 2.0
+
+# Benefit analysis thresholds
+complexity_threshold = 0.4
+full_moe_threshold = 0.7
+selective_moe_threshold = 0.4
+
+# Complexity keywords for routing decisions
+complexity_keywords = [
+    "analyze", "compare", "explain", "reasoning", "logic", "mathematical",
+    "technical", "scientific", "creative", "artistic", "code", "programming",
+    "translate", "summarize", "classify", "generate", "question", "answer"
+]
+
+[integration]
+# Model integration settings
+moe_layer_positions = [6, 12, 18, 24]  # Strategic layer positions
+use_tpu_optimization = true
+enable_monitoring = true
+enable_api = true
+
+# Memory management
+enable_memory_monitoring = true
+memory_cleanup_threshold = 0.8
+expert_cleanup_threshold = 10  # Minimum usage count
+
+[performance]
+# Performance thresholds
+routing_entropy_threshold = 2.0
+efficiency_threshold = 0.7
+utilization_threshold = 0.5
+load_balance_threshold = 0.1
+
+# Optimization settings
+enable_gradient_checkpointing = true
+use_mixed_precision = true
+enable_expert_pruning = false
+
+[training]
+# Training-specific settings
+enable_specialization_training = true
+specialization_learning_rate = 1e-4
+max_specialization_epochs = 20
+early_stopping_patience = 3
+
+# Load balancing during training
+aux_loss_weight = 0.01
+diversity_loss_weight = 0.001
+
+[monitoring]
+# Monitoring and logging
+enable_real_time_metrics = true
+metrics_update_interval = 100  # steps
+log_expert_utilization = true
+log_routing_decisions = false  # Set to true for debugging
+
+# Health monitoring
+system_health_check_interval = 1000  # steps
+degraded_performance_threshold = 0.6
+critical_failure_threshold = 0.3
+
+[api]
+# MoE Control API settings
+enable_control_api = true
+enable_runtime_reconfiguration = true
+enable_expert_inspection = true
+
+# API endpoints
+health_endpoint = "/moe/health"
+metrics_endpoint = "/moe/metrics"
+config_endpoint = "/moe/config"
+experts_endpoint = "/moe/experts"
+
+[tpu_v6e]
+# TPU v6e-64 specific optimizations
+mesh_shape = [8, 8]  # dp=8, ep=8
+data_parallel_size = 8
+expert_parallel_size = 8
+model_parallel_size = 1
+
+# Memory optimization
+use_gradient_accumulation = true
+accumulation_steps = 4
+enable_activation_checkpointing = true
+
+# Kernel optimization
+use_specialized_kernels = true
+enable_flash_attention = true
+use_fused_ops = true
+
+[fallback]
+# Fallback configuration
+enable_graceful_degradation = true
+fallback_to_standard_on_error = true
+max_consecutive_failures = 3
+failure_recovery_timeout = 30  # seconds
+
+# Standard model fallback
+standard_model_path = "capibara/models/standard"
+enable_hybrid_mode = true  # Mix MoE and standard layers

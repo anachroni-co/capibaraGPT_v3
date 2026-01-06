@@ -1,7 +1,0 @@
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'capibara6-api'
-    static_configs:
-      - targets: ['capibara6-api:8000']

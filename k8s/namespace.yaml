@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: capibara6
-  labels:
-    name: capibara6
-    app: capibara6-ai-system

@@ -1,0 +1,18 @@
+[reasoning]
+max_steps = 16
+confidence_threshold = 0.8
+use_process_rewards = true
+enable_meta_cognition = true
+enable_self_verification = true
+reasoning_temperature = 0.2
+verification_temperature = 0.1
+
+[integration]
+use_tpu_kernels = true
+use_flash_attention = true
+enable_monitoring = true
+
+[fallbacks]
+max_retries = 3
+fallback_to_simple_cot = true
+timeout_seconds = 30

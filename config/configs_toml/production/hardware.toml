@@ -1,0 +1,66 @@
+# Configuración de hardware TPU v6e-64 para Capibara-6 con MoE
+
+[tpu_v6e]
+# TPU v6e-64 specifications
+cores = 64
+mesh_shape = [8, 8]  # dp=8, ep=8 for MoE
+memory_per_core_gb = 32
+total_memory_gb = 2048
+hbm_bandwidth_gbps = 4800
+memory_pressure_threshold = 0.85
+cleanup_threshold = 0.9
+enable_memory_monitoring = true
+enable_systolic_arrays = true
+
+# MoE specific configuration
+enable_expert_parallelism = true
+expert_parallel_size = 8
+data_parallel_size = 8
+model_parallel_size = 1
+
+[optimization]
+enable_xla = true
+enable_auto_sharding = true
+optimization_level = 3
+enable_gradient_checkpointing = true
+enable_remat = true
+enable_flash_attention = true
+use_bf16 = true
+use_mixed_precision = true
+
+# MoE optimizations
+enable_moe_optimizations = true
+moe_load_balancing = true
+expert_capacity_factor = 1.25
+routing_temperature = 1.0
+
+# Training parameters
+batch_size_per_core = 8  # Reduced for MoE
+learning_rate = 1e-4
+gradient_clip_norm = 1.0
+
+[preemptible]
+# Preemptible instance handling
+enable_preemptible_recovery = true
+checkpoint_every_steps = 100
+emergency_checkpoint_steps = 50
+quick_save_steps = 25
+max_preemption_retries = 3
+
+[gpu_fallback]
+use_gpu = false
+gpu_count = 8
+mixed_precision = true
+
+# Legacy TPU v4 support (deprecated)
+[tpu_v4_legacy]
+cores = 32
+mesh_shape = [4, 8]
+memory_per_core_gb = 32
+deprecated = true
+
+# Sección HRM para referencia de hardware/bio
+[hrm]
+ppg_supported = true
+rr_intervals_supported = true
+max_streams = 4 

@@ -1,0 +1,32 @@
+[security]
+secret_key = "tu_clave_secreta_muy_segura"
+algorithm = "HS256"
+access_token_expire_minutes = 30
+
+[database]
+url = "sqlite:///./capibara.db"
+
+[models]
+spacy = "es_core_news_sm"
+transformers = "nlptown/bert-base-multilingual-uncased-sentiment"
+
+[api]
+host = "0.0.0.0"
+port = 8000
+workers = 4
+
+[logging]
+level = "INFO"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+[search]
+max_results = 5
+timeout = 10
+
+[cache]
+ttl = 3600
+max_size = 1000
+
+[rate_limit]
+requests = 100
+period = 60

@@ -1,0 +1,82 @@
+# Configuración unificada para CapibaraGPT-v2
+# Todas las configuraciones están consolidadas aquí
+
+[model]
+name = "CapibaraGPT-v2"
+version = "3.3.0"
+description = "Modelo modular con optimizaciones TPU v4"
+
+[hardware]
+device = "tpu"
+version = "v4"  # Solo v4 soportado actualmente
+num_devices = 32  # TPU v4-32
+memory_gb_per_device = 32
+total_memory_gb = 1024
+
+[training]
+batch_size = 512
+learning_rate = 1e-4
+gradient_accumulation_steps = 8
+max_gradient_norm = 1.0
+mixed_precision = true
+dtype = "bfloat16"
+
+[optimization]
+use_dynamic_scale = true
+use_gradient_checkpointing = true
+use_remat = true
+use_scan = true
+use_pjit = true
+
+[memory]
+use_memory_efficient_attention = true
+attention_block_size = 128
+max_sequence_length = 8192
+cache_size_gb = 256
+
+[monitoring]
+enabled = true
+log_level = "INFO"
+metrics_history_size = 1000
+alert_cooldown_seconds = 300
+
+[monitoring.thresholds]
+max_memory_usage_gb = 80.0
+min_tflops = 100.0
+max_latency_ms = 100.0
+min_utilization = 0.5
+max_temperature_c = 85.0
+max_power_watts = 450.0
+max_fallbacks_per_hour = 10
+
+[vq]
+enabled = true
+num_codes = 64  # Configuración estándar para TPU v4
+codebook_size = 1024
+diversity_regularization_weight = 0.1
+commitment_cost = 0.25
+use_straight_through = true
+use_ema_updates = true
+
+[fallbacks]
+enabled = true
+max_retries = 3
+backoff_factor = 2.0
+timeout_seconds = 30
+
+[logging]
+level = "INFO"
+file = "capibara.log"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+max_file_size_mb = 100
+backup_count = 5
+
+# Configuraciones comentadas de TPU v6 para referencia futura
+#[tpu_v6]
+#enabled = false
+#num_devices = 512
+#memory_gb_per_device = 64
+#total_memory_gb = 32768
+#vq_codes = 128
+#batch_size = 1024
+#attention_block_size = 256

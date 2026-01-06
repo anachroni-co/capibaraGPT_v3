@@ -1,0 +1,67 @@
+# Configuración del módulo Chain-of-Thought con optimizaciones de memoria
+
+[metadata]
+version = "2.3"
+name = "CapibaraGPT-CoT"
+description = "Configuración del módulo Chain-of-Thought con optimizaciones de memoria y paralelismo"
+
+[core]
+max_thought_steps = 8
+temperature_thoughts = 0.7
+temperature_final_answer = 0.5
+stop_token_thought = "<END_OF_THOUGHT>"
+stop_token_answer = "<END_OF_ANSWER>"
+verbose = true
+hidden_size = 768
+
+[memory_optimization]
+use_gradient_checkpointing = true
+checkpoint_policy = "block_depth"
+checkpoint_blocks = 2
+remat_layer_interval = 2
+preserve_rng_state = true
+
+memory_pressure_threshold = 0.85
+enable_memory_monitoring = true
+cleanup_interval = 300.0
+max_memory_usage_gb = 32.0
+force_device_gc = true
+
+use_mixed_precision = true
+compute_dtype = "bfloat16"
+param_dtype = "float32"
+output_dtype = "float32"
+
+[parallelism]
+use_model_parallelism = true
+model_parallel_submesh = [2, 2]
+data_parallel_submesh = [2, 1]
+shard_strategy = "axis_0"
+
+[knowledge_cores]
+enable_dynamic_routing = true
+enable_hierarchical_reasoning = true
+enable_cross_core_communication = true
+core_selection_threshold = 0.6
+
+[submodels]
+available = ["dual_process", "semiotic", "adaptive"]
+selection_threshold = 0.4
+enable_fusion = true
+
+[layers]
+selection_strategy = "dynamic"
+attention_config = {num_heads = 8, key_size = 64, attention_dropout = 0.1}
+
+[router]
+type = "core_integrated"
+cache_size = 1000
+context_window_size = 512
+
+[optimization]
+use_tpu = true
+mixed_precision = true
+memory_limit_gb = 32.0
+cleanup_threshold = 0.85
+batch_size = 32
+gradient_accumulation_steps = 4 

@@ -1,0 +1,39 @@
+# Fusion profile for production (TPU v6e / MoE)
+
+[include]
+base = "fusion_base.toml"
+
+[tpu_v6e]
+cores = 64
+mesh_shape = [8, 8]
+memory_per_core_gb = 32
+total_memory_gb = 2048
+cleanup_threshold = 0.9
+enable_memory_monitoring = true
+enable_systolic_arrays = true
+
+[optimization]
+enable_xla = true
+enable_auto_sharding = true
+optimization_level = 3
+enable_gradient_checkpointing = true
+enable_remat = true
+enable_flash_attention = true
+use_bf16 = true
+use_mixed_precision = true
+
+[moe]
+enable_expert_parallelism = true
+expert_parallel_size = 8
+data_parallel_size = 8
+model_parallel_size = 1
+load_balancing = true
+expert_capacity_factor = 1.25
+routing_temperature = 1.0
+
+[training]
+batch_size_per_core = 8
+learning_rate = 1e-4
+gradient_clip_norm = 1.0
+
+

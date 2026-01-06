@@ -1,0 +1,9 @@
+# Configuración de tipos de datos para TPU v4-32
+
+[dtypes]
+model_dtype = "bfloat16"  # Tipo de dato principal para el modelo
+param_dtype = "float32"   # Tipo de dato para parámetros
+
+[precision]
+use_mixed_precision = true  # Habilitar precisión mixta
+gradient_accumulation_dtype = "float32"  # Tipo para acumulación de gradientes 

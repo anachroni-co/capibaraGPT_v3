@@ -1,0 +1,122 @@
+# Configuración del módulo VQ (Vector Quantization) de CapibaraGPT
+# Este archivo define la configuración completa para el procesamiento VQ
+
+[general]
+# Configuración general del módulo
+experimental = true  # Habilita características experimentales
+debug_mode = false   # Modo de depuración
+log_level = "INFO"   # Nivel de logging (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+
+[vqbit]
+# Configuración general de VQbit
+beta = 0.25         # Factor de compromiso para VQbit (0.0 a 1.0)
+decay = 0.99        # Tasa de decaimiento para EMA (0.0 a 1.0)
+epsilon = 1e-5      # Epsilon para estabilidad numérica
+
+# Configuración por modalidad
+[modalities]
+[modalities.text]
+codebook_size = 512      # Tamaño del codebook para texto
+embedding_dim = 128      # Dimensión del embedding
+adaptive_enabled = true   # Habilita procesamiento VQ adaptativo
+backend = "jax"          # Backend de computación a utilizar
+
+[modalities.image]
+codebook_size = 1024
+embedding_dim = 256
+adaptive_enabled = true
+backend = "jax"
+
+[modalities.audio]
+codebook_size = 256
+embedding_dim = 64
+adaptive_enabled = true
+backend = "jax"
+
+[modalities.video]
+codebook_size = 256
+embedding_dim = 64
+adaptive_enabled = true
+backend = "jax"
+
+[modalities.semiotic]
+codebook_size = 128
+embedding_dim = 32
+adaptive_enabled = true
+backend = "jax"
+
+[modalities.env_sentiment]
+codebook_size = 64
+embedding_dim = 16
+adaptive_enabled = true
+backend = "jax"
+
+[vq]
+# Configuración de backends VQ
+[vq.backends]
+[vq.backends.jax]
+batch_size = 32                 # Tamaño de batch
+optimization_level = 3          # Nivel de optimización (0-3)
+precision = "bfloat16"          # Precisión computacional
+memory_efficient = true        # Optimización de memoria
+device = "tpu"                  # Dispositivo de computación
+compiled = true                 # Compilación JIT habilitada
+max_parallel_operations = 4     # Máximo de operaciones en paralelo
+
+[vq.backends.torch]
+batch_size = 32                 # Tamaño de batch
+optimization_level = 2          # Nivel de optimización (0-3)
+precision = "float32"           # Precisión computacional
+memory_efficient = true        # Optimización de memoria
+device = "cuda"                 # Dispositivo de computación
+compiled = false                # Compilación TorchScript
+max_workers = 4                 # Máximo de workers en paralelo
+
+[vq.backends.flax]
+batch_size = 32                 # Tamaño de batch
+optimization_level = 3          # Nivel de optimización (0-3)
+precision = "bfloat16"          # Precisión computacional
+memory_efficient = true        # Optimización de memoria
+device = "tpu"                  # Dispositivo de computación
+compiled = true                 # Compilación habilitada
+max_parallel_operations = 4     # Máximo de operaciones en paralelo
+
+[training]
+# Configuración de entrenamiento
+learning_rate = 1e-4           # Tasa de aprendizaje
+batch_size = 32                # Tamaño del batch
+max_epochs = 100               # Máximo de épocas
+early_stopping_patience = 10    # Paciencia para early stopping
+gradient_clip = 1.0            # Valor máximo para gradiente
+warmup_steps = 1000            # Pasos de calentamiento
+weight_decay = 0.01            # Decaimiento de pesos
+scheduler = "cosine"           # Tipo de scheduler
+
+[metrics]
+# Configuración de métricas
+track_vq_metrics = true                # Seguimiento de métricas VQ
+track_vqbit_metrics = true            # Seguimiento de métricas VQbit
+track_performance_metrics = true       # Seguimiento de métricas de rendimiento
+save_metrics_interval = 100            # Intervalo para guardar métricas
+metrics_buffer_size = 1000             # Tamaño del buffer de métricas
+log_interval = 10                      # Intervalo de logging
+tensorboard = true                     # Habilitar TensorBoard
+
+[optimization]
+# Configuración de optimización
+use_mixed_precision = true             # Usar precisión mixta
+use_gradient_accumulation = true       # Usar acumulación de gradientes
+accumulation_steps = 4                 # Pasos de acumulación
+use_amp = true                         # Usar Automatic Mixed Precision
+jit_compile = true                     # Compilación JIT
+remat = true                           # Usar remat para optimización de memoria
+prevent_cse = true                     # Prevenir Common Subexpression Elimination
+
+[memory]
+# Configuración de memoria
+max_memory_usage = "16GB"              # Uso máximo de memoria
+clear_cache_interval = 1000            # Intervalo para limpiar caché
+use_memory_efficient_attention = true   # Usar atención eficiente en memoria
+memory_efficient_linear = true         # Usar capas lineales eficientes en memoria
+gradient_checkpointing = true          # Usar checkpointing de gradientes
+remat_frequency = 4                    # Frecuencia de remat 

@@ -1,0 +1,286 @@
+# Configuración para conversión TPU v4-32 → ARM Axion
+# CapibaraGPT v3.3.0
+
+[metadata]
+version = "3.3.0"
+name = "TPU-to-ARM-Conversion-Config"
+description = "Configuración optimizada para conversión TPU v4-32 → ARM Axion"
+author = "CapibaraGPT Team"
+
+[conversion]
+# Configuración general de conversión
+pipeline = "tpu_checkpoint → jax → arm_optimized"
+enable_validation = true
+enable_fallback = true
+max_conversion_time_minutes = 60
+
+[input]
+# Configuración de entrada TPU
+tpu_checkpoint_format = "jax_checkpoint"
+expected_dtypes = ["bfloat16", "float32", "int32"]
+compression_enabled = true
+validation_strict = true
+
+[output]
+# Configuración de salida ARM
+output_formats = ["jax_optimized", "onnx_arm", "tflite_arm"]
+compression_enabled = true
+metadata_included = true
+
+# ==========================================
+# OPTIMIZACIONES ARM ESPECÍFICAS
+# ==========================================
+
+[arm_optimizations]
+# Configuración de optimizaciones ARM
+enable_sve2 = true
+enable_memory_pools = true
+enable_quantization = true
+enable_onnx_runtime = true
+enable_autoscaling = true
+
+[sve2_optimizations]
+# ARM SVE2 (Scalable Vector Extensions) optimizations
+enabled = true
+auto_detect = true
+vector_length = 512  # bits
+use_sve2 = true
+fallback_to_neon = true
+optimization_level = "aggressive"  # conservative, balanced, aggressive
+
+[sve2_optimizations.operations]
+vectorized_add = true
+vectorized_matmul = true
+attention_compute = true
+gather_scatter = true
+reduce_operations = true
+softmax_vectorized = true
+
+[sve2_optimizations.tuning]
+prefetch_distance = 8
+cache_line_size = 64
+unroll_factor = 4
+parallel_threshold = 1024
+
+[memory_pool_arm]
+# ARM Memory Pool Management
+enabled = true
+total_memory_gb = 32.0
+numa_aware = true
+huge_pages = true
+cache_line_size = 64
+page_size = 4096
+
+[memory_pool_arm.pools]
+inference_pool_mb = 2048
+attention_pool_mb = 1024
+embeddings_pool_mb = 512
+activations_pool_mb = 1024
+cache_pool_mb = 256
+
+[memory_pool_arm.optimization]
+prefetch_distance = 8
+cleanup_interval = 60
+max_age_seconds = 300
+memory_efficiency_target = 85.0
+
+[quantization]
+# ARM-specific quantization
+enabled = true
+default_bits = 8
+scheme = "symmetric"  # symmetric, asymmetric, dynamic
+use_arm_optimizations = true
+calibration_samples = 1000
+supported_bits = [4, 8, 16]
+
+[quantization.advanced]
+per_channel = true
+per_tensor = false
+dynamic_range = true
+symmetric = true
+
+[onnx_runtime]
+# ONNX Runtime ARM backend
+enabled = true
+providers = ["ArmNNExecutionProvider", "ACLExecutionProvider", "CPUExecutionProvider"]
+graph_optimization_level = "all"
+enable_memory_pattern = true
+execution_mode = "parallel"
+
+[onnx_runtime.optimizations]
+enable_quantization = true
+enable_pruning = false
+enable_fusion = true
+enable_constant_folding = true
+
+# ==========================================
+# CONFIGURACIÓN DE RENDIMIENTO
+# ==========================================
+
+[performance]
+# Configuración de rendimiento ARM Axion
+num_threads = "auto"  # auto, o número específico
+batch_size = 8
+max_sequence_length = 2048
+precision = "bfloat16"  # float32, bfloat16, float16
+
+[performance.threading]
+auto_detect_cores = true
+reserve_system_cores = 2
+thread_affinity = true
+smt_disabled = true  # ARM Axion no tiene SMT
+
+[performance.memory]
+enable_memory_mapping = true
+enable_huge_pages = true
+memory_alignment = 64
+prefetch_enabled = true
+
+# ==========================================
+# VALIDACIÓN Y TESTING
+# ==========================================
+
+[validation]
+# Configuración de validación
+enabled = true
+strict_mode = true
+samples_count = 100
+timeout_seconds = 300
+
+[validation.checks]
+sve2_compatibility = true
+memory_efficiency = true
+quantization_readiness = true
+onnx_compatibility = true
+performance_benchmark = true
+
+[validation.thresholds]
+memory_usage_gb = 32.0
+conversion_time_minutes = 30
+accuracy_drop_percent = 1.0
+performance_improvement_percent = 10.0
+
+# ==========================================
+# FALLBACK Y ERROR HANDLING
+# ==========================================
+
+[fallback]
+# Configuración de fallback
+enable_onnx_fallback = true
+enable_cpu_fallback = true
+enable_reduced_precision = true
+
+[fallback.onnx]
+optimization_level = "basic"
+providers = ["CPUExecutionProvider"]
+enable_quantization = false
+
+[error_handling]
+# Manejo de errores
+max_retries = 3
+retry_delay_seconds = 10
+continue_on_warning = true
+log_level = "INFO"
+
+# ==========================================
+# MONITORING Y MÉTRICAS
+# ==========================================
+
+[monitoring]
+# Configuración de monitoreo
+enabled = true
+metrics_interval_seconds = 5
+export_metrics = true
+
+[monitoring.metrics]
+memory_usage = true
+cpu_usage = true
+conversion_progress = true
+optimization_effectiveness = true
+validation_results = true
+
+[monitoring.export]
+format = "json"  # json, csv, binary
+include_timestamps = true
+include_system_info = true
+include_performance_data = true
+
+# ==========================================
+# CONFIGURACIÓN ESPECÍFICA ARM AXION
+# ==========================================
+
+[arm_axion]
+# Configuración específica para Google Cloud ARM Axion C4A
+platform = "google_cloud_c4a"
+architecture = "armv9.0-a"
+cpu_cores = "neoverse_v2"
+
+[arm_axion.hardware]
+max_memory_gb = 576
+memory_type = "ddr5"
+memory_speed = "5600MT/s"
+cache_l3_mb = 80
+cache_l2_mb = 2
+cache_l1_kb = 64
+
+[arm_axion.networking]
+max_bandwidth_gbps = 100
+standard_bandwidth_gbps = 50
+
+[arm_axion.optimizations]
+use_titanium_offload = true
+enable_arm_kleidi = true
+vectorization = "sve2"
+numa_binding = true
+threads_per_core = 1
+
+# ==========================================
+# CONFIGURACIÓN DE EXPORTACIÓN
+# ==========================================
+
+[export]
+# Configuración de exportación
+formats = ["jax", "onnx", "tflite"]
+compression = true
+metadata = true
+validation_report = true
+
+[export.jax]
+# Exportación JAX optimizada
+format = "pickle"
+compression = "gzip"
+include_optimizations = true
+
+[export.onnx]
+# Exportación ONNX optimizada
+opset_version = 11
+dynamic_axes = true
+optimize_for_arm = true
+
+[export.tflite]
+# Exportación TFLite optimizada
+target_spec = "arm_optimized"
+quantization = true
+optimizations = ["DEFAULT", "OPTIMIZE_FOR_SIZE"]
+
+# ==========================================
+# CONFIGURACIÓN DE LOGGING
+# ==========================================
+
+[logging]
+# Configuración de logging
+level = "INFO"
+format = "detailed"
+file_output = true
+console_output = true
+
+[logging.files]
+conversion_log = "conversion.log"
+validation_log = "validation.log"
+performance_log = "performance.log"
+error_log = "errors.log"
+
+[logging.rotation]
+max_size_mb = 100
+backup_count = 5
+compress = true

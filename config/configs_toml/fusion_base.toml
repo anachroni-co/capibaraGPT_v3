@@ -1,0 +1,143 @@
+[metadata]
+name = "CapibaraGPT-v2 Fusion Base"
+version = "1.0"
+
+[model]
+hidden_size = 768
+num_virtual_qubits = 512
+vocab_size = 50257
+max_context_length = 2048
+num_router_experts = 8
+router_capacity_factor = 1.25
+num_layers = 12
+num_heads = 12
+intermediate_size = 3072
+dropout_rate = 0.1
+attention_dropout = 0.1
+layer_norm_eps = 1e-12
+activation_function = "gelu"
+
+[memory_optimization]
+use_gradient_checkpointing = true
+checkpoint_policy = "block_depth"
+checkpoint_blocks = 2
+remat_layer_interval = 2
+preserve_rng_state = true
+memory_pressure_threshold = 0.85
+enable_memory_monitoring = true
+cleanup_interval = 300.0
+max_memory_usage_gb = 32.0
+force_device_gc = true
+use_mixed_precision = true
+compute_dtype = "bfloat16"
+param_dtype = "float32"
+output_dtype = "float32"
+use_model_parallelism = true
+model_parallel_submesh = [2, 2]
+data_parallel_submesh = [2, 1]
+shard_strategy = "axis_0"
+dynamic_batch_size = true
+min_batch_size = 4
+max_batch_size = 32
+batch_growth_factor = 1.5
+
+[tpu_v4]
+use_tpu_optimizations = true
+cores = 32
+memory_limit_gb = 32.0
+cleanup_threshold = 0.9
+mesh_shape = [4, 8]
+axis_names = ["data", "model"]
+dtype = "bfloat16"
+param_dtype = "float32"
+enable_systolic_arrays = true
+enable_xla_optimization = true
+optimization_level = 3
+
+[neuroadaptive]
+enable_neuroadaptive = true
+neuroadaptive_rate = 0.01
+use_remat_neuroadaptive = true
+neurogenesis_threshold = 0.8
+num_adaptive_layers = 2
+adaptation_interval = 100
+enable_neurogenesis = true
+enable_adaptive_embedding = true
+
+[router]
+hidden_size = 768
+num_heads = 8
+cache_size = 1000
+routing_cache_size = 1000
+enable_adaptive_routing = true
+enable_contextual_activation = true
+enable_vision = true
+enable_audio = true
+enable_bio = true
+
+[agents]
+max_agents = 100
+agent_cleanup_interval = 300.0
+enable_hot_reload = false
+agent_timeout = 30.0
+
+[modules]
+active = ["dual_process", "adaptive", "semiotic", "semiotic_interaction"]
+enable_lazy_loading = true
+lazy_loading_timeout = 30.0
+
+[monitoring]
+enable_metrics = true
+metrics_window_size = 1000
+log_interval = 100
+enable_visualization = true
+visualization_cleanup_interval = 3600.0
+max_visualization_files = 50
+
+[memory]
+memory_pressure_threshold = 0.85
+enable_memory_monitoring = true
+cleanup_interval = 300.0
+
+[paths]
+config_root = "capibara/config"
+modules_root = "capibara/config/modules"
+checkpoints_dir = "checkpoints"
+logs_dir = "logs"
+
+[services]
+enable_tts = true
+tts_backend = "capibara_tts"
+tts_fallback = "pyttsx3"
+websocket_enabled = true
+websocket_host = "localhost"
+websocket_port = 8765
+ssl_enabled = false
+max_concurrent_connections = 100
+audio_cache_enabled = true
+audio_cache_size = 1000
+audio_cache_ttl = 3600
+
+[tts]
+fastspeech_model_path = "models/fastspeech.onnx"
+hifigan_model_path = "models/hifigan.onnx"
+sample_rate = 22050
+audio_format = "wav"
+bit_depth = 16
+channels = 1
+voice_speed = 150
+voice_volume = 1.0
+spectrogram_clipping = [-4.0, 4.0]
+enable_websocket_server = true
+websocket_buffer_size = 8192
+websocket_timeout = 30.0
+fallback_engine = "pyttsx3"
+fallback_voice_rate = 150
+fallback_voice_volume = 1.0
+cert_file = ""
+key_file = ""
+enable_audio_preprocessing = true
+enable_noise_reduction = false
+enable_voice_enhancement = true
+
+

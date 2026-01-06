@@ -1,0 +1,29 @@
+# Configuración Neuroadaptativa para CapibaraGPT-v2
+
+[core]
+enable_neuroadaptive = true
+neuroadaptive_rate = 0.01
+use_remat_neuroadaptive = true
+neurogenesis_threshold = 0.8
+num_adaptive_layers = 2
+adaptation_interval = 100
+
+[features]
+enable_neurogenesis = true
+enable_adaptive_embedding = true
+enable_contextual_activation = true
+enable_adaptive_routing = true
+enable_adaptive_attention = true
+
+[memory]
+memory_growth_factor = 1.2
+max_memory_per_layer = "2GB"
+pruning_threshold = 0.1
+consolidation_interval = 1000
+
+[optimization]
+use_gradient_checkpointing = true
+enable_sparse_gradients = true
+enable_adaptive_computation = true
+min_layer_size = 64
+max_layer_size = 1024 

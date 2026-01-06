@@ -1,0 +1,27 @@
+[semiotic]
+hidden_size = 256
+dropout_rate = 0.1
+num_heads = 4
+ssm_dim = 64
+adaptive_enabled = true
+ssm_enabled = true
+tpu_optimized = true
+semiotic_weight = 0.1
+ssm_weight = 0.1
+interpretation_types = ["literal", "cultural", "symbolic"]
+log_dir = "logs"
+max_log_size = 10485760
+backup_count = 5
+
+[mnemosyne_semio]
+context_keywords = [
+    "obra de arte", "análisis artístico", "pintura", "escultura", "videoarte",
+    "fotografía", "interpretación simbólica", "símbolos visuales", "arte clásico",
+    "romanticismo", "barroco", "renacimiento", "iconografía"
+]
+
+style_mapping = { velazquez = "Barroco", picasso = "Cubismo" }
+
+symbol_mapping = { meninas = ["espejo", "perspectiva invertida"], guernica = ["dolor", "guerra"] }
+
+parallel_mapping = { Barroco = ["Literatura del Siglo de Oro", "teatro de Calderón"], Cubismo = ["Vanguardias literarias"] } 

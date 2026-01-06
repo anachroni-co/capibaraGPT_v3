@@ -1,0 +1,69 @@
+[model]
+model_name = "capibara-gpt-v2-test"
+model_type = "transformer"
+vocab_size = 1000
+max_seq_length = 128
+num_layers = 2
+num_heads = 4
+hidden_size = 128
+intermediate_size = 512
+activation = "gelu"
+dropout = 0.1
+layer_norm_eps = "1e-5"
+
+[training]
+batch_size = 8
+learning_rate = "1e-4"
+weight_decay = 0.01
+max_grad_norm = 1.0
+num_train_epochs = 1
+warmup_steps = 100
+logging_steps = 10
+save_steps = 50
+eval_steps = 20
+
+[validation]
+n_splits = 3
+metrics = [ "loss", "accuracy",]
+shuffle = true
+stratify = true
+
+[memory_optimization]
+offload_to_cpu = true
+gradient_checkpointing = false
+remat_frequency = 1
+cache_size = 128
+mixed_precision = false
+tf32 = false
+memory_efficient_attention = false
+
+[dataset]
+train_file = "data/test/train.jsonl"
+validation_file = "data/test/validation.jsonl"
+test_file = "data/test/test.jsonl"
+max_length = 128
+batch_size = 8
+shuffle_buffer_size = 100
+prefetch_size = 1
+num_parallel_calls = 2
+compression = false
+
+[logging]
+level = "DEBUG"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+file = "logs/testing.log"
+max_size = 1048576
+backup_count = 2
+rotation = "size"
+
+[modules.ethics_module]
+enabled = true
+risk_threshold = 0.5
+categories = [ "hate_speech", "violence",]
+gradient_checkpointing_compatible = true
+
+[modules.adaptive_vq_submodel]
+enabled = false
+embedding_dim = 2
+depth = 1
+gradient_checkpointing_compatible = true
