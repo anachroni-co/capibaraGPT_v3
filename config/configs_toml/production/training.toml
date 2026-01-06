@@ -1,0 +1,30 @@
+# Configuración de Training para CapibaraGPT-v2
+
+[training]
+batch_size = 32
+learning_rate = 1e-4
+warmup_steps = 1000
+max_steps = 100000
+gradient_clip_norm = 1.0
+weight_decay = 0.01
+use_gradient_checkpointing = true
+
+[validation]
+eval_steps = 1000
+save_steps = 5000
+log_steps = 100
+validation_batch_size = 16
+max_validation_steps = 100
+
+[optimization]
+use_gradient_checkpointing = true
+use_expert_weights_cache = true
+use_tpu_optimized_gemm = true
+use_tpu_memory_monitor = true
+use_tpu_profiler = true
+
+[distributed]
+enable_distributed = true
+gradient_accumulation_steps = 8
+num_microbatches = 4
+use_sharding = true 

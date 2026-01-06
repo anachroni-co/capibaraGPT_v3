@@ -1,0 +1,342 @@
+[scheduling]
+[[scheduling.phase_ordering]]
+name = "base_training"
+components = [ "embeddings", "attention_layers",]
+epochs = 10
+batch_size = 512
+tpu_optimization_level = 3
+
+[[scheduling.phase_ordering]]
+name = "specialized_training"
+components = [ "capibara_ssm",]
+epochs = 15
+batch_size = 512
+tpu_optimization_level = 3
+
+[[scheduling.phase_ordering]]
+name = "ethical_training"
+components = [ "ethics_module", "coherence_detector",]
+epochs = 5
+batch_size = 512
+tpu_optimization_level = 3
+
+[[scheduling.phase_ordering]]
+name = "fine_tuning"
+components = [ "all",]
+epochs = 3
+batch_size = 512
+tpu_optimization_level = 3
+
+[data_processing]
+batch_size = 512
+max_length = 2048
+tpu_optimized = true
+use_tpu_data_loader = true
+
+[architecture]
+base_model = "BitNet1.58"
+activation = "SwiGLU"
+normalization = "RootMeanSquareNorm"
+positional_embedding = "Rotary"
+attention_mechanism = [ "MambaSSM", "FlashAttention2",]
+tpu_optimized = true
+use_tpu_specific_ops = true
+
+[adaptive_embedding]
+enabled = true
+mode = "adaptive16"
+states_per_param = 16
+encoding_type = "vectorial"
+temperature = 0.1
+use_softmax = true
+tpu_optimized = true
+
+[adaptive_vq_submodel]
+enabled = true
+activation_mode = "dynamic"
+trigger_keywords = [ "adaptive", "physics", "simulation", "system",]
+tpu_optimized = true
+
+[scaling_plan]
+[[scaling_plan.phases]]
+name = "300M"
+target_params = 300000000
+dataset_tokens = 3000000000
+precision = "bfloat16"
+purpose = "Pipeline validation"
+checkpoint_interval = 1000
+tpu_optimization_level = 3
+
+[[scaling_plan.phases]]
+name = "500M"
+target_params = 500000000
+dataset_tokens = 5000000000
+precision = "bfloat16"
+purpose = "Scale validation"
+checkpoint_interval = 2000
+tpu_optimization_level = 3
+
+[[scaling_plan.phases]]
+name = "1B-3B"
+target_params = 3000000000
+dataset_tokens = 15000000000
+precision = "bfloat16"
+purpose = "First public model"
+checkpoint_interval = 5000
+tpu_optimization_level = 3
+
+[[scaling_plan.phases]]
+name = "10B"
+target_params = 10000000000
+dataset_tokens = 40000000000
+precision = "bfloat16"
+purpose = "General API"
+checkpoint_interval = 10000
+tpu_optimization_level = 3
+
+[[scaling_plan.phases]]
+name = "200B"
+target_params = 200000000000
+dataset_tokens = 70000000000
+precision = "bfloat16"
+purpose = "Multimodal reasoning"
+checkpoint_interval = 20000
+tpu_optimization_level = 3
+
+[[scaling_plan.phases]]
+name = "1T"
+target_params = 1000000000000
+dataset_tokens = 100000000000
+precision = "bfloat16"
+purpose = "Full multimodal"
+checkpoint_interval = 50000
+tpu_optimization_level = 3
+
+[[scaling_plan.phases]]
+name = "10T"
+target_params = 10000000000000
+dataset_tokens = 300000000000
+precision = "bfloat16"
+purpose = "Full adaptive simulation"
+checkpoint_interval = 100000
+tpu_optimization_level = 3
+
+[monitoring]
+metrics = [ "loss", "perplexity", "adaptive_activation_rate", "memory_usage", "precision_metrics", "scaling_efficiency", "tpu_utilization", "throughput"]
+tpu_profiling = true
+memory_monitoring = true
+performance_tracking = true
+
+[optimization]
+gradient_checkpointing = true
+mixed_precision = true
+gradient_clip_norm = 1.0
+zero_stage = 2
+sharding = "2d"
+remat = true
+tpu_optimization_level = 3
+enable_xla = true
+enable_auto_mixed_precision = true
+memory_fraction = 0.9
+batch_size_per_core = 16
+mesh_shape = [32, 8]
+
+[training_strategies.embeddings]
+[[training_strategies.embeddings.data_sources]]
+name = "common_crawl"
+weight = 0.4
+path = "data/common_crawl"
+tpu_optimized = true
+
+[[training_strategies.embeddings.data_sources]]
+name = "wikipedia"
+weight = 0.3
+path = "data/wikipedia"
+tpu_optimized = true
+
+[[training_strategies.embeddings.data_sources]]
+name = "books"
+weight = 0.3
+path = "data/books"
+tpu_optimized = true
+
+[training_strategies.attention_layers]
+[[training_strategies.attention_layers.data_sources]]
+name = "qa_pairs"
+weight = 0.3
+path = "data/qa_pairs"
+tpu_optimized = true
+
+[[training_strategies.attention_layers.data_sources]]
+name = "dialogue"
+weight = 0.3
+path = "data/dialogue"
+tpu_optimized = true
+
+[[training_strategies.attention_layers.data_sources]]
+name = "long_context"
+weight = 0.4
+path = "data/long_context"
+tpu_optimized = true
+
+[training_strategies.capibara_ssm]
+[[training_strategies.capibara_ssm.data_sources]]
+name = "time_series"
+weight = 0.4
+path = "data/time_series"
+tpu_optimized = true
+
+[[training_strategies.capibara_ssm.data_sources]]
+name = "sequential_logic"
+weight = 0.3
+path = "data/sequential"
+tpu_optimized = true
+
+[[training_strategies.capibara_ssm.data_sources]]
+name = "code_sequences"
+weight = 0.3
+path = "data/code"
+tpu_optimized = true
+
+[training_strategies.mixture_of_rookies]
+[[training_strategies.mixture_of_rookies.data_sources]]
+name = "specialized_tasks"
+weight = 0.5
+tpu_optimized = true
+
+[[training_strategies.mixture_of_rookies.data_sources]]
+name = "general_knowledge"
+weight = 0.5
+tpu_optimized = true
+
+[training_strategies.ethics_module]
+[[training_strategies.ethics_module.data_sources]]
+name = "ethics_dataset"
+weight = 0.4
+tpu_optimized = true
+
+[[training_strategies.ethics_module.data_sources]]
+name = "bias_evaluation"
+weight = 0.3
+tpu_optimized = true
+
+[[training_strategies.ethics_module.data_sources]]
+name = "safety_examples"
+weight = 0.3
+tpu_optimized = true
+
+[training_strategies.coherence_detector]
+[[training_strategies.coherence_detector.data_sources]]
+name = "coherence_pairs"
+weight = 0.5
+tpu_optimized = true
+
+[[training_strategies.coherence_detector.data_sources]]
+name = "contradiction_examples"
+weight = 0.5
+tpu_optimized = true
+
+[data_processing.tokenizer_config]
+vocab_size = 32000
+special_tokens = true
+tpu_optimized = true
+
+[data_processing.augmentation]
+token_masking = 0.15
+sequence_shuffling = 0.1
+tpu_optimized = true
+
+[architecture.scaling]
+method = "u-µP"
+precision = "bfloat16"
+transfer_hyperparams = true
+direct_fp16_training = true
+tpu_optimized = true
+
+[adaptive_vq_submodel.router]
+type = "attention_based"
+threshold = 0.7
+tpu_optimized = true
+
+[adaptive_vq_submodel.cross_attention]
+enabled = true
+latent_dim = 128
+tpu_optimized = true
+
+[quantization.training]
+enabled = true
+precision = "bfloat16"
+method = "SmoothQuant"
+fine_grained = true
+quantize_weights = true
+quantize_activations = true
+quantize_softmax = true
+tpu_optimized = true
+
+[quantization.inference]
+enabled = true
+precision = "bfloat16"
+method = "ZeroQuant"
+dynamic_range = true
+tpu_optimized = true
+
+[monitoring.alerts]
+adaptive_activation_threshold = 0.8
+memory_usage_threshold = 0.9
+precision_loss_threshold = 0.1
+tpu_utilization_threshold = 0.9
+
+[monitoring.logging]
+frequency = 100
+tensorboard = true
+wandb = true
+tpu_profiling = true
+
+[training_strategies.embeddings.batch_strategy]
+token_mix = "balanced"
+vocab_coverage = 0.95
+tpu_optimized = true
+
+[training_strategies.embeddings.training_focus]
+attention_patterns = true
+position_bias = true
+tpu_optimized = true
+
+[training_strategies.embeddings.evaluation_metrics]
+perplexity = 0.1
+coverage = 0.95
+tpu_optimized = true
+
+[training_strategies.attention_layers.training_focus]
+attention_patterns = true
+position_bias = true
+tpu_optimized = true
+
+[training_strategies.attention_layers.evaluation_metrics]
+attention_entropy = 0.2
+head_diversity = 0.8
+tpu_optimized = true
+
+[training_strategies.capibara_ssm.training_focus]
+state_tracking = true
+sequence_memory = true
+tpu_optimized = true
+
+[training_strategies.capibara_ssm.evaluation_metrics]
+state_coherence = 0.85
+memory_retention = 0.9
+tpu_optimized = true
+
+[training_strategies.mixture_of_rookies.mixture_config]
+expert_specialization = true
+routing_entropy = 0.7
+tpu_optimized = true
+
+[training_strategies.ethics_module.evaluation_metrics]
+bias_score = 0.1
+toxicity_threshold = 0.2
+tpu_optimized = true
+
+[training_strategies.coherence_detector.validation_criteria]
+coherence_threshold = 0.8
+tpu_optimized = true

@@ -1,0 +1,204 @@
+[device]
+type = "arm_axion"
+platform = "google_cloud_c4a"
+architecture = "armv9.0-a"
+cpu_cores = "neoverse_v2"
+
+[inference]
+# Configuración optimizada para ARM Axion C4A
+backend = "jax_arm"
+precision = "bfloat16"  # ARM Axion optimizado para bfloat16
+batch_size = 8  # Optimizado para arquitectura ARM
+max_sequence_length = 2048
+use_titanium_offload = true  # Aprovecha el subsistema Titanium
+
+[memory]
+# ARM Axion specifications: hasta 576 GB DDR5 @ 5600MT/s
+# UMA (Uniform Memory Access) para rendimiento óptimo
+max_memory_gb = 576
+memory_type = "ddr5"
+memory_speed = "5600MT/s"
+uma_placement = true
+cache_l3_mb = 80  # 80MB L3 cache en Neoverse V2
+cache_l2_mb = 2   # 2MB private L2 per core
+cache_l1_kb = 64  # 64KB L1 instruction + 64KB L1 data per core
+
+[performance]
+# Optimizaciones específicas ARM Axion
+use_arm_kleidi = true  # ARM Kleidi libraries para AI
+vectorization = "sve2"  # ARM SVE2 support
+numa_binding = true    # NUMA node binding para mejor rendimiento
+threads_per_core = 1   # ARM Axion no tiene SMT
+
+[networking]
+# C4A networking capabilities
+max_bandwidth_gbps = 100  # Tier_1 networking
+standard_bandwidth_gbps = 50
+
+[fallbacks]
+# Fallbacks para compatibilidad
+cpu_fallback = true
+jax_cpu_backend = true
+tensorflow_lite = true
+
+[optimizations]
+# Optimizaciones específicas para cargas de trabajo de inferencia
+enable_arm_optimized_kernels = true
+use_bfloat16_compute = true
+enable_memory_prefetch = true
+cache_optimization = "arm_neoverse_v2"
+
+[compatibility]
+# Compatibilidad con workloads existentes
+x86_compatibility_layer = false  # Nativo ARM
+java_optimizations = true       # ARM optimizado para Java
+python_optimizations = true     # ARM optimizado para Python
+container_native = true         # Optimizado para containers
+
+[monitoring]
+# Métricas específicas ARM
+track_arm_performance = true
+monitor_cache_efficiency = true
+track_memory_bandwidth = true
+monitor_titanium_offload = true 
+
+# ==========================================
+# ARM AXION v3.2 ADVANCED FEATURES
+# ==========================================
+
+[arm_kleidi]
+# ARM Kleidi AI Libraries integration
+enabled = true
+auto_detect = true
+force_optimization = false
+capabilities = ["gemm_fp32", "gemm_int8", "attention_fp32", "conv2d_int8"]
+
+[onnx_runtime]
+# ONNX Runtime ARM backend
+enabled = true
+providers = ["ArmNNExecutionProvider", "ACLExecutionProvider", "CPUExecutionProvider"]
+graph_optimization_level = "all"
+enable_memory_pattern = true
+execution_mode = "parallel"
+
+[quantization]
+# ARM-specific quantization
+enabled = true
+default_bits = 8
+scheme = "symmetric"  # symmetric, asymmetric, dynamic
+use_arm_optimizations = true
+calibration_samples = 100
+supported_bits = [4, 8, 16]
+
+[multi_instance]
+# Load balancing multi-instancia
+enabled = true
+strategy = "intelligent"  # round_robin, least_connections, intelligent
+health_check_interval = 10.0
+max_instances = 8
+min_instances = 2
+auto_scaling = true
+failover_retries = 3
+
+# ==========================================
+# ARM AXION v3.2 ADVANCED FEATURES
+# ==========================================
+
+[sve_optimizations]
+# ARM SVE (Scalable Vector Extension) optimizations
+enabled = true
+auto_detect = true
+vector_length = 256  # bits, auto-detected if 0
+use_sve2 = true
+fallback_to_neon = true
+optimization_level = "aggressive"  # conservative, balanced, aggressive
+
+[sve_optimizations.operations]
+vectorized_add = true
+vectorized_matmul = true
+attention_compute = true
+gather_scatter = true
+reduce_operations = true
+softmax_vectorized = true
+
+[sve_optimizations.tuning]
+prefetch_distance = 8
+cache_line_size = 64
+unroll_factor = 4
+parallel_threshold = 1024
+
+[memory_pool_arm]
+# ARM Memory Pool Management
+enabled = true
+total_memory_gb = 64.0
+numa_aware = true
+huge_pages = true
+cache_line_size = 64
+page_size = 4096
+
+[memory_pool_arm.pools]
+inference_pool_mb = 2048
+attention_pool_mb = 1024
+embeddings_pool_mb = 512
+activations_pool_mb = 1024
+cache_pool_mb = 256
+
+[memory_pool_arm.optimization]
+prefetch_distance = 8
+cleanup_interval = 60
+max_age_seconds = 300
+memory_efficiency_target = 85.0
+
+[profiling_tools_arm]
+# ARM-specific profiling tools
+enabled = true
+sampling_interval = 0.1  # seconds
+auto_start = false
+export_format = "json"  # json, csv, binary
+
+[profiling_tools_arm.metrics]
+performance_counters = true
+system_metrics = true
+cache_analysis = true
+thermal_monitoring = true
+power_monitoring = true
+sve_utilization = true
+
+[profiling_tools_arm.analysis]
+generate_recommendations = true
+benchmark_comparisons = true
+trend_analysis = true
+anomaly_detection = true
+
+[autoscaling_arm]
+# Auto-scaling for Google Cloud C4A
+enabled = true
+project_id = "capibara-gpt-production"
+region = "us-central1"
+policy = "balanced"  # conservative, balanced, aggressive
+
+[autoscaling_arm.thresholds]
+scale_up_cpu = 75.0
+scale_up_memory = 80.0
+scale_up_latency_ms = 1000.0
+scale_down_cpu = 30.0
+scale_down_memory = 40.0
+scale_down_latency_ms = 200.0
+
+[autoscaling_arm.instances]
+min_instances = 1
+max_instances = 10
+default_type = "c4a-standard-4"
+preferred_zones = ["us-central1-a", "us-central1-b", "us-central1-c"]
+
+[autoscaling_arm.cost_optimization]
+enabled = true
+target_cost_per_hour = 5.0
+cost_efficiency_weight = 0.3
+performance_weight = 0.7
+spot_instances = false
+
+[autoscaling_arm.cooldown]
+scale_up_seconds = 300
+scale_down_seconds = 600
+health_check_interval = 30

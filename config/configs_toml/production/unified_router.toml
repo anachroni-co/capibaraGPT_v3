@@ -1,0 +1,55 @@
+# Configuración del Router Unificado para CapibaraGPT-v2
+
+[core]
+hidden_size = 768
+vocab_size = 50257
+num_virtual_qubits = 512
+num_experts = 8
+num_tasks = 12
+dropout_rate = 0.1
+
+[routing]
+strategy = "adaptive"
+cache_size = 1000
+enable_adaptive_routing = true
+enable_contextual_activation = true
+routing_cache_size = 1000
+
+[modalities]
+enable_vision = true
+enable_audio = true
+enable_bio = true
+
+[performance]
+use_tpu_optimizations = true
+dtype = "bfloat16"
+param_dtype = "float32"
+
+# Nueva sección para HRM
+[hrm]
+enabled = true
+sampling_rate_hz = 100
+window_seconds = 10
+expected_hr_min = 40
+expected_hr_max = 180
+anomaly_rmssd_threshold_ms = 80.0
+anomaly_hr_jump_bpm = 30.0 
+
+# Configuración para módulo de razonamiento jerárquico (distinto de HRM bio)
+[hierarchical_reasoning]
+enabled = true
+h_dim = 512
+l_dim = 256
+max_iterations = 100
+convergence_threshold = 0.01
+tpu_cores_assigned = 3
+
+[hierarchical_reasoning.task_detection]
+keywords_math = ["calcular", "resolver", "ecuación", "integral", "derivada", "límite", "matriz", "probabilidad"]
+keywords_reasoning = ["deducir", "inferir", "lógica", "premisa", "conclusión", "argumento", "prueba"]
+keywords_planning = ["planificar", "estrategia", "pasos", "optimizar", "cronograma", "objetivos"]
+
+[hierarchical_reasoning.integration]
+use_with_consensus = true
+weight_in_consensus = 3.0
+override_threshold = 0.8 

@@ -1,0 +1,86 @@
+# Default Configuration for Capibara-6 with MoE Integration
+
+[model]
+name = "Capibara-6"
+version = "2.0.0"
+hidden_size = 768
+num_layers = 24
+num_heads = 12
+vocab_size = 50257
+max_position_embeddings = 2048
+dtype = "bfloat16"
+param_dtype = "float32"
+
+[modules]
+# Active modules for the modular system
+active = [
+    "core_transformer",
+    "attention_module", 
+    "feedforward_module",
+    "embedding_module"
+]
+
+# Module configurations
+[modules.core_transformer]
+enabled = true
+layers = 24
+hidden_size = 768
+
+[modules.attention_module]
+enabled = true
+num_heads = 12
+head_dim = 64
+dropout = 0.1
+
+[modules.feedforward_module]
+enabled = true
+intermediate_size = 3072
+activation = "gelu"
+dropout = 0.1
+
+[modules.embedding_module]
+enabled = true
+vocab_size = 50257
+hidden_size = 768
+max_position_embeddings = 2048
+
+[training]
+batch_size = 32
+learning_rate = 1e-4
+weight_decay = 0.01
+warmup_steps = 1000
+max_steps = 100000
+gradient_clip_norm = 1.0
+
+[optimization]
+optimizer = "adamw"
+beta1 = 0.9
+beta2 = 0.999
+epsilon = 1e-8
+
+[tpu]
+# TPU v6e-64 configuration
+enabled = true
+mesh_shape = [8, 8]  # dp=8, ep=8
+use_bf16 = true
+enable_flash_attention = true
+
+[moe]
+# MoE system configuration (references moe_system.toml)
+enabled = true
+config_file = "moe_system.toml"
+
+[rag]
+# RAG system configuration (references advanced_rag.toml)
+enabled = true
+config_file = "advanced_rag.toml"
+
+[logging]
+level = "INFO"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+[paths]
+model_dir = "models"
+data_dir = "data"
+cache_dir = "cache"
+logs_dir = "logs"

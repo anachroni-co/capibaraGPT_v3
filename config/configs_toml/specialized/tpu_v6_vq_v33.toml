@@ -1,0 +1,130 @@
+# Configuración TPU v6 con Vector Quantization v3.3
+# Optimizada para máximo rendimiento en TPU v6
+
+[metadata]
+name = "TPU-v6-VQ-v33"
+version = "3.3.0"
+description = "Configuración optimizada para TPU v6 con Vector Quantization v3.3"
+
+[hardware]
+device = "tpu"
+tpu_version = "v6"
+num_devices = 512  # Increased for maximum parallelism
+precision = "bfloat16"
+memory_mode = "high_bandwidth"
+mesh_shape = [4, 128]  # Optimized for VQ operations
+memory_fraction = 0.95  # Increased for better utilization
+prefetch_buffer_size = 8  # Doubled for better throughput
+
+[vq]
+embedding_dim = 4096
+quantization_codes = 256  # 128 VQ codes
+adaptive_layers = 16
+diversity_threshold = 0.98
+diversity_regularization_enabled = true
+adaptive_ml_enabled = true
+cache_size_ratio = 0.5  # Increased for better hit rate
+enable_prefetch = true
+tile_size = 2048  # Quadrupled for TPU v6
+use_sparse_attention = true  # Enable sparse attention for efficiency
+attention_dropout = 0.1  # Added for regularization
+
+[training]
+batch_size = 4  # More conservative for stability
+gradient_accumulation_steps = 64  # Doubled for better stability
+learning_rate = 2e-5  # Further reduced for stability
+warmup_steps = 8000  # Doubled again for better convergence
+max_steps = 400000  # Doubled for better convergence
+weight_decay = 0.01  # Reduced for stability
+optimizer = "adamw"
+scheduler = "cosine_with_restarts"
+num_cycles = 4  # Added for better convergence
+
+[model]
+hidden_size = 8192  # Doubled for TPU v6
+intermediate_size = 32768
+num_attention_heads = 64
+num_hidden_layers = 48
+max_position_embeddings = 32768
+vocab_size = 32000
+tie_word_embeddings = false
+layer_norm_epsilon = 1e-7  # Reduced for better precision
+
+[routing]
+num_experts = 32  # Increased for better specialization
+routing_algorithm = "top_2"  # Changed to top_2 for better load balancing
+capacity_factor = 2.0  # Increased for better load distribution
+load_balancing_loss_weight = 0.05  # Increased for better balance
+jitter_noise = 0.1  # Added for better routing stability
+
+[inference]
+max_length = 32768
+temperature = 0.8
+top_p = 0.92  # Adjusted for better quality
+top_k = 40  # Reduced for better focus
+repetition_penalty = 1.2  # Increased slightly
+max_batch_size = 2  # More conservative for 128 VQ
+num_beams = 4  # Added for better quality
+
+[optimization]
+sparse_representation = true
+max_active_codes = 131072  # Doubled for better coverage
+compression_ratio = 2097152  # Doubled compression
+code_pruning_threshold = 1e-9  # More aggressive pruning
+memory_optimization = true
+use_gradient_checkpointing = true
+use_kernel_injection = true  # Enable kernel injection
+use_recomputation = true  # Enable selective recomputation
+
+[performance]
+peak_tflops = 1293  # 275 * 4.7 speedup
+vq_operations_per_second = 1e12
+memory_bandwidth_gb_s = 4800
+interconnect_bandwidth_gb_s = 4800
+target_step_time_ms = 100  # Added target step time
+target_throughput_samples_per_second = 1000
+
+[monitoring]
+vq_state_monitoring = true
+cache_coherence_tracking = true
+diversity_rate_monitoring = true
+cost_tracking = true
+performance_profiling = true
+memory_profiling = true  # Added memory profiling
+gradient_norm_tracking = true  # Added gradient tracking
+convergence_monitoring = true  # Added convergence monitoring
+
+[compatibility]
+fallback_to_64_codes = true
+arm_axion_compatibility = false
+tpu_v4_compatibility = true
+minimum_tpu_version = "v4-32"
+
+[deployment]
+cloud_provider = "google_cloud"
+recommended_instance = "tpu-v6-512"
+minimum_instance = "tpu-v6-256"
+auto_scaling = false
+preemptible = false
+zone_preference = ["us-central1-a", "us-central1-b"]  # Added zone preferences
+
+[security]
+vq_encryption = true
+code_isolation = true
+secure_vq_communication = true
+audit_logging = true
+encryption_key_rotation = true  # Added key rotation
+secure_memory_wiping = true  # Added secure memory wiping
+
+[logging]
+level = "INFO"
+vq_operations_logging = true
+performance_metrics_logging = true
+cost_tracking_logging = true
+detailed_profiling = false
+log_rotation_days = 7  # Added log rotation
+compression_enabled = true  # Added log compression
+
+[use_cases]
+default = "ultra_complex_processing"
+fallback = "research_applications"

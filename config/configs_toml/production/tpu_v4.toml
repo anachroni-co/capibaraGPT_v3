@@ -1,0 +1,156 @@
+# Configuración específica para TPU v4-32 en CapibaraGPT
+
+[device]
+type = "tpu"
+version = "v4-32"
+cores = 32
+memory_per_core_gb = 32
+hbm_bandwidth_gbps = 1200
+
+[mesh]
+default_1d = [8]
+default_2d = [4, 8]
+default_3d = [4, 4, 8]
+
+[layout]
+default_1d = ["batch"]
+default_2d = ["data", "model"]
+default_3d = ["batch", "height", "width"]
+default_4d = ["batch", "height", "width", "channel"]
+
+[dtypes]
+preferred = "bfloat16"
+supported = [
+    "bfloat16",
+    "float32",
+    "int32",
+    "bool",
+    "complex64",
+    "qstate",
+    "cultural_embedding"
+]
+
+[performance]
+min_batch_size = 32
+max_batch_size = 4096
+optimal_batch_size = 512
+
+[sparsity]
+block_size = 16
+min_ratio = 0.7
+
+[quantization]
+bits = 8
+axis = 1
+
+[optimization]
+# Configuraciones para diferentes tipos de operaciones
+
+[optimization.attention]
+min_cores = 8
+preferred_layout = "2d"
+use_flash_attention = true
+use_fused_softmax = true
+
+[optimization.ssm]
+min_cores = 4
+preferred_layout = "1d"
+use_scan = true
+use_custom_kernel = true
+
+[optimization.adaptive]
+min_cores = 2
+preferred_layout = "1d"
+use_custom_gates = true
+use_density_matrix = false
+
+[optimization.cultural]
+min_cores = 8
+preferred_layout = "2d"
+use_sparse_embeddings = true
+use_quantization = true
+
+[profiling]
+enabled = true
+metrics = [
+    "flops",
+    "memory_usage",
+    "communication_time",
+    "computation_time",
+    "total_time",
+    "memory_bandwidth",
+    "network_bandwidth",
+    "core_utilization",
+    "sparsity_ratio",
+    "quantization_error"
+]
+
+[scheduling]
+# Estrategias de scheduling para diferentes patrones
+
+[scheduling.parallel]
+max_concurrent_ops = 16
+core_allocation = "dynamic"
+priority = "high"
+
+[scheduling.sequential]
+pipeline_depth = 4
+core_allocation = "fixed"
+priority = "medium"
+
+[scheduling.hybrid]
+auto_balance = true
+core_allocation = "adaptive"
+priority = "high"
+
+[memory]
+# Configuraciones de gestión de memoria
+
+[memory.allocation]
+strategy = "dynamic"
+max_fragmentation = 0.2
+gc_threshold = 0.8
+
+[memory.swapping]
+enabled = true
+threshold = 0.9
+policy = "lru"
+
+[communication]
+# Configuraciones de comunicación entre cores
+
+[communication.collective]
+use_2d_mesh = true
+use_nccl = true
+optimize_allreduce = true
+
+[communication.p2p]
+use_rdma = true
+buffer_size = 16384
+num_channels = 4
+
+[monitoring]
+# Configuraciones de monitoreo en tiempo real
+
+[monitoring.metrics]
+collection_interval = 1.0
+aggregation_window = 60.0
+export_format = "json"
+
+[monitoring.alerts]
+memory_threshold = 0.95
+temperature_threshold = 85.0
+error_rate_threshold = 0.01
+
+[debugging]
+# Configuraciones para debugging
+
+[debugging.profiling]
+enabled = true
+trace_level = "full"
+save_traces = true
+
+[debugging.validation]
+check_numerics = true
+check_shapes = true
+check_dtypes = true 

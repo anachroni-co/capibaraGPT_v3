@@ -1,0 +1,5 @@
+# Mantenido por compatibilidad. Para nuevos despliegues usar:
+#   fusion_production.toml (perfil) y/o fusion_base.toml (base).
+
+[modules]
+active = ["dual_process", "adaptive", "semiotic", "semiotic_interaction"]

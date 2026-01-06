@@ -1,0 +1,83 @@
+[tpu]
+cores = 8
+memory_gb = 32
+dtype = "bfloat16"
+precision = "high"
+optimization_level = 3
+enable_xla = true
+enable_auto_mixed_precision = true
+
+[monitoring]
+enabled = true
+log_interval = 100
+metrics = [ "loss", "perplexity", "gradient_norm", "learning_rate",]
+
+[quantization]
+enabled = true
+bits = 8
+mode = "fp8"
+
+[training]
+batch_size = 32
+learning_rate = "1e-4"
+weight_decay = 0.01
+warmup_steps = 10000
+max_steps = 1000000
+gradient_clip = 1.0
+optimizer = "adamw"
+scheduler = "cosine"
+mixed_precision = true
+gradient_accumulation = 4
+num_epochs = 10
+checkpoint_frequency = 1
+checkpoint_dir = "checkpoints"
+
+[model]
+vocab_size = 65536
+hidden_size = 2048
+num_layers = 24
+num_heads = 32
+intermediate_size = 8192
+max_position_embeddings = 2048
+dropout = 0.1
+layer_norm_eps = "1e-5"
+activation = "gelu"
+pad_token_id = 0
+bos_token_id = 1
+eos_token_id = 2
+embedding_mode = "classic"
+use_adaptive_vq_submodel = false
+adaptive_trigger_keywords = [ "qubit", "entanglement", "adaptive gate",]
+dominant_modality = "text"
+model_name = "gpt2"
+max_length = 512
+
+[data]
+train_path = "path/to/train/data"
+val_path = "path/to/val/data"
+batch_size = 32
+max_length = 512
+
+[monitoring.wandb]
+project = "capibara-gpt"
+tags = [ "tpu", "quantization",]
+group = "training"
+job_type = "train"
+
+[quantization.calibration]
+samples = 1000
+percentile = 99.9
+method = "minmax"
+
+[quantization.qat]
+enabled = true
+epochs = 5
+learning_rate = "1e-5"
+warmup_steps = 1000
+weight_decay = 0.01
+
+[training.checkpointing]
+save_interval = 1000
+max_to_keep = 5
+save_best_only = true
+monitor = "val_loss"

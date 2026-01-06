@@ -1,0 +1,38 @@
+# Configuración de optimizaciones de memoria para CapibaraGPT-v2
+
+[metadata]
+version = "2.3"
+name = "CapibaraGPT-Memory-Optimization"
+description = "Configuración de optimizaciones de memoria y gradient checkpointing"
+
+[gradient_checkpointing]
+use_gradient_checkpointing = true
+checkpoint_policy = "block_depth"  # Opciones: block_depth, uniform, dots
+checkpoint_blocks = 2  # Número de bloques entre checkpoints
+remat_layer_interval = 2  # Cada cuántas capas aplicar remat
+preserve_rng_state = true  # Preservar estado RNG durante recomputos
+
+[memory_management]
+memory_pressure_threshold = 0.85
+enable_memory_monitoring = true
+cleanup_interval = 300.0
+max_memory_usage_gb = 32.0
+force_device_gc = true
+
+[precision]
+use_mixed_precision = true
+compute_dtype = "bfloat16"
+param_dtype = "float32"
+output_dtype = "float32"
+
+[parallelism]
+use_model_parallelism = true
+model_parallel_submesh = [2, 2]
+data_parallel_submesh = [2, 1]
+shard_strategy = "axis_0"  # Opciones: axis_0, axis_1, full
+
+[batch_optimization]
+dynamic_batch_size = true
+min_batch_size = 4
+max_batch_size = 32
+batch_growth_factor = 1.5 

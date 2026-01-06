@@ -1,0 +1,148 @@
+debug = true
+log_level = "DEBUG"
+
+[model]
+hidden_size = 2560
+num_heads = 32
+num_layers = 32
+dropout_rate = 0.1
+max_length = 4096
+layer_norm_eps = "1e-5"
+activation = "gelu"
+gradient_checkpointing = true
+use_mixed_precision = true
+use_flash_attention = true
+use_capibara_ssm = true
+
+[training]
+learning_rate = 0.00015
+num_epochs = 25
+warmup_steps = 4000
+weight_decay = 0.1
+gradient_clip_norm = 1.0
+strategy = "mirrored"
+use_tpu = true
+mixed_precision = true
+seed = 42
+checkpoint_frequency = 1000
+validation_frequency = 2000
+keep_checkpoint_max = 5
+
+[validation]
+n_splits = 5
+metrics = [ "loss", "accuracy", "perplexity", "bleu", "f1", "capibara_ssm_loss", "attention_entropy", "gradient_norm", "memory_usage", "throughput", "latency", "coherence_score", "diversity_score", "context_retention", "hallucination_rate",]
+shuffle = true
+stratify = true
+
+[memory_optimization]
+offload_to_cpu = true
+gradient_checkpointing = true
+remat_frequency = 4
+cache_size = 1024
+mixed_precision = true
+tf32 = true
+memory_efficient_attention = true
+
+[modules]
+coherence_detector = true
+contextual_activation = true
+personality_manager = true
+use_sparse_attention = true
+use_flash_attention = true
+use_capibara_ssm = true
+
+[paths]
+checkpoints = "dev_checkpoints"
+logs = "dev_logs"
+data = "dev_data"
+cache = "/tmp/capibara_cache"
+
+[optimization]
+zero_stage = 2
+sharding = "2d"
+remat = true
+parallel_mode = "model_and_data_parallel"
+
+[monitoring]
+log_frequency = 100
+metrics = [ "loss", "perplexity", "gradient_norm", "learning_rate", "memory_usage",]
+gradient_spike_threshold = 5.0
+loss_divergence_threshold = 2.0
+
+[tpu]
+enabled = true
+num_cores = 8
+dtype = "bfloat16"
+batch_size_per_core = 16
+memory_limit = ""
+topology = "v2-8"
+optimization_level = 3
+enable_xla = true
+
+[training.batch_size]
+initial = 512
+max_size = 2048
+min_size = 128
+growth_factor = 2
+growth_interval = 1000
+warmup_steps = 4000
+memory_threshold = 0.8
+adaptive = true
+strategy = "gradient_accumulation"
+
+[validation.early_stopping]
+patience = 3
+min_delta = 0.001
+monitor = "validation_loss"
+mode = "min"
+
+[modules.ethics_module]
+enabled = true
+risk_threshold = 0.7
+categories = [ "hate_speech", "violence", "explicit_content",]
+gradient_checkpointing_compatible = true
+
+[optimization.tpu]
+num_cores = 8
+dtype = "bfloat16"
+precision = "high"
+optimization_level = 3
+enable_xla = true
+
+[tpu.memory_config]
+auto_calculate = true
+safety_factor = 0.9
+per_core_memory = ""
+max_batch_size = 64
+
+[tpu.validations]
+check_jax_version = true
+check_tpu_availability = true
+validate_topology = true
+check_memory_limits = true
+
+[tpu.error_handling]
+raise_on_invalid_cores = true
+raise_on_invalid_dtype = true
+raise_on_memory_exceeded = true
+log_validation_errors = true
+
+[validation.metrics_config.capibara_ssm_loss]
+window_size = 100
+normalize = true
+
+[validation.metrics_config.attention_entropy]
+layers = [ 0, 8, 16, 24,]
+heads = "all"
+
+[validation.metrics_config.coherence_score]
+n_gram = 3
+threshold = 0.7
+
+[validation.metrics_config.diversity_score]
+temperature = 1.0
+top_k = 50
+
+[validation.metrics_config.context_retention]
+max_length = 4096
+window_size = 512

@@ -1,0 +1,51 @@
+[monitoring]
+save_activations = true
+log_gradients = true
+check_divergence = true
+
+[training_phases.phase1]
+frozen_layers = [ "embeddings", "layers.0:6",]
+
+[training_phases.phase2]
+frozen_layers = [ "embeddings", "layers.0:12",]
+
+[optimization.gradient_checkpointing]
+enabled = true
+granularity = "layer"
+exclude_frozen = true
+
+[optimization.layer_decay]
+enabled = true
+decay_rate = 0.9
+min_lr_ratio = 0.1
+
+[optimization.adapters]
+init_scale = 0.1
+dropout = 0.1
+skip_connection = true
+
+[training_phases.phase1.adapter_config]
+size = 64
+location = "post_attention"
+
+[training_phases.phase1.lr_config]
+new_params_lr = "3e-4"
+adapter_lr = "1e-4"
+decay_rate = 0.9
+
+[training_phases.phase1.monitoring]
+divergence_threshold = 0.5
+check_frequency = 100
+
+[training_phases.phase2.adapter_config]
+size = 128
+location = [ "post_attention", "post_ffn",]
+
+[training_phases.phase2.lr_config]
+new_params_lr = "2e-4"
+adapter_lr = "8e-5"
+decay_rate = 0.85
+
+[training_phases.phase2.monitoring]
+divergence_threshold = 0.6
+check_frequency = 200

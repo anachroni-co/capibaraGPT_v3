@@ -1,0 +1,30 @@
+[test_time_compute]
+max_thinking_steps = 32
+min_thinking_steps = 1
+difficulty_threshold_multiplier = 2.0
+confidence_threshold = 0.85
+verification_rounds = 3
+self_consistency_samples = 5
+adaptive_scaling = true
+early_stopping = true
+
+[strategies]
+beam_search_width = 4
+monte_carlo_samples = 10
+
+[integration]
+use_tpu_kernels = true
+enable_router_integration = true
+enable_memory_monitoring = true
+enable_metrics_collection = true
+
+[performance]
+default_timeout = 30.0
+fast_timeout = 2.0
+balanced_timeout = 5.0
+comprehensive_timeout = 10.0
+
+[fallbacks]
+enable_auto_fallback = true
+fallback_strategy = "balanced"
+max_retries = 2

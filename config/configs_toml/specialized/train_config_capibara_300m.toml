@@ -1,0 +1,37 @@
+
+[model]
+model_size = "300M"
+architecture = "BitNet1.58"
+hidden_size = 4096
+num_layers = 16
+seq_length = 2048
+vocab_size = 32000
+
+[training]
+precision = "fp32"
+batch_size = 65536
+learning_rate = 0.0003
+warmup_steps = 10000
+weight_decay = 0.01
+grad_clip = 1.0
+dropout = 0.1
+num_train_samples = 500000000
+save_interval = 1000
+
+[phases.pretraining_general]
+epochs = 8
+data_sources = ["common_crawl", "wikipedia", "mC4"]
+data_path = "gs://capibara-datasets/general"
+
+[phases.finetuning_sistema]
+epochs = 4
+data_sources = [
+  "logs_linux",
+  "scripts_bash_nix",
+  "manuales_nixos",
+  "configuracion_nixos",
+  "documentacion_systemd",
+  "dataset_conversacional_sistema",
+  "acciones_shell_real"
+]
+

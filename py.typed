@@ -1,0 +1,6 @@
+# Este archivo marca el paquete capibara como tipado según PEP 561
+# Partial: False - Indica que todo el paquete está tipado
+# Check: Strict - Indica que se debe usar verificación estricta de tipos
+ 
+partial = False
+check = strict 

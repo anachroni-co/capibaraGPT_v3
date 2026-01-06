@@ -1,0 +1,21 @@
+[model]
+architecture = "bitnet_1.58"
+hidden_size = 768
+num_heads = 12
+num_layers = 24
+vocab_size = 32000
+max_seq_length = 8192
+
+[training]
+precision = "fp32_fp16"
+batch_size = 32
+gradient_accumulation = 4
+learning_rate = "1e-4"
+warmup_steps = 1000
+total_steps = 100000
+
+[data]
+train_files = [ "pile_v3", "mc4", "wikipedia",]
+validation_files = [ "mmlu", "gsm8k",]
+batch_size = 32
+sequence_length = 8192

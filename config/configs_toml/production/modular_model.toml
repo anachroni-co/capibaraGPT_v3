@@ -1,0 +1,31 @@
+# Configuración principal para ModularCapibaraModel
+
+[model]
+hidden_size = 768
+num_virtual_qubits = 512
+vocab_size = 50257
+max_context_length = 2048
+num_router_experts = 8
+router_capacity_factor = 1.25
+
+[tpu]
+use_core_optimizations = true
+workload_type = "balanced"
+use_tpu_optimizations = true
+
+[features]
+enable_adaptive_routing = true
+enable_cultural_analysis = true
+enable_spiking_neural = true
+
+[performance]
+routing_cache_size = 1000
+lazy_loading_timeout = 30.0
+visualization_cleanup_interval = 3600.0
+max_visualization_files = 50
+
+[agents]
+max_agents = 100
+agent_cleanup_interval = 300.0
+memory_pressure_threshold = 0.85
+enable_hot_reload = false 

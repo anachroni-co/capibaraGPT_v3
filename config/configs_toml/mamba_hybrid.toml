@@ -1,0 +1,192 @@
+# Configuración Híbrida Mamba-Transformer para Capibara-6
+# Optimizada para TPU v6e-64 con routing inteligente
+
+[model]
+name = "Capibara-6-Mamba-Hybrid"
+version = "3.0.0"
+hidden_size = 768
+num_layers = 24
+num_heads = 12
+vocab_size = 50257
+max_position_embeddings = 2048
+dtype = "bfloat16"
+param_dtype = "float32"
+
+[modules]
+# Módulos activos con Mamba y Hybrid Attention
+active = [
+    "core_transformer",
+    "mamba",              # 🆕 Módulo Mamba O(n)
+    "hybrid_attention",   # 🆕 Atención híbrida inteligente
+    "attention_module", 
+    "feedforward_module",
+    "embedding_module"
+]
+
+# Configuración del módulo Mamba
+[modules.mamba]
+enabled = true
+hidden_size = 768
+d_state = 64           # Dimensión del estado SSM
+d_conv = 4             # Kernel size convolución 1D
+expand_factor = 2      # Factor expansión proyecciones
+dt_rank = 32          # Rango parámetro temporal
+use_bias = true
+use_conv_bias = true
+activation = "swish"   # swish, gelu, relu
+layer_norm_epsilon = 1e-5
+
+# Optimizaciones Mamba TPU
+use_tpu_optimizations = true
+use_mixed_precision = true
+scan_type = "associative"  # "linear", "associative"
+
+# Configuración del módulo híbrido
+[modules.hybrid_attention]
+enabled = true
+hidden_size = 768
+num_heads = 12
+intermediate_size = 3072
+
+# Parámetros de decisión híbrida
+mamba_threshold = 512        # Longitud mínima para Mamba
+transformer_max_length = 2048  # Longitud máxima Transformer
+
+# Configuración Mamba dentro del híbrido
+[modules.hybrid_attention.mamba_config]
+hidden_size = 768
+d_state = 64
+d_conv = 4
+expand_factor = 2
+use_tpu_optimizations = true
+
+# Configuración Transformer dentro del híbrido
+dropout_rate = 0.1
+layer_norm_eps = 1e-12
+
+# Optimizaciones híbridas
+use_tpu_optimizations = true
+use_mixed_precision = true
+enable_caching = true
+collect_metrics = true
+log_decisions = false  # Cambiar a true para debugging
+
+# Configuración módulos existentes
+[modules.core_transformer]
+enabled = true
+layers = 24
+hidden_size = 768
+
+[modules.attention_module]
+enabled = true
+num_heads = 12
+head_dim = 64
+dropout = 0.1
+
+[modules.feedforward_module]
+enabled = true
+intermediate_size = 3072
+activation = "gelu"
+dropout = 0.1
+
+[modules.embedding_module]
+enabled = true
+vocab_size = 50257
+hidden_size = 768
+max_position_embeddings = 2048
+
+[training]
+batch_size = 32
+learning_rate = 1e-4
+weight_decay = 0.01
+warmup_steps = 1000
+max_steps = 100000
+gradient_clip_norm = 1.0
+
+# Configuración específica para entrenamiento híbrido
+enable_adaptive_batching = true  # Ajustar batch según módulo activo
+mamba_batch_multiplier = 1.5     # Batch más grande para Mamba (más eficiente)
+transformer_batch_multiplier = 1.0
+
+[optimization]
+optimizer = "adamw"
+beta1 = 0.9
+beta2 = 0.999
+epsilon = 1e-8
+
+# Optimizaciones específicas para Mamba
+mamba_lr_multiplier = 1.2        # LR ligeramente mayor para Mamba
+hybrid_gradient_scaling = true   # Escalado diferencial de gradientes
+
+[tpu]
+# TPU v6e-64 configuration optimizada para Mamba
+enabled = true
+mesh_shape = [8, 8]  # dp=8, ep=8
+use_bf16 = true
+enable_flash_attention = true
+
+# Optimizaciones Mamba-específicas TPU
+enable_mamba_scan_optimization = true
+associative_scan_threshold = 512
+tpu_memory_optimization = true
+
+[moe]
+# MoE system configuration (compatible con Mamba)
+enabled = true
+config_file = "moe_system.toml"
+mamba_moe_integration = true  # Integrar Mamba en sistema MoE
+
+[rag]
+# RAG system configuration 
+enabled = true
+config_file = "advanced_rag.toml"
+
+[hybrid_routing]
+# Configuración avanzada de routing híbrido
+enabled = true
+
+# Reglas de decisión
+[hybrid_routing.decision_rules]
+short_sequence_max = 256      # Siempre Transformer
+medium_sequence_max = 1024    # Híbrido según carga
+long_sequence_min = 1024      # Siempre Mamba
+very_long_sequence_min = 2048 # Forzar Mamba
+
+# Factores de decisión
+memory_pressure_threshold = 0.8  # Cambiar a Mamba si memoria >80%
+training_mode_preference = "mamba"  # Preferir Mamba en training
+inference_mode_preference = "auto"  # Auto-decidir en inference
+
+# Métricas y monitoreo
+[hybrid_routing.metrics]
+collect_decision_stats = true
+collect_performance_metrics = true
+log_routing_decisions = false  # Cambiar a true para debugging
+decision_history_size = 1000
+
+# Configuración de fallbacks
+[hybrid_routing.fallbacks]
+mamba_fallback_to_transformer = true
+transformer_fallback_to_mamba = false  # Transformer no fallback a Mamba
+error_fallback_module = "transformer"   # Usar Transformer si hay errores
+
+[logging]
+level = "INFO"
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Logging específico para Mamba
+[logging.mamba]
+level = "INFO"
+log_ssm_operations = false    # Cambiar a true para debugging detallado
+log_scan_operations = false   # Cambiar a true para debugging scan
+log_routing_decisions = false # Cambiar a true para debugging routing
+
+[paths]
+model_dir = "models"
+data_dir = "data"
+cache_dir = "cache"
+logs_dir = "logs"
+
+# Paths específicos para Mamba
+mamba_cache_dir = "cache/mamba"
+hybrid_metrics_dir = "logs/hybrid_metrics"
