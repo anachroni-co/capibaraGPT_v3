@@ -342,11 +342,11 @@ pytest capibara/tests/
 
 ### Community
 - **GitHub Issues**: Report bugs and features
-- **Discord**: [CapibaraGPT Community](https://discord.gg/capibaragpt)
-- **Documentation**: [docs.capibaragpt.com](https://docs.capibaragpt.com)
+- **Website**: [www.anachroni.co](https://www.anachroni.co)
+- **Documentation**: [docs.anachroni.co](https://docs.anachroni.co)
 
 ### Enterprise Support
-- **Email**: enterprise@anacronic.io
+- **Email**: [info@anachroni.co](mailto:info@anachroni.co)
 - **SLA Options**: 99.9% to 99.99% uptime
 - **Custom Training**: Specialized models
 - **White-glove Deployment**: Professional setup and tuning
@@ -355,7 +355,7 @@ pytest capibara/tests/
 
 <div align="center">
 
-**CapibaraGPT v3** - Built with love by [Anacronic](https://www.anachroni.co)
+**CapibaraGPT v3** - Built with ❤️ by [Anacroni S.Coop.Gal.](https://www.anachroni.co)
 
 *Democratizing advanced AI for everyone*
 
