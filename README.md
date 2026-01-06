@@ -355,7 +355,7 @@ pytest capibara/tests/
 
 <div align="center">
 
-**CapibaraGPT v3** - Built with love by [Anacronic](https://anacronic.io)
+**CapibaraGPT v3** - Built with love by [Anacronic](https://www.anachroni.co)
 
 *Democratizing advanced AI for everyone*
 
@@ -365,3 +365,4 @@ pytest capibara/tests/
 [![ARM](https://img.shields.io/badge/ARM-Axion%20v3.2-green.svg)](https://aws.amazon.com/ec2/graviton/)
 
 </div>
+
