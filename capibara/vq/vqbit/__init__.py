@@ -591,4 +591,4 @@ elif available_components >= 4:
 elif available_components >= 2:
     logger.info(" Basic VQBit system available")
 else:
-logger.debug("Limited VQBit capabilities available")
+    logger.debug("Limited VQBit capabilities available")

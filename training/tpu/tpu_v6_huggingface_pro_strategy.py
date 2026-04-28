@@ -492,9 +492,9 @@ class TPUv6HuggingFaceProStrategy:
         self._pipeline_cache[model_id] = pipe
         return pipe
 
-def _apply_tpu_v6_consensus_algorithm(
-        self, 
-        responses: List[Dict[str, Any]], 
+    def _apply_tpu_v6_consensus_algorithm(
+        self,
+        responses: List[Dict[str, Any]],
         original_prompt: str
     ) -> Dict[str, Any]:
         """Apply advanced consensus algorithm optimized for TPU v6-64."""
