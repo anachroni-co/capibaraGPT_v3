@@ -29,7 +29,12 @@ import asyncio
 import gc
 import os
 import time
-import psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None  # type: ignore[assignment]
+    PSUTIL_AVAILABLE = False
 import logging
 import platform
 import threading

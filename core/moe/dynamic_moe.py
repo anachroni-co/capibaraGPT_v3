@@ -12,19 +12,18 @@ import time
 
 # JAX imports with fallbacks
 try:
-    # Try to import real JAX first
     import jax
     import jax.numpy as jnp
     from jax import nn, random
     from jax.sharding import PartitionSpec as P
     JAX_AVAILABLE = True
 except ImportError:
-    # Fall back to capibara.jax
-    from jax import numpy as jnp
-    from jax import nn, random
-    from jax.sharding import PartitionSpec as P
+    import numpy as jnp  # type: ignore[no-redef]
     JAX_AVAILABLE = False
-    jax = None
+    jax = None  # type: ignore[assignment]
+    nn = None   # type: ignore[assignment]
+    random = None  # type: ignore[assignment]
+    P = None    # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

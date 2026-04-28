@@ -26,7 +26,19 @@ except Exception:
     jax = None  # type: ignore
     jnp = np  # type: ignore
     nn = None  # type: ignore
-from pydantic import BaseModel, Field, field_validator
+try:
+    from pydantic import BaseModel, Field, field_validator
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    class BaseModel:  # type: ignore[no-redef]
+        def __init__(self, **kwargs: object) -> None:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+    def Field(*args: object, **kwargs: object) -> object:  # type: ignore[no-redef]
+        return kwargs.get("default", None)
+    def field_validator(*args: object, **kwargs: object):  # type: ignore[no-redef]
+        return lambda f: f
+    PYDANTIC_AVAILABLE = False
 
 # Interface imports
 try:
