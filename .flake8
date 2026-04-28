@@ -23,6 +23,7 @@ per-file-ignores =
     capibara/vq/vqbit/vq_v33_tpu_v6.py: F821
     config/__init__.py: F821
     core/backends/registry.py: F821,F824
+    core/routers/base.py: F821
     core/cot_27_nuclei_complete.py: F821
     core/decorators.py: F821,F824
     data/processors/semantic_deduplication.py: F821

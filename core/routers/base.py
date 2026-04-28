@@ -4,18 +4,38 @@ Uses JAX native implementations directly with TPU v4-32 optimizations.
 """
 
 import os
-import psutil
 import logging
 import time
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Protocol, runtime_checkable, List, Tuple
 
-from jax import nn
-from jax import numpy as jnp
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None  # type: ignore
+    PSUTIL_AVAILABLE = False
 
-from capibara.utils.monitoring import MemoryMonitor
-from capibara.core.config import RouterConfig, ModularModelConfig
+try:
+    from jax import nn
+    from jax import numpy as jnp
+    JAX_AVAILABLE = True
+except ImportError:
+    import numpy as jnp  # type: ignore
+    nn = None  # type: ignore
+    JAX_AVAILABLE = False
+
+try:
+    from capibara.utils.monitoring import MemoryMonitor
+except ImportError:
+    MemoryMonitor = None  # type: ignore
+
+try:
+    from capibara.core.config import RouterConfig, ModularModelConfig
+except ImportError:
+    RouterConfig = None  # type: ignore
+    ModularModelConfig = None  # type: ignore
 
 # Direct imports of native implementations
 try:
@@ -49,7 +69,13 @@ class RouterProtocol(Protocol):
     def route(self, x: jnp.ndarray, context: Optional[jnp.ndarray] = None) -> jnp.ndarray:
         ...
 
-class BaseRouter(nn.Module, ABC):
+if JAX_AVAILABLE and nn is not None:
+    _FlaxBase = nn.Module
+else:
+    class _FlaxBase:  # type: ignore[no-redef]
+        pass
+
+class BaseRouter(_FlaxBase, ABC):  # type: ignore[misc]
     """Abstract base class for all routers"""
     config: RouterConfig
     
