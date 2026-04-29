@@ -81,6 +81,10 @@ class MetaConsensusConfig:
     cost_feedback_weight: float = 0.3
     latency_feedback_weight: float = 0.1
     
+    # Model paths (empty string = not configured)
+    router_model_path: str = ""
+    btx_seed_model_path: str = ""
+
     # Storage and persistence
     model_cache_dir: str = "cache/models"
     metrics_storage_dir: str = "storage/metrics"
@@ -363,8 +367,7 @@ class MetaConsensusSystem:
         
         logger.info("Initializing Hybrid Expert Router...")
         
-        # Mock router model path - in real implementation, provide actual path
-        router_model_path = "models/router_2.6B"
+        router_model_path = self.config.router_model_path
         model_configs = {}
         
         self.hybrid_router = HybridExpertRouter(
@@ -383,8 +386,7 @@ class MetaConsensusSystem:
         
         logger.info("Initializing BTX Training System...")
         
-        # Mock configuration - in real implementation, provide actual paths and configs
-        seed_model_path = "models/seed_model_1b"
+        seed_model_path = self.config.btx_seed_model_path
         output_base_path = "output/btx_training"
         expert_configs = []  # Would be populated with actual expert configs
         
@@ -1041,16 +1043,29 @@ class MetaConsensusSystem:
         return min(base_uncertainty + expert_factor * 0.5, 1.0)
     
     async def _detect_bias(self, result: ConsensusResult) -> float:
-        """Detect potential bias in the consensus result."""
-        
-        # Mock bias detection - in real implementation, use bias detection models
-        return 0.1  # Low bias score
+        """Detect potential bias using keyword heuristics on the response text."""
+        text = result.response.lower()
+        bias_patterns = [
+            "always", "never", "all ", "none ", "every ", "only ",
+            "obviously", "clearly", "everybody knows", "of course",
+        ]
+        hits = sum(1 for p in bias_patterns if p in text)
+        # Normalise: 0 hits → 0.0, 5+ hits → 0.5 (caps at 0.5 — model needed for higher)
+        return min(hits / 10.0, 0.5)
     
     async def _apply_safety_filtering(self, result: ConsensusResult) -> float:
-        """Apply safety filtering to the consensus result."""
-        
-        # Mock safety filtering - in real implementation, use safety models
-        return 0.95  # High safety score
+        """Score response safety using keyword pattern matching.
+
+        Returns a value in [0, 1] where 1.0 means no unsafe patterns detected.
+        Each matched unsafe pattern reduces the score by 0.15, floored at 0.0.
+        """
+        text = result.response.lower()
+        unsafe_patterns = [
+            "kill", "harm", "illegal", "weapon", "exploit",
+            "hack ", "malware", "phishing", "abuse", "violence",
+        ]
+        hits = sum(1 for p in unsafe_patterns if p in text)
+        return max(1.0 - hits * 0.15, 0.0)
     
     async def _update_metrics_and_learning(
         self,
