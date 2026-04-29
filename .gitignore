@@ -61,3 +61,7 @@ _version.py
 # Benchmark outputs
 benchmark_results/
 
+# pytest coverage data
+.coverage
+htmlcov/
+
