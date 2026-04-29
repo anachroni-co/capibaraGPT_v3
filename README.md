@@ -1,63 +1,145 @@
-# CapibaraGPT v3
+# 🦫 Capibara Slim
 
-Experimental open-source foundation model stack for research and education.
+A lightweight, modular AI inference and training system combining Transformers and Mamba architectures for production-grade deployment.
 
-## What this repository includes
+## 🧠 Overview
 
-- Multi-backend core runtime (CPU, optional GPU/TPU).
-- Training modules (consensus, strategies, federated paths).
-- Inference modules (including quantization/hybrid experiments).
-- Data pipelines and dataset tooling.
-- Optional services and integrations.
-- Test and benchmark suites.
+Capibara Slim is a streamlined version of the original Capibara system. It removes experimental complexity and focuses on:
 
-## Live Repository Metrics
+- stable inference
+- modular model design
+- optional hybrid architectures (Transformer + Mamba)
+- simple routing logic
+- deployable API-first design
 
-Last refreshed: `2026-04-20`
+It is designed to be **fast, understandable, and production-ready** — not a research sandbox.
 
-### Snapshot
+## ⚙️ Key Features
 
-| Metric | Value |
-|---|---:|
-| Python files (repo only) | ~594 |
-| Markdown files (repo only) | ~70 |
-| Python LOC (repo only) | ~180,000 |
-| Test files (repo only) | 38 |
-| Test functions (`def test_*`, `async def test_*`) | ~466 |
+### 🧠 Hybrid Architecture (Optional)
 
-### Python LOC by top-level folder (approximate)
+- Transformer blocks for general reasoning
+- Mamba blocks for efficient long-sequence processing
+- Optional fixed hybrid stacking (no dynamic per-token routing)
 
-| Folder | LOC |
-|---|---:|
-| `training` | 35,177 |
-| `core` | 28,474 |
-| `capibara` | 14,605 |
-| `services` | 10,601 |
-| `data` | 10,162 |
-| `sub_models` | 9,616 |
-| `agents` | 8,873 |
-| `jax` | 8,788 |
-| `utils` | 7,607 |
-| `inference` | 6,208 |
+### 🚀 Inference Engine
 
-```mermaid
-xychart-beta
-    title "Python LOC by Folder (Top 10)"
-    x-axis [training, core, capibara, services, data, sub_models, agents, jax, utils, inference]
-    y-axis "LOC" 0 --> 36000
-    bar [35177, 28474, 14605, 10601, 10162, 9616, 8873, 8788, 7607, 6208]
+- deterministic pipeline execution
+- streaming support
+- optional caching layer (KV cache)
+
+### 🧩 Modular Design
+
+Clear separation between:
+
+- core execution
+- model layers
+- functional modules
+- tools (optional)
+
+### 🔌 Tool Use (Lite MCP)
+
+- simple function-calling interface
+- external tool execution sandbox
+- no deep agent framework dependency
+
+### 🛡️ Safety Layer
+
+- input filtering
+- output filtering
+- lightweight policy enforcement
+
+### 📊 Training Pipeline
+
+- single-strategy training loop
+- reproducible configuration-based runs
+- checkpointing and model export
+
+## 🧭 Architecture
+
+```
+User
+ ↓
+API (services/)
+ ↓
+Inference Pipeline
+ ↓
+Core Router
+ ↓
+Model Stack
+   ├── Transformer Blocks
+   ├── Mamba Blocks
+   └── Modules (reasoning/tools)
+ ↓
+Optional Tool Execution
+ ↓
+Safety Layer
+ ↓
+Response
 ```
 
-## Current reality
+## 📁 Project Structure
 
-This is an active research codebase, not a production-hardened product.
-Some modules are fully functional, while others are still under active implementation.
+```
+capibara-slim/
+│
+├── app/              # API layer (FastAPI or similar)
+├── core/             # execution graph + router
+├── inference/        # runtime pipeline
+├── models/           # layers, modules, submodels
+├── training/         # simplified training loop
+├── data/             # datasets
+├── rag/              # optional retrieval system
+├── tools/            # MCP-lite tool system
+├── safety/           # input/output filtering
+├── config/           # global configuration
+├── services/         # API + orchestration layer
+├── tests/            # integration tests
+├── scripts/          # dev & deployment scripts
+├── docker/           # deployment setup
+└── utils/            # lightweight helpers
+```
 
-Pending technical work lives in a single file:
+## 🧠 Design Principles
 
-- **[`BACKLOG.md`](./BACKLOG.md)** — concrete, verifiable pending items with scope and exit criteria.
+### 1. Simplicity over exploration
 
-The previous auto-generated `TODOs.md`, `TODOs_PRIORITIZED.md` and 20 per-folder `TODOs.md` files were removed on 2026-04-20 because they were low-signal regex scrapes that conflated code comments with real pending work.
+No experimental routing systems or multi-agent frameworks.
+
+### 2. Deterministic inference
+
+Same input → same output (given same model state).
+
+### 3. Controlled modularity
+
+Modules exist, but do not introduce unnecessary abstraction layers.
+
+### 4. Hybrid architecture by design, not by runtime chaos
+
+Mamba and Transformer are combined in fixed, understandable patterns.
+
+### 5. Production-first mindset
+
+Every component must justify its existence in terms of real production value.
+
+## 🚀 Quick Start
+
+```bash
+# Install dependencies
+pip install -r requirements-mvp.txt
+
+# Run inference
+python -m inference.pipeline --config config/default.yaml
+
+# Run API server
+python -m app.main
+```
+
+## 🧪 Testing
+
+```bash
+pytest tests/ -v
+```
 
 ## Requirements
 
@@ -68,85 +150,6 @@ Optional acceleration backends:
 
 - GPU: PyTorch + CUDA
 - TPU: JAX + Flax
-
-## Installation
-
-```bash
-git clone https://github.com/anachroni-co/capibaraGPT_v3.git
-cd capibaraGPT_v3
-
-python -m venv .venv
-# Linux/macOS
-source .venv/bin/activate
-# Windows PowerShell
-# .\.venv\Scripts\Activate.ps1
-
-pip install -e .
-```
-
-Optional extras:
-
-```bash
-pip install -e ".[dev]"
-pip install -e ".[gpu]"
-pip install -e ".[tpu]"
-```
-
-## Quick start
-
-```python
-from core.backends import get_backend, BackendType
-
-backend = get_backend(BackendType.AUTO)
-print(f"Using backend: {backend.name}")
-```
-
-## Run tests
-
-```bash
-pytest tests/ -v
-```
-
-Coverage:
-
-```bash
-pytest tests/ --cov=core --cov-report=term-missing
-```
-
-## Run benchmarks
-
-```bash
-python -m benchmarks run
-```
-
-## Repository layout
-
-- `core/`: model/runtime components.
-- `training/`: training systems and strategies.
-- `inference/`: inference engines and quantization paths.
-- `data/`: datasets, processing, and loading.
-- `capibara/`: specialized modules (VQ, SSM, routers, optimizations).
-- `services/`: optional service-level integrations.
-- `sub_models/`: specialized expert modules.
-- `tests/`: unit/integration/security/benchmark tests.
-- `docs/`: project documentation.
-
-## Limitations
-
-- Several advanced paths still include placeholder/mock logic (see `BACKLOG.md`).
-- Hardware-specific features depend on external stacks and environment.
-- Performance numbers can vary significantly across machines.
-
-## Reproduce metrics
-
-```bash
-# Python/Markdown files (excluding venv)
-rg --files -g "*.py" -g "!**/.venv/**" -g "!**/venv/**" -g "!**/.git/**" | wc -l
-rg --files -g "*.md" -g "!**/.venv/**" -g "!**/venv/**" -g "!**/.git/**" | wc -l
-
-# Test functions
-rg -n "^(async )?def test_" -g "*.py" -g "!**/venv/**" -g "!**/.git/**" | wc -l
-```
 
 ## License
 
