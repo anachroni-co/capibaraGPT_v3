@@ -265,8 +265,7 @@ class QuantizedInferenceEngine:
             seq_len = np.random.randint(128, self.config.max_sequence_length)
             sample = np.random.randint(0, 50000, size=(1, seq_len))
             calibration_samples.append(sample)
-        
-        await asyncio.sleep(0.1)  # Simulate processing delay
+
         return np.concatenate(calibration_samples, axis=0)
     
     async def _quantized_forward_pass(self, input_tokens: np.ndarray,
@@ -276,13 +275,16 @@ class QuantizedInferenceEngine:
         
         # Embedding lookup with quantized weights
         embeddings = await self._quantized_embedding_lookup(input_tokens)
-        
-        # Transformer layers
+
+        # Transformer layers — count derived from loaded params, not hardcoded
         hidden_states = embeddings
         attention_weights_list = []
-        
-        for layer_idx in range(12):  # 12 layers
-            layer_name = f'transformer_layer_{layer_idx}'
+
+        layer_names = sorted(
+            [k for k in self.quantized_params if k.startswith('transformer_layer_')],
+            key=lambda k: int(k.split('_')[-1]),
+        )
+        for layer_name in layer_names:
             
             # Self-attention with quantized weights
             attn_output, attn_weights = await self._quantized_attention(
@@ -486,26 +488,23 @@ class QuantizedInferenceEngine:
         return results
     
     async def _optimize_for_tpu_v6(self):
-        """Apply TPU v6 specific optimizations."""
-        logger.info(" Applying TPU v6 optimizations...")
-        
-        # TPU-specific optimizations would go here
-        # - Reshape tensors for optimal TPU utilization
-        # - Apply TPU-specific quantization schemes
-        # - Configure memory layouts
-        
-        await asyncio.sleep(0.1)  # Simulate optimization time
-    
+        """Apply TPU v6 specific optimizations.
+
+        Hardware-specific layout tuning (bfloat16 tile alignment, HBM
+        prefetch) requires the orbax/libtpu runtime that is only present on
+        a real TPU pod.  When running elsewhere this is intentionally a
+        no-op so load_model() still succeeds on developer machines.
+        """
+        logger.info("TPU v6 hardware optimizations skipped (libtpu not available)")
+
     async def _optimize_for_arm_axion(self):
-        """Apply ARM Axion specific optimizations."""
-        logger.info(" Applying ARM Axion optimizations...")
-        
-        # ARM-specific optimizations would go here
-        # - Vectorization optimizations
-        # - NEON instruction utilization
-        # - Cache-friendly memory layouts
-        
-        await asyncio.sleep(0.1)  # Simulate optimization time
+        """Apply ARM Axion specific optimizations.
+
+        NEON/SVE vectorization and cache-layout tuning require the
+        Axion SDK.  This is a no-op outside of Axion VMs so that
+        load_model() can complete on any machine.
+        """
+        logger.info("ARM Axion hardware optimizations skipped (Axion SDK not available)")
     
     def _softmax(self, x: np.ndarray, axis: int = -1) -> np.ndarray:
         """Numerically stable softmax."""

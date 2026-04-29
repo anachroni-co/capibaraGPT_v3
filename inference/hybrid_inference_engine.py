@@ -267,18 +267,19 @@ class TPUv6eInferenceEngine:
         
         generated_tokens = []
         current_ids = input_ids
+        rng = jax.random.PRNGKey(0)
 
         # Autoregressive generation
         with self.mesh:
             for step in range(max_tokens):
                 # Forward pass
                 logits = self.compiled_generate(self.model_params, current_ids, step)
-                
-                # Sampling
+
+                # Sampling: temperature > 0 → multinomial; temperature == 0 → greedy
                 if temperature > 0:
-                    probs = jax.nn.softmax(logits[:, -1, :] / temperature)
-                    # Sampling simulation
-                    next_token = jnp.argmax(probs, axis=-1, keepdims=True)
+                    rng, sample_rng = jax.random.split(rng)
+                    log_probs = jax.nn.log_softmax(logits[:, -1, :] / temperature)
+                    next_token = jax.random.categorical(sample_rng, log_probs)[..., None]
                 else:
                     next_token = jnp.argmax(logits[:, -1, :], axis=-1, keepdims=True)
                 
@@ -307,18 +308,42 @@ class TPUv6eInferenceEngine:
         )
     
     async def generate_stream(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
-        """Generate text with streaming."""
+        """Generate text streaming one decoded token at a time."""
         if not self.loaded:
             self.load_model()
 
-        # For streaming, we would send tokens one by one
-        # For now, we simulate with chunks
-        result = await self.generate(prompt, **kwargs)
-        words = result.text.split()
+        if self.compiled_generate is None:
+            raise RuntimeError(
+                "TPU inference engine has no compiled generation function. "
+                "Attach a Flax model_module before calling generate_stream()."
+            )
 
-        for word in words:
-            yield word + " "
-            await asyncio.sleep(0.05)  # Simulate generation speed
+        inputs = self.tokenizer(prompt, return_tensors="np", padding=True)
+        current_ids = jnp.array(inputs["input_ids"])
+        max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+        temperature = kwargs.get('temperature', self.config.temperature)
+        rng = jax.random.PRNGKey(0)
+
+        with self.mesh:
+            for step in range(max_tokens):
+                logits = self.compiled_generate(self.model_params, current_ids, step)
+
+                if temperature > 0:
+                    rng, sample_rng = jax.random.split(rng)
+                    log_probs = jax.nn.log_softmax(logits[:, -1, :] / temperature)
+                    next_token = jax.random.categorical(sample_rng, log_probs)[..., None]
+                else:
+                    next_token = jnp.argmax(logits[:, -1, :], axis=-1, keepdims=True)
+
+                token_id = int(next_token[0])
+                current_ids = jnp.concatenate([current_ids, next_token], axis=1)
+
+                if token_id == self.tokenizer.eos_token_id:
+                    break
+
+                token_text = self.tokenizer.decode([token_id], skip_special_tokens=True)
+                if token_text:
+                    yield token_text
 
 class GPUInferenceEngine:
     """Inference engine for GPU/CPU using PyTorch."""
@@ -530,12 +555,9 @@ class HybridInferenceEngine:
             async for token in self.active_engine.generate_stream(prompt, **kwargs):
                 yield token
         else:
-            # Fallback: generate complete and simulate streaming
+            # Fallback for engines that don't support streaming: yield full result
             result = await self.generate(prompt, **kwargs)
-            words = result.text.split()
-            for word in words:
-                yield word + " "
-                await asyncio.sleep(0.05)
+            yield result.text
     
     def get_backend_info(self) -> Dict[str, Any]:
         """Get current backend information."""
