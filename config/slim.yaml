@@ -1,0 +1,30 @@
+# Capibara Slim — default configuration
+# Minimal set of fields required for the Slim MVP.
+
+api:
+  host: "0.0.0.0"
+  port: 8000
+
+inference:
+  max_new_tokens: 256
+  temperature: 0.7
+  top_p: 0.9
+
+routing:
+  # Strategy: "length" picks model by token count; "always_transformer" or
+  # "always_mamba" force a fixed backend for testing.
+  strategy: "length"
+  mamba_threshold: 128   # inputs shorter than this (tokens) go to Mamba
+
+model:
+  # "stub" returns a canned response without loading any weights.
+  # Replace with "transformer" or "mamba" once weights are available.
+  backend: "stub"
+  path: ""
+
+safety:
+  input_filter: true
+  output_filter: true
+
+logging:
+  level: "INFO"
