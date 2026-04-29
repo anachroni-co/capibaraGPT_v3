@@ -145,3 +145,92 @@ def test_add_route_is_idempotent_on_same_path():
     r.add_route("/x", lambda req: 1)
     r.add_route("/x", lambda req: 2)  # overwrites
     assert r.route(_Req("/x")) == 2
+
+
+# ---------------------------------------------------------------------------
+# AdaptiveRouter (BACKLOG-006)
+# Imported from the real package — exercises adaptive_router.py lines
+# that are not reachable via the standalone-loaded BtoRouterV2 above.
+# ---------------------------------------------------------------------------
+
+from core.routers.adaptive_router import AdaptiveRouter, AdtoptiveRouter
+from core.config import ModularModelConfig
+
+
+def test_adaptive_router_construction():
+    cfg = ModularModelConfig()
+    r = AdaptiveRouter(config=cfg)
+    assert r.config is cfg
+    assert r.adaptation_strategy == "default"
+
+
+def test_adaptive_router_route_returns_dict():
+    cfg = ModularModelConfig()
+    r = AdaptiveRouter(config=cfg)
+
+    class _Req:
+        path = "/test"
+
+    result = r.route(_Req())
+    assert isinstance(result, dict)
+
+
+def test_adaptive_router_alias():
+    assert AdtoptiveRouter is AdaptiveRouter
+
+
+# ---------------------------------------------------------------------------
+# core.routers.base — FallbackConfig, RouterProtocol, BaseRouterV2
+# (BACKLOG-006)
+# ---------------------------------------------------------------------------
+
+import core.routers.base as _base
+
+
+def test_fallback_config_defaults():
+    fc = _base.FallbackConfig()
+    assert fc.memory_threshold == pytest.approx(0.85)
+    assert fc.latency_threshold_ms == pytest.approx(100.0)
+    assert fc.batch_size_reduction == pytest.approx(0.5)
+    assert fc.min_batch_size == 1
+    assert fc.enable_auto_recovery is True
+    assert fc.recovery_wait_time == 300
+
+
+def test_fallback_config_custom_values():
+    fc = _base.FallbackConfig(memory_threshold=0.9, min_batch_size=4)
+    assert fc.memory_threshold == pytest.approx(0.9)
+    assert fc.min_batch_size == 4
+
+
+def test_router_protocol_is_runtime_checkable():
+    class _Impl:
+        def route(self, x, context=None):
+            return x
+
+    assert isinstance(_Impl(), _base.RouterProtocol)
+
+
+def _make_v2(monkeypatch):
+    """Helper: create BaseRouterV2 with patched MemoryMonitor and explicit config."""
+    class _FakeMM:
+        def get_memory_usage(self):
+            return 0.0
+
+    monkeypatch.setattr(_base, "MemoryMonitor", _FakeMM)
+    # Pass a RouterConfig instance explicitly so the no-arg RouterConfig()
+    # call inside __init__ is never reached (avoids None-callable when the
+    # capibara package import order differs across test-session orderings).
+    from capibara.core.config import RouterConfig
+    return _base.BaseRouterV2(config=RouterConfig())
+
+
+def test_base_router_v2_route_and_combine(monkeypatch):
+    v2 = _make_v2(monkeypatch)
+    assert v2.route({"key": "val"}) == {"key": "val"}
+
+
+def test_base_router_v2_combine_outputs_non_dict(monkeypatch):
+    v2 = _make_v2(monkeypatch)
+    assert v2.combine_outputs(None) is None
+    assert v2.combine_outputs({}) == {}

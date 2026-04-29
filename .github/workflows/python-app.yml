@@ -52,11 +52,10 @@ jobs:
       run: |
         pytest
     - name: Coverage gate - unit (BACKLOG-006)
-      # Real execution-coverage gate for the two packages that have proper unit
-      # tests: core/routers (BtoRouterV2) and core/cot (EnhancedChainOfThoughtModule,
-      # CoTConfig, factory). Threshold starts at 35% - measured local baseline is
-      # ~39% - and the roadmap in BACKLOG.md tracks raising it as more modules get
-      # real tests. Intentionally avoids heavy ML deps (jax, flax, transformers).
+      # Raised from 35% → 55% after BACKLOG-006 expanded tests for
+      # core/routers (AdaptiveRouter, BaseRouterV2, FallbackConfig) and
+      # core/cot (EnhancedCoTModule CPU fallback, CapibaraEnhancedCoT,
+      # CoTConfig edge cases). Intentionally avoids heavy ML deps.
       run: |
         pytest \
           tests/unit/test_routers_bto.py \
@@ -64,7 +63,18 @@ jobs:
           --cov=core/routers \
           --cov=core/cot \
           --cov-report=term-missing \
-          --cov-fail-under=35
+          --cov-fail-under=55
+    - name: Coverage gate - backends (BACKLOG-006)
+      # Pure-stdlib / numpy tests for core/backends utilities and registry.
+      # GPU/TPU backend files are excluded from the gate because they require
+      # hardware that CI does not have; the 40% threshold covers cpu_backend,
+      # utils, registry, module_gate, lazy_import, and base.
+      run: |
+        pytest \
+          tests/unit/test_backends_utils.py \
+          --cov=core/backends \
+          --cov-report=term-missing \
+          --cov-fail-under=40
     - name: Surface gate - consensus + data_lineage (BACKLOG-006)
       # AST-level non-regression tests. No coverage threshold because these modules
       # cannot be imported in CI without heavy ML deps; AST parse + structural

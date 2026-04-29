@@ -42,6 +42,9 @@ ProcessRewardModel = _enhanced.ProcessRewardModel
 MetaCognitionModule = _enhanced.MetaCognitionModule
 SelfReflectionModule = _enhanced.SelfReflectionModule
 ADVANCED_COT_AVAILABLE = _enhanced.ADVANCED_COT_AVAILABLE
+# CPU fallback variants (active when ADVANCED_COT_AVAILABLE is False)
+_EnhancedCoTModule = _enhanced.EnhancedCoTModule
+_CapibaraEnhancedCoT = _enhanced.CapibaraEnhancedCoT
 
 
 # ---------------------------------------------------------------------------
@@ -195,3 +198,115 @@ def test_advanced_cot_available_is_bool():
     # The flag is set at import time and may be True (jax present) or False
     # (pure CPU fallback). Both are acceptable - we only assert it's a bool.
     assert isinstance(ADVANCED_COT_AVAILABLE, bool)
+
+
+# ---------------------------------------------------------------------------
+# EnhancedCoTModule CPU fallback (BACKLOG-006)
+# Exercises the `else` branch that is active when JAX/Flax is unavailable.
+# ---------------------------------------------------------------------------
+
+
+def test_enhanced_cot_module_cpu_call_returns_expected_keys():
+    m = _EnhancedCoTModule(config=ReasoningConfig(max_reasoning_steps=2))
+    result = m([0.1, 0.2, 0.3])
+    assert "output" in result
+    assert "reasoning_trace" in result
+    assert "confidence" in result
+    assert "verification" in result
+    assert "metrics" in result
+    assert result["metrics"]["num_steps"] >= 1
+
+
+def test_enhanced_cot_module_cpu_early_stop():
+    # confidence_threshold above any possible step_reward forces early exit.
+    cfg = ReasoningConfig(max_reasoning_steps=8, confidence_threshold=1.1)
+    m = _EnhancedCoTModule(config=cfg)
+    result = m([0.5])
+    assert result["metrics"]["num_steps"] == 1
+
+
+def test_enhanced_cot_module_cpu_generate_reasoning_step():
+    m = _EnhancedCoTModule(config=ReasoningConfig(max_reasoning_steps=3))
+    step = m.generate_reasoning_step([0.5, 0.5], [], 0)
+    assert step["step_index"] == 0
+    assert 0.0 <= step["step_confidence"] <= 1.0
+    assert "step_reward" in step
+
+
+def test_enhanced_cot_module_cpu_verify_chain_with_trace():
+    m = _EnhancedCoTModule(config=ReasoningConfig())
+    trace = [{"step_confidence": 0.9}, {"step_confidence": 0.85}]
+    v = m.verify_reasoning_chain(trace)
+    assert v["verified"] is True
+
+
+def test_enhanced_cot_module_cpu_verify_chain_no_reflection():
+    # Disable self-verification → always returns verified=True sentinel.
+    cfg = ReasoningConfig(enable_self_verification=False)
+    m = _EnhancedCoTModule(config=cfg)
+    assert m.self_reflection is None
+    v = m.verify_reasoning_chain([{"step_confidence": 0.1}])
+    assert v["verified"] is True
+    assert v["score"] == pytest.approx(1.0)
+
+
+def test_enhanced_cot_module_cpu_no_process_rewards():
+    cfg = ReasoningConfig(use_process_rewards=False, max_reasoning_steps=2)
+    m = _EnhancedCoTModule(config=cfg)
+    assert m.process_reward_model is None
+    result = m([0.1, 0.2])
+    assert "output" in result
+
+
+def test_enhanced_cot_module_cpu_no_meta_cognition():
+    cfg = ReasoningConfig(enable_meta_cognition=False, max_reasoning_steps=2)
+    m = _EnhancedCoTModule(config=cfg)
+    assert m.meta_cognition is None
+    result = m([0.1])
+    assert result["metrics"]["num_steps"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# CapibaraEnhancedCoT CPU fallback (BACKLOG-006)
+# ---------------------------------------------------------------------------
+
+
+def test_capibara_enhanced_cot_cpu_call():
+    c = _CapibaraEnhancedCoT(config=ReasoningConfig(max_reasoning_steps=2))
+    result = c([0.1, 0.2])
+    assert "output" in result
+    assert "reasoning_trace" in result
+
+
+def test_capibara_enhanced_cot_setup_no_jax():
+    # setup() returns early when JAX is unavailable (no crash).
+    c = _CapibaraEnhancedCoT(config=ReasoningConfig())
+    c.setup()  # should be a no-op; JAX not available in CI
+
+
+# ---------------------------------------------------------------------------
+# CoTConfig edge cases (BACKLOG-006)
+# ---------------------------------------------------------------------------
+
+
+def test_cotconfig_reasoning_dim_clamped_when_too_large():
+    # __post_init__ must reduce reasoning_dim to hidden_size//2.
+    c = CoTConfig(hidden_size=128, reasoning_dim=512)
+    assert c.reasoning_dim == 64
+
+
+def test_cotconfig_reasoning_dim_not_clamped_when_valid():
+    c = CoTConfig(hidden_size=768, reasoning_dim=384)
+    assert c.reasoning_dim == 384
+
+
+# ---------------------------------------------------------------------------
+# _ensure_backend second-call early-return (BACKLOG-006)
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_backend_cached_return():
+    # After the first call (at import time) _HAS_JAX is set; subsequent
+    # calls must return immediately via the early-exit guard.
+    result = _enhanced._ensure_backend()
+    assert isinstance(result, bool)
