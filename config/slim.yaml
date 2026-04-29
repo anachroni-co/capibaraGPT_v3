@@ -9,6 +9,7 @@ inference:
   max_new_tokens: 256
   temperature: 0.7
   top_p: 0.9
+  timeout_seconds: 30
 
 routing:
   # Strategy: "length" picks model by token count; "always_transformer" or
@@ -27,6 +28,10 @@ model:
 safety:
   input_filter: true
   output_filter: true
+
+cache:
+  enabled: false   # set true to cache identical requests in memory
+  max_size: 256
 
 logging:
   level: "INFO"

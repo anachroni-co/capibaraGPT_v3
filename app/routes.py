@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from services.api_service import ApiService
+from utils.cache import get_cache
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -28,6 +29,12 @@ class GenerateResponse(BaseModel):
 @router.get("/health")
 def health() -> dict:
     return {"status": "ok", "service": "capibara-slim"}
+
+
+@router.get("/metrics")
+def metrics() -> dict:
+    cache_stats = get_cache().stats()
+    return {"cache": cache_stats}
 
 
 @router.post("/generate", response_model=GenerateResponse)
