@@ -152,7 +152,7 @@ if JAX_AVAILABLE and FLAX_AVAILABLE:
             )
             conv_b = self.param(
                 "conv_bias", nn.initializers.zeros, (d_inner,)
-            ) if True else None
+            ) if self.config.use_conv_bias else None
 
             x_conv = jax.lax.conv_general_dilated(
                 x_padded,

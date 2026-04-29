@@ -28,7 +28,22 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
+def _silu(x: jnp.ndarray) -> jnp.ndarray:
+    """SiLU activation with NumPy fallback when JAX is unavailable."""
+    if JAX_AVAILABLE and nn is not None:
+        return nn.silu(x)
+    return x / (1.0 + jnp.exp(-x))
+
+
+def _bernoulli_mask(shape, keep_prob: float) -> jnp.ndarray:
+    """Bernoulli dropout mask with NumPy fallback when JAX is unavailable."""
+    if JAX_AVAILABLE and random is not None:
+        key = random.PRNGKey(int(time.time() * 1000) % 2 ** 32)
+        return random.bernoulli(key=key, p=keep_prob, shape=shape)
+    import numpy as _np
+    return _np.random.random(shape) < keep_prob
+
+
 # JIT-compiled MoE helper functions for performance
 # =============================================================================
 
@@ -186,14 +201,12 @@ class ExpertLayer:
         hidden = jnp.dot(x, self.w1) + self.bias1
         
         # Apply activation (SwiGLU-style)
-        hidden = nn.silu(hidden)  # SiLU activation
-        
+        hidden = _silu(hidden)
+
         # Apply dropout if training
         if training and self.config.expert_dropout > 0:
-            dropout_mask = random.bernoulli(
-                key=random.PRNGKey(int(time.time() * 1000) % 2**32),
-                p=1.0 - self.config.expert_dropout,
-                shape=hidden.shape
+            dropout_mask = _bernoulli_mask(
+                hidden.shape, 1.0 - self.config.expert_dropout
             )
             hidden = hidden * dropout_mask / (1.0 - self.config.expert_dropout)
             

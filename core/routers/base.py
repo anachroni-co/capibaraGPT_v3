@@ -219,7 +219,11 @@ class BaseRouter(_FlaxBase, ABC):  # type: ignore[misc]
             scores = jnp.where(mask[:, None, None, :], scores, float('-inf'))
         
         # Use less memory in softmax
-        weights = nn.softmax(scores, axis=-1)
+        if JAX_AVAILABLE and nn is not None:
+            weights = nn.softmax(scores, axis=-1)
+        else:
+            _e = jnp.exp(scores - jnp.max(scores, axis=-1, keepdims=True))
+            weights = _e / jnp.sum(_e, axis=-1, keepdims=True)
         del scores  # Free memory
         
         output = self._optimized_matmul(weights, value)
