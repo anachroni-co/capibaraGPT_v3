@@ -17,10 +17,12 @@ routing:
   mamba_threshold: 128   # inputs shorter than this (tokens) go to Mamba
 
 model:
-  # "stub" returns a canned response without loading any weights.
-  # Replace with "transformer" or "mamba" once weights are available.
-  backend: "stub"
-  path: ""
+  # "auto"        — router decides (transformer vs mamba by input length)
+  # "stub"        — canned response, no weights needed
+  # "transformer" — HuggingFace causal LM (requires torch + transformers)
+  # "mamba"       — Mamba SSM (requires mamba-ssm; stub until weights added)
+  backend: "auto"
+  path: "models/tiny-gpt2"
 
 safety:
   input_filter: true
