@@ -13,7 +13,7 @@ import json
 import logging
 import numpy as np
 from pathlib import Path
-from typing import Dict, Tuple, Optional, Union, List
+from typing import Any, Dict, Tuple, Optional, Union, List
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -386,6 +386,95 @@ class QuantizedInferenceEngine:
         sV = np.array(layer_scales["sV"], dtype=np.float16)
         
         return sK, sV
+
+# ---------------------------------------------------------------------------
+# Slim-specific integration
+# ---------------------------------------------------------------------------
+
+QUANTIZATION_AVAILABLE = True  # pure-numpy, always available
+
+
+@dataclass
+class SlimQuantizationStats:
+    total_tensors: int
+    quantized_tensors: int
+    skipped_tensors: int
+
+    def __str__(self) -> str:
+        return (
+            f"quantized={self.quantized_tensors}/{self.total_tensors}  "
+            f"skipped={self.skipped_tensors}"
+        )
+
+
+class SlimQuantizer:
+    """INT8 per-channel quantization for Slim model state dicts.
+
+    Works on plain dicts of numpy arrays or torch tensors (if torch is available).
+    Returns a *new* state dict with 2-D float tensors replaced by
+    ``<name>.W_q`` (int8) + ``<name>.S`` (float16 scales) pairs.
+    """
+
+    def __init__(self, config: Optional[QuantizationConfig] = None) -> None:
+        self.config = config or QuantizationConfig()
+        self._quantizer = WeightQuantizer(self.config)
+
+    def quantize_state_dict(
+        self, state_dict: Dict[str, Any]
+    ) -> Tuple["SlimQuantizationStats", Dict[str, np.ndarray]]:
+        """Quantize a state dict. Returns (stats, quantized_dict)."""
+        result: Dict[str, np.ndarray] = {}
+        total = quantized = skipped = 0
+
+        for name, tensor in state_dict.items():
+            total += 1
+            # Accept torch tensors or numpy arrays
+            if hasattr(tensor, "detach"):
+                arr = tensor.detach().cpu().float().numpy()
+            else:
+                arr = np.asarray(tensor, dtype=np.float32)
+
+            if self._quantizer._is_quantizable_weight(arr):
+                q, scales = self._quantizer.quantize_per_channel_symmetric(arr)
+                result[f"{name}.W_q"] = q
+                result[f"{name}.S"] = scales
+                quantized += 1
+            else:
+                result[name] = arr
+                skipped += 1
+
+        return SlimQuantizationStats(total, quantized, skipped), result
+
+    def apply_to_model(self, model: Any) -> "SlimQuantizationStats":
+        """Quantize a torch nn.Module in-place (loads int8 weights back).
+
+        Only replaces weight tensors of ``nn.Linear`` layers.
+        Requires torch.
+        """
+        try:
+            import torch
+            import torch.nn as nn
+        except ImportError as exc:
+            raise ImportError("apply_to_model requires PyTorch") from exc
+
+        total = quantized = skipped = 0
+        for module_name, module in model.named_modules():
+            if not isinstance(module, nn.Linear):
+                continue
+            w = module.weight.detach().cpu().float().numpy()
+            total += 1
+            if self._quantizer._is_quantizable_weight(w):
+                q, scales = self._quantizer.quantize_per_channel_symmetric(w)
+                # Dequantize back into float32 for transparent drop-in use
+                w_dq = q.astype(np.float32) * scales[:, np.newaxis]
+                with torch.no_grad():
+                    module.weight.copy_(torch.from_numpy(w_dq))
+                quantized += 1
+            else:
+                skipped += 1
+
+        return SlimQuantizationStats(total, quantized, skipped)
+
 
 # Factory functions for easy integration
 def create_weight_quantizer(config_dict: Optional[Dict] = None) -> WeightQuantizer:
