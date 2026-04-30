@@ -1,9 +1,11 @@
 """Capibara Slim — HTTP route definitions."""
 from __future__ import annotations
 
+import json
 import logging
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from services.api_service import ApiService
@@ -33,8 +35,12 @@ def health() -> dict:
 
 @router.get("/metrics")
 def metrics() -> dict:
-    cache_stats = get_cache().stats()
-    return {"cache": cache_stats}
+    import utils.stats as _stats
+    return {
+        "service": "capibara-slim",
+        "cache": get_cache().stats(),
+        "requests": _stats.snapshot(),
+    }
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -49,3 +55,40 @@ def generate(request: GenerateRequest) -> GenerateResponse:
     except Exception as exc:
         logger.exception("generate failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/generate/stream")
+def generate_stream(request: GenerateRequest) -> StreamingResponse:
+    """Server-Sent Events streaming endpoint.
+
+    Each token is emitted as an SSE data line:
+        data: {"token": "hello "}\\n\\n
+
+    The stream ends with:
+        data: [DONE]\\n\\n
+
+    Example (curl):
+        curl -X POST http://localhost:8000/generate/stream \\
+             -H 'Content-Type: application/json' \\
+             -d '{"input": "hello"}' \\
+             --no-buffer
+    """
+    from inference.streaming import SlimStreamer
+    streamer = SlimStreamer()
+
+    def _event_gen():
+        try:
+            for fragment in streamer.stream(
+                request.input,
+                max_tokens=request.max_tokens,
+                temperature=request.temperature,
+            ):
+                payload = json.dumps({"token": fragment}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+        except Exception as exc:
+            logger.exception("streaming error")
+            yield f"data: {json.dumps({'error': str(exc)})}\n\n"
+        finally:
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_event_gen(), media_type="text/event-stream")
