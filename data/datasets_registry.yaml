@@ -1,0 +1,233 @@
+# Capibara Slim — pretraining dataset registry
+#
+# Each entry describes a dataset available for download.
+# Fields:
+#   id:          unique identifier used in CLI (python -m data.download get <id>)
+#   name:        human-readable name
+#   langs:       list of BCP-47 language codes
+#   source:      "huggingface" | "direct"
+#   hf_repo:     HuggingFace repo (source=huggingface only)
+#   hf_config:   HuggingFace config/subset (null = default)
+#   hf_split:    HuggingFace split to download (default: "train")
+#   text_field:  name of the text column in the dataset
+#   url:         direct download URL (source=direct only)
+#   size_tokens: approximate token count (informational)
+#   license:     SPDX or short name
+#   description: one-line description
+
+datasets:
+
+  # ── English base ─────────────────────────────────────────────────────────
+
+  - id: fineweb-edu-10bt
+    name: FineWeb-Edu (10B token sample)
+    langs: [en]
+    source: huggingface
+    hf_repo: HuggingFaceFW/fineweb-edu
+    hf_config: sample-10BT
+    hf_split: train
+    text_field: text
+    size_tokens: 10B
+    license: ODC-BY-1.0
+    description: >
+      High-quality educational web content filtered from CommonCrawl.
+      Best quality-to-size ratio for smaller models.
+
+  - id: fineweb-edu-100bt
+    name: FineWeb-Edu (100B token sample)
+    langs: [en]
+    source: huggingface
+    hf_repo: HuggingFaceFW/fineweb-edu
+    hf_config: sample-100BT
+    hf_split: train
+    text_field: text
+    size_tokens: 100B
+    license: ODC-BY-1.0
+    description: >
+      Full FineWeb-Edu sample, deduplicated CommonCrawl educational content.
+
+  - id: slimpajama
+    name: SlimPajama-627B (Cerebras)
+    langs: [en]
+    source: huggingface
+    hf_repo: cerebras/SlimPajama-627B
+    hf_config: null
+    hf_split: train
+    text_field: text
+    size_tokens: 627B
+    license: Apache-2.0
+    description: >
+      Cleaned, deduplicated RedPajama — diverse mix of web, books, code,
+      arXiv, Wikipedia, StackExchange.
+
+  - id: dolma
+    name: Dolma v1.6 (AI2)
+    langs: [en]
+    source: huggingface
+    hf_repo: allenai/dolma
+    hf_config: v1_6
+    hf_split: train
+    text_field: text
+    size_tokens: 3T
+    license: ODC-BY-1.0
+    description: >
+      3T token open corpus used to train OLMo; diverse sources including
+      CommonCrawl, GitHub, arXiv, Reddit, Wikipedia, Project Gutenberg.
+
+  # ── Spanish ───────────────────────────────────────────────────────────────
+
+  - id: culturax-es
+    name: CulturaX Spanish
+    langs: [es]
+    source: huggingface
+    hf_repo: uonlp/CulturaX
+    hf_config: es
+    hf_split: train
+    text_field: text
+    size_tokens: ~200B
+    license: ODC-BY-1.0
+    description: >
+      Cleaned Spanish web text from mC4 + OSCAR with deduplication and
+      quality filtering. Best general Spanish corpus.
+
+  - id: oscar-es
+    name: OSCAR 23.01 Spanish
+    langs: [es]
+    source: huggingface
+    hf_repo: oscar-corpus/OSCAR-2301
+    hf_config: es
+    hf_split: train
+    text_field: text
+    size_tokens: ~150B
+    license: CC0-1.0
+    description: >
+      CommonCrawl-based Spanish corpus; deduplicated with language ID
+      and quality signals.
+
+  # ── Galician ──────────────────────────────────────────────────────────────
+
+  - id: corpusnos
+    name: CorpusNÓS (Proxecto Nós / USC)
+    langs: [gl]
+    source: huggingface
+    hf_repo: proxectonos/corpus_nos
+    hf_config: null
+    hf_split: train
+    text_field: text
+    size_tokens: ~8B
+    license: CC-BY-4.0
+    description: >
+      Largest dedicated Galician corpus: books, press, government docs,
+      Wikipedia, web crawl. Created by CiTIUS / Universidad de Santiago.
+
+  - id: culturax-gl
+    name: CulturaX Galician
+    langs: [gl]
+    source: huggingface
+    hf_repo: uonlp/CulturaX
+    hf_config: gl
+    hf_split: train
+    text_field: text
+    size_tokens: ~2B
+    license: ODC-BY-1.0
+    description: >
+      Galician subset of CulturaX (mC4 + OSCAR). Smaller but well-filtered.
+
+  - id: oscar-gl
+    name: OSCAR 23.01 Galician
+    langs: [gl]
+    source: huggingface
+    hf_repo: oscar-corpus/OSCAR-2301
+    hf_config: gl
+    hf_split: train
+    text_field: text
+    size_tokens: ~1B
+    license: CC0-1.0
+    description: >
+      Galician CommonCrawl subset; useful as complement to CorpusNÓS.
+
+  # ── Portuguese ────────────────────────────────────────────────────────────
+
+  - id: gigaverbo
+    name: GigaVerbo (Tucano / pt-BR + pt-PT)
+    langs: [pt-BR, pt-PT]
+    source: huggingface
+    hf_repo: nicholaskluge/GigaVerbo
+    hf_config: null
+    hf_split: train
+    text_field: text
+    size_tokens: 200B
+    license: Apache-2.0
+    description: >
+      200B deduplicated Portuguese tokens covering both Brazilian and
+      European Portuguese; used to train the Tucano LLM family.
+
+  - id: culturax-pt
+    name: CulturaX Portuguese
+    langs: [pt-BR, pt-PT]
+    source: huggingface
+    hf_repo: uonlp/CulturaX
+    hf_config: pt
+    hf_split: train
+    text_field: text
+    size_tokens: ~100B
+    license: ODC-BY-1.0
+    description: >
+      Portuguese subset of CulturaX; cleaned mC4 + OSCAR combination.
+
+  - id: brwac
+    name: BrWaC — Brazilian Portuguese Web as Corpus
+    langs: [pt-BR]
+    source: huggingface
+    hf_repo: dominguesm/brwac
+    hf_config: null
+    hf_split: train
+    text_field: text
+    size_tokens: ~4B
+    license: CC-BY-4.0
+    description: >
+      2.68B token Brazilian web corpus (WaCky framework); low duplication,
+      diverse domains. Used for BERTimbau training.
+
+  - id: portuguese-pd
+    name: Portuguese Public Domain (PleIAs)
+    langs: [pt-BR, pt-PT]
+    source: huggingface
+    hf_repo: PleIAs/Portuguese-PD
+    hf_config: null
+    hf_split: train
+    text_field: text
+    size_tokens: ~2B
+    license: CC0-1.0
+    description: >
+      Digital heritage collection: 672M words of literary and cultural
+      Portuguese texts from Internet Archive and national libraries.
+
+  - id: oscar-pt
+    name: OSCAR 23.01 Portuguese
+    langs: [pt-BR, pt-PT]
+    source: huggingface
+    hf_repo: oscar-corpus/OSCAR-2301
+    hf_config: pt
+    hf_split: train
+    text_field: text
+    size_tokens: ~80B
+    license: CC0-1.0
+    description: >
+      Portuguese CommonCrawl subset with language ID filtering.
+
+  # ── Galician + Portuguese bilingual ──────────────────────────────────────
+
+  - id: carvalho-pt-gl
+    name: Carvalho pt-gl (USC / Nos-PT)
+    langs: [gl, pt-PT]
+    source: huggingface
+    hf_repo: Nos-PT/Carvalho_pt-gl-corpus
+    hf_config: null
+    hf_split: train
+    text_field: text
+    size_tokens: 5B
+    license: Apache-2.0
+    description: >
+      5B token bilingual corpus (balanced Galician + European Portuguese)
+      built from CorpusNÓS + Arquivo.pt. Ideal for cross-lingual training.
