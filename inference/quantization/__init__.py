@@ -19,6 +19,16 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# Slim quantization — always available (pure numpy)
+from .slim_quantizer import (  # noqa: E402
+    QUANTIZATION_AVAILABLE,
+    QuantizationConfig,
+    WeightQuantizer,
+    SlimQuantizationStats,
+    SlimQuantizer,
+    create_weight_quantizer,
+)
+
 # Component availability flags
 QUANTIZATION_AVAILABLE = False
 QUANTIZED_LAYERS_AVAILABLE = False

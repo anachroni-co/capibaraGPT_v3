@@ -8,6 +8,8 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.auth import AuthMiddleware
+from app.ratelimit import RateLimitMiddleware
 from app.routes import router
 from config.slim_loader import get as cfg_get
 from utils.logger import new_request_id, request_id, setup_logging
@@ -23,6 +25,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(AuthMiddleware)
+app.add_middleware(RateLimitMiddleware)
 
 
 @app.middleware("http")

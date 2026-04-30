@@ -35,3 +35,17 @@ cache:
 
 logging:
   level: "INFO"
+
+quantization:
+  enabled: false            # set true to apply INT8 post-training quantization
+  weight_percentile: 99.9   # percentile for per-channel scale computation
+  preserve_float16: true    # keep non-quantizable tensors as float16
+
+auth:
+  enabled: false            # set true to require API key on /generate endpoints
+  # Key is read from CAPIBARA_API_KEY env var when enabled
+
+rate_limit:
+  enabled: false            # set true to enable per-IP sliding window throttle
+  requests_per_minute: 60
+  burst: 10                 # max simultaneous excess before hard 429
