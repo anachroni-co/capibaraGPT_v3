@@ -52,7 +52,7 @@ jobs:
       run: |
         pytest
     - name: Coverage gate - unit (BACKLOG-006)
-      # Raised from 35% → 55% after BACKLOG-006 expanded tests for
+      # Raised from 35% -> 55% after BACKLOG-006 expanded tests for
       # core/routers (AdaptiveRouter, BaseRouterV2, FallbackConfig) and
       # core/cot (EnhancedCoTModule CPU fallback, CapibaraEnhancedCoT,
       # CoTConfig edge cases). Intentionally avoids heavy ML deps.

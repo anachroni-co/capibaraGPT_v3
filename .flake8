@@ -1,9 +1,9 @@
 [flake8]
-# E9   – syntax / runtime errors  (always fatal)
-# F63x – starred-import / print statement misuse
-# F7xx – syntax warnings (return outside function, etc.)
-# F822 – undefined name in __all__
-# F824 – global never assigned
+# E9   - syntax / runtime errors  (always fatal)
+# F63x - starred-import / print statement misuse
+# F7xx - syntax warnings (return outside function, etc.)
+# F822 - undefined name in __all__
+# F824 - global never assigned
 #
 # F821 (undefined name) is suppressed per-file for modules that rely on
 # conditional try/except ImportError guards for optional heavy deps
