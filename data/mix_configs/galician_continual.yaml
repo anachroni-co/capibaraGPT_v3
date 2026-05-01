@@ -1,0 +1,41 @@
+# Capibara Slim — Phase 2: Galician continual pretraining
+#
+# Starts from a Phase 1 checkpoint and continues training with Galician
+# as the dominant language. Spanish and Portuguese remain present to:
+#   - leverage cross-lingual transfer (gl is typologically very close to pt/es)
+#   - prevent catastrophic forgetting of the base Romance-language capabilities
+#
+# Galician data sources (download first):
+#   python -m data.download get corpusnos   --output data/raw
+#   python -m data.download get culturax-gl --output data/raw
+#   python -m data.download get oscar-gl    --output data/raw
+#
+# Typical run (resume from Phase 1):
+#   python -m training.train --preset 3b \
+#       --mix data/mix_configs/galician_continual.yaml \
+#       --resume checkpoints/phase1/latest \
+#       --output checkpoints/phase2 \
+#       --lr 1e-4 \
+#       --max-steps 30000 \
+#       --warmup-steps 500
+
+name: galician_continual
+description: "Phase 2 — Galician continual pretraining (gl 50% / pt 25% / es 25%)"
+seed: 42
+epoch_size: 0    # 0 = auto
+
+sources:
+  - path: data/processed/gl/train.txt
+    lang: gl
+    weight: 0.50
+    name: "CorpusNÓS + CulturaX Galician"
+
+  - path: data/processed/pt/train.txt
+    lang: pt
+    weight: 0.25
+    name: "GigaVerbo Portuguese"
+
+  - path: data/processed/es/train.txt
+    lang: es
+    weight: 0.25
+    name: "CulturaX Spanish"

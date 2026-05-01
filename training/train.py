@@ -36,7 +36,12 @@ logger = logging.getLogger(__name__)
 def _parse_args(argv=None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Capibara Slim trainer")
     p.add_argument("--preset",      default="1.5b",     help="Model preset: 1.5b | 3b | 7b")
-    p.add_argument("--data",        required=True,       help="Path to training text file")
+
+    # Data: mutually exclusive — either a single file or a mix config
+    data_grp = p.add_mutually_exclusive_group(required=True)
+    data_grp.add_argument("--data", help="Path to a single training text file")
+    data_grp.add_argument("--mix",  help="Path to a mix config YAML (data/mix_configs/*.yaml)")
+
     p.add_argument("--eval-data",   default=None,        help="Path to evaluation text file")
     p.add_argument("--output",      default="checkpoints", help="Checkpoint output directory")
     p.add_argument("--tokenizer",   default="models/tiny-gpt2", help="Tokenizer path")
@@ -83,12 +88,25 @@ def main(argv=None) -> None:
     # Tokenizer
     tokenizer = SlimTokenizer(args.tokenizer)
 
-    # Datasets
-    train_ds = SlimDataset(args.data, tokenizer, seq_len=args.seq_len)
-    eval_ds  = SlimDataset(args.eval_data, tokenizer, seq_len=args.seq_len) if args.eval_data else None
+    # Datasets — single file or multilingual mix
+    if args.mix:
+        from data.mixer import DataMixer
+        mixer = DataMixer.from_yaml(args.mix)
+        logger.info("Mix config: %s", mixer.config.name)
+        for src in mixer.config.sources:
+            logger.info("  %-6s  weight=%.2f  %s", src.lang, src.weight, src.path)
+        train_loader = mixer.build_dataloader(
+            tokenizer,
+            seq_len=args.seq_len,
+            batch_size=args.batch_size,
+        )
+        eval_ds = None
+    else:
+        train_ds = SlimDataset(args.data, tokenizer, seq_len=args.seq_len)
+        train_loader = create_dataloader(train_ds, batch_size=args.batch_size)
+        eval_ds = SlimDataset(args.eval_data, tokenizer, seq_len=args.seq_len) if args.eval_data else None
 
-    train_loader = create_dataloader(train_ds, batch_size=args.batch_size)
-    eval_loader  = create_dataloader(eval_ds,  batch_size=args.batch_size, shuffle=False) if eval_ds else None
+    eval_loader = create_dataloader(eval_ds, batch_size=args.batch_size, shuffle=False) if eval_ds else None
 
     # Trainer
     train_cfg = TrainConfig(

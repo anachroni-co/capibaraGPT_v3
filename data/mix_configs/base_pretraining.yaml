@@ -1,0 +1,42 @@
+# Capibara Slim — Phase 1: multilingual base pretraining
+#
+# Proportions follow modern practice for Iberian-language LLMs:
+#   English    80% — strong base reasoning / grammar / world knowledge
+#   Spanish    10% — core Romance language bridge
+#   Portuguese 10% — typologically close to Galician; data-rich
+#
+# Recommended datasets (download first):
+#   python -m data.download get fineweb-edu-10bt --output data/raw
+#   python -m data.download get culturax-es      --output data/raw
+#   python -m data.download get gigaverbo        --output data/raw
+#
+# Then preprocess:
+#   python -m data.preprocess split data/raw/fineweb-edu-10bt/shard_*.txt \
+#       --output-dir data/processed/en
+#   ... (repeat for es, pt)
+#
+# Typical run:
+#   python -m training.train --preset 3b \
+#       --mix data/mix_configs/base_pretraining.yaml \
+#       --output checkpoints/phase1
+
+name: base_pretraining
+description: "Phase 1 — multilingual base (en 80% / es 10% / pt 10%)"
+seed: 42
+epoch_size: 0    # 0 = auto (sum of all dataset sizes)
+
+sources:
+  - path: data/processed/en/train.txt
+    lang: en
+    weight: 0.80
+    name: "FineWeb-Edu English"
+
+  - path: data/processed/es/train.txt
+    lang: es
+    weight: 0.10
+    name: "CulturaX Spanish"
+
+  - path: data/processed/pt/train.txt
+    lang: pt
+    weight: 0.10
+    name: "GigaVerbo Portuguese"
