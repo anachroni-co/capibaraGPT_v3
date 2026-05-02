@@ -122,6 +122,7 @@ python -m benchmarks run
 ## Repository layout
 
 - `core/`: model/runtime components.
+  - `core/think_anywhere/` — Think-Anywhere reasoning module (see below).
 - `training/`: training systems and strategies.
 - `inference/`: inference engines and quantization paths.
 - `data/`: datasets, processing, and loading.
@@ -130,6 +131,78 @@ python -m benchmarks run
 - `sub_models/`: specialized expert modules.
 - `tests/`: unit/integration/security/benchmark tests.
 - `docs/`: project documentation.
+
+## Think-Anywhere reasoning
+
+`core/think_anywhere/` implements the **Think-Anywhere** mechanism from
+[_Think Anywhere in Code Generation_](https://arxiv.org/abs/2603.29957)
+(Jiang et al., Peking University / Alibaba, 2026).
+
+Instead of reasoning only before the output (upfront thinking), Think-Anywhere
+lets the model insert `<thinkanywhere>` blocks at any token position during
+generation — focusing computation where the code is hardest to write.
+
+### Key components
+
+| Class | File | Purpose |
+|---|---|---|
+| `ThinkAnywhereConfig` | `config.py` | All hyperparameters: token strings, reward weights (α = 0.1 / 0.9), GRPO settings, semantic-mix α = 0.5 |
+| `ThinkAnywhereProcessor` | `token_processor.py` | Format prompts (Table 1), parse responses, validate structure, strip thinking blocks, initialize special-token embeddings (Eqs. 5–6) |
+| `ThinkAnywhereReward` | `rewards.py` | Hierarchical reward R = 0.1·R\_struct + 0.9·R\_correct (Eq. 9), subprocess sandbox execution, GRPO group-normalized advantages (Eq. 7) |
+| `ThinkAnywhereStreamFilter` | `streaming.py` | Real-time streaming filter: suppresses thinking blocks token-by-token without buffering the full response |
+
+### Quick usage
+
+```python
+from core.think_anywhere import ThinkAnywhereProcessor, ThinkAnywhereReward
+
+proc = ThinkAnywhereProcessor()
+
+# Format a prompt for Think-Anywhere generation
+prompt = proc.format_prompt("Write a function that returns the edit distance between two strings.")
+
+# Parse a model response — extract clean code and thinking blocks
+result = proc.parse(model_response)
+print(result.clean_code)           # executable code, all <thinkanywhere> stripped
+print(result.think_anywhere_blocks)  # list of inline reasoning fragments
+print(result.is_valid)             # structural validation (R_struct)
+
+# Compute GRPO reward for a batch of rollout responses
+reward_fn = ThinkAnywhereReward()
+results = reward_fn.batch(responses, test_cases=["assert f('horse','ros') == 3"])
+advantages = reward_fn.group_normalized_advantages(results)
+```
+
+### Inference integration
+
+Set `InferenceConfig.think_anywhere_mode = True` to automatically strip
+thinking blocks from generated text before returning it to the caller:
+
+```python
+from inference.hybrid_inference_engine import InferenceConfig, InferenceBackend
+
+config = InferenceConfig(
+    backend=InferenceBackend.AUTO,
+    think_anywhere_mode=True,   # strips <think> and <thinkanywhere> blocks
+)
+```
+
+Streaming (`generate_stream`) uses `ThinkAnywhereStreamFilter` to suppress
+thinking content in real time — the caller never sees reasoning tokens.
+
+### Special-token variant (Think-Anywhere\*)
+
+`ThinkAnywhereConfig(use_special_tokens=True)` switches to single-token
+`<ta>` / `</ta>` delimiters. Call
+`ThinkAnywhereProcessor.initialize_special_token_embedding()` to compute
+the semantic-aware embeddings from Eqs. 5–6 before fine-tuning:
+
+```python
+e_open, e_close = proc.initialize_special_token_embedding(
+    tokenizer.get_input_embeddings().weight.detach().numpy(),
+    token_ids={"think": t1, "any": t2, "where": t3, "<im_start>": t4, "<im_end>": t5},
+)
+```
 
 ## Limitations
 
