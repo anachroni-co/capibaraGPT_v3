@@ -13,6 +13,7 @@ This module implements a multi-level distributed caching system for consensus op
 
 import logging
 import asyncio
+import functools
 import time
 import pickle
 import json
@@ -886,6 +887,7 @@ def consensus_cached(ttl: int = 3600, key_prefix: str = "consensus",
     """Decorator for caching consensus operations."""
     
     def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
         async def wrapper(*args, **kwargs):
             # Generate cache key
             key_data = f"{key_prefix}:{func.__name__}:{hash(str(args) + str(kwargs))}"
