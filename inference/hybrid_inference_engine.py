@@ -53,6 +53,20 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Think-Anywhere post-processing (optional — graceful no-op if module absent)
+try:
+    from core.think_anywhere import (
+        ThinkAnywhereProcessor,
+        ThinkAnywhereStreamFilter as _ThinkStreamFilter,
+    )
+    _TA_PROCESSOR = ThinkAnywhereProcessor()
+    THINK_ANYWHERE_AVAILABLE = True
+except Exception:
+    _TA_PROCESSOR = None  # type: ignore[assignment]
+    _ThinkStreamFilter = None  # type: ignore[assignment,misc]
+    THINK_ANYWHERE_AVAILABLE = False
+
+
 # Maps model_scale strings saved in CheckpointMetadata to TPUOptimizedSSM hidden_size.
 _SCALE_REGISTRY: dict = {
     "1b": {"hidden_size": 2048},
@@ -89,6 +103,11 @@ class InferenceConfig:
     enable_streaming: bool = True
     enable_caching: bool = True
     cache_size_mb: int = 1024
+
+    # Think-Anywhere (arXiv:2603.29957): when True the engine strips all
+    # <think> and <thinkanywhere> blocks from the final output so callers
+    # receive only the clean executable code / answer.
+    think_anywhere_mode: bool = False
 
 @dataclass
 class InferenceResult:
@@ -343,11 +362,15 @@ class TPUv6eInferenceEngine:
 
         # Decode result
         generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-        
+
+        # Strip Think-Anywhere thinking blocks when mode is enabled
+        if self.config.think_anywhere_mode and THINK_ANYWHERE_AVAILABLE:
+            generated_text = _TA_PROCESSOR.strip_thinking(generated_text)
+
         end_time = time.time()
         time_taken = end_time - start_time
         tokens_per_second = len(generated_tokens) / time_taken if time_taken > 0 else 0
-        
+
         return InferenceResult(
             text=generated_text,
             tokens_generated=len(generated_tokens),
@@ -375,6 +398,12 @@ class TPUv6eInferenceEngine:
         temperature = kwargs.get('temperature', self.config.temperature)
         rng = jax.random.PRNGKey(0)
 
+        ta_filter = (
+            _ThinkStreamFilter()
+            if self.config.think_anywhere_mode and THINK_ANYWHERE_AVAILABLE
+            else None
+        )
+
         with self.mesh:
             for step in range(max_tokens):
                 logits = self.compiled_generate(self.model_params, current_ids, step)
@@ -394,7 +423,18 @@ class TPUv6eInferenceEngine:
 
                 token_text = self.tokenizer.decode([token_id], skip_special_tokens=True)
                 if token_text:
-                    yield token_text
+                    if ta_filter is not None:
+                        chunk = ta_filter.feed(token_text)
+                        if chunk:
+                            yield chunk
+                    else:
+                        yield token_text
+
+        # Flush any remaining buffered text from the Think-Anywhere filter
+        if ta_filter is not None:
+            tail = ta_filter.flush()
+            if tail:
+                yield tail
 
 class GPUInferenceEngine:
     """Inference engine for GPU/CPU using PyTorch."""
