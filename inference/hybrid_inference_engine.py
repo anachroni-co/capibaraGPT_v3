@@ -66,6 +66,15 @@ except Exception:
     _ThinkStreamFilter = None  # type: ignore[assignment,misc]
     THINK_ANYWHERE_AVAILABLE = False
 
+# Special-token registry (verify/plan/uncertain/search/lang/debug)
+try:
+    from core.special_tokens import get_registry as _get_special_token_registry
+    _SPECIAL_TOKEN_REGISTRY = _get_special_token_registry()
+    SPECIAL_TOKENS_AVAILABLE = True
+except Exception:
+    _SPECIAL_TOKEN_REGISTRY = None  # type: ignore[assignment]
+    SPECIAL_TOKENS_AVAILABLE = False
+
 
 # Maps model_scale strings saved in CheckpointMetadata to TPUOptimizedSSM hidden_size.
 _SCALE_REGISTRY: dict = {
@@ -108,6 +117,11 @@ class InferenceConfig:
     # <think> and <thinkanywhere> blocks from the final output so callers
     # receive only the clean executable code / answer.
     think_anywhere_mode: bool = False
+
+    # Special-token stripping: when True, all registered meta-tokens with
+    # strip_from_output=True (verify/plan/search/lang/debug) are removed
+    # from the final output. Does not affect <uncertain> (kept by design).
+    strip_special_tokens: bool = True
 
 @dataclass
 class InferenceResult:
@@ -366,6 +380,10 @@ class TPUv6eInferenceEngine:
         # Strip Think-Anywhere thinking blocks when mode is enabled
         if self.config.think_anywhere_mode and THINK_ANYWHERE_AVAILABLE:
             generated_text = _TA_PROCESSOR.strip_thinking(generated_text)
+
+        # Strip registered special-token blocks (verify/plan/search/lang/debug)
+        if self.config.strip_special_tokens and SPECIAL_TOKENS_AVAILABLE:
+            generated_text = _SPECIAL_TOKEN_REGISTRY.strip_all(generated_text)
 
         end_time = time.time()
         time_taken = end_time - start_time
