@@ -123,6 +123,7 @@ python -m benchmarks run
 
 - `core/`: model/runtime components.
   - `core/think_anywhere/` — Think-Anywhere reasoning module (see below).
+  - `core/special_tokens/` — structured meta-token framework (see below).
 - `training/`: training systems and strategies.
 - `inference/`: inference engines and quantization paths.
 - `data/`: datasets, processing, and loading.
@@ -202,6 +203,75 @@ e_open, e_close = proc.initialize_special_token_embedding(
     tokenizer.get_input_embeddings().weight.detach().numpy(),
     token_ids={"think": t1, "any": t2, "where": t3, "<im_start>": t4, "<im_end>": t5},
 )
+```
+
+## Special-token framework
+
+`core/special_tokens/` generalizes the Think-Anywhere pattern into a reusable
+framework for any structured meta-token type. Each token has semantic-aware
+embedding initialization, a real-time streaming filter, and a global registry.
+
+### Built-in tokens
+
+| Token | strip? | Purpose |
+|---|---|---|
+| `<verify>` / `</verify>` | ✅ | Self-verification: model checks its output before continuing |
+| `<plan>` / `</plan>` | ✅ | Task decomposition: outline algorithm before writing code |
+| `<uncertain>` / `</uncertain>` | ❌ kept | Low-confidence marker: preserved for caller post-processing |
+| `<search>query</search>` | ✅ | On-demand RAG trigger at the exact token position needed |
+| `<lang:XX>` / `</lang>` | ✅ | Inline language switch (gl/pt/es/en/…) |
+| `<debug>` / `</debug>` | ✅ | Error diagnosis before writing a fix |
+
+### Quick usage
+
+```python
+from core.special_tokens import get_registry, SearchTokenHandler, LangTokenProcessor
+
+reg = get_registry()
+print(reg.list_tokens())  # ['verify', 'plan', 'uncertain', 'search', 'lang', 'debug']
+
+# Strip all strippable tokens from a model response
+clean = reg.strip_all(model_output)
+
+# <search> with RAG
+from rag.retriever import Retriever
+handler = SearchTokenHandler(retriever=Retriever(...))
+output = handler.process(model_output)  # <search>q</search> → [Retrieved: …]
+
+# <lang:XX> parsing
+proc = LangTokenProcessor()
+clean, blocks = proc.parse(model_output)
+# blocks = [("gl", "Ola mundo"), ("pt", "Olá mundo")]
+```
+
+### Inference integration
+
+`InferenceConfig.strip_special_tokens=True` (default) wires the registry into
+the inference engine — all strip tokens are removed from `generate()` output.
+`<uncertain>` is intentionally preserved so callers can detect low-confidence spans.
+
+```python
+from inference.hybrid_inference_engine import InferenceConfig, InferenceBackend
+
+config = InferenceConfig(
+    backend=InferenceBackend.AUTO,
+    think_anywhere_mode=True,     # strips <think> / <thinkanywhere>
+    strip_special_tokens=True,    # strips verify/plan/search/lang/debug
+)
+```
+
+### Adding a custom token
+
+```python
+from core.special_tokens import SpecialTokenConfig, register_token
+
+register_token(SpecialTokenConfig(
+    name="cite",
+    open_tag="<cite>",
+    close_tag="</cite>",
+    seed_tokens=["source", "reference", "citation"],
+    strip_from_output=False,  # keep citations in output
+))
 ```
 
 ## Limitations
