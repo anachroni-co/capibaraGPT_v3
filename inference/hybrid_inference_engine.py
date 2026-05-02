@@ -53,6 +53,28 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Think-Anywhere post-processing (optional — graceful no-op if module absent)
+try:
+    from core.think_anywhere import (
+        ThinkAnywhereProcessor,
+        ThinkAnywhereStreamFilter as _ThinkStreamFilter,
+    )
+    _TA_PROCESSOR = ThinkAnywhereProcessor()
+    THINK_ANYWHERE_AVAILABLE = True
+except Exception:
+    _TA_PROCESSOR = None  # type: ignore[assignment]
+    _ThinkStreamFilter = None  # type: ignore[assignment,misc]
+    THINK_ANYWHERE_AVAILABLE = False
+
+
+# Maps model_scale strings saved in CheckpointMetadata to TPUOptimizedSSM hidden_size.
+_SCALE_REGISTRY: dict = {
+    "1b": {"hidden_size": 2048},
+    "3b": {"hidden_size": 4096},
+    "7b": {"hidden_size": 6144},
+}
+
+
 class InferenceBackend(Enum):
     """Available inference backend types."""
     TPU_V6E = "tpu_v6e"
@@ -81,6 +103,11 @@ class InferenceConfig:
     enable_streaming: bool = True
     enable_caching: bool = True
     cache_size_mb: int = 1024
+
+    # Think-Anywhere (arXiv:2603.29957): when True the engine strips all
+    # <think> and <thinkanywhere> blocks from the final output so callers
+    # receive only the clean executable code / answer.
+    think_anywhere_mode: bool = False
 
 @dataclass
 class InferenceResult:
@@ -143,7 +170,10 @@ class TPUv6eInferenceEngine:
             
             # Load model parameters
             self._load_model_params()
-            
+
+            # Autoload Flax model_module from checkpoint metadata when available
+            self._autoload_model_module()
+
             # Compile generation function
             self._compile_generation_function()
             
@@ -214,7 +244,47 @@ class TPUv6eInferenceEngine:
               "params.msgpack, or an orbax checkpoint/ directory. "
             "Aborting instead of returning mock parameters."
         )
-    
+
+    def _autoload_model_module(self) -> None:
+        """Read metadata.pkl and instantiate the correct TPUOptimizedSSM variant.
+
+        Reads ``CheckpointMetadata.model_scale`` (written by TPUv6eRobustTrainer)
+        to pick the matching hidden_size from ``_SCALE_REGISTRY``, then sets
+        ``self.model_module`` so that ``_compile_generation_function`` can JIT the
+        real forward pass.  If metadata is absent or the import fails, the method
+        logs a warning and leaves ``self.model_module`` unset — generation will
+        fail fast with the existing clear error message.
+        """
+        if getattr(self, "model_module", None) is not None:
+            return  # already wired externally
+
+        metadata_path = Path(self.model_path) / "metadata.pkl"
+        if not metadata_path.exists():
+            logger.debug("No metadata.pkl at %s; skipping model_module autoload", self.model_path)
+            return
+
+        try:
+            with open(metadata_path, "rb") as f:
+                metadata = pickle.load(f)  # nosec B301 - trusted checkpoint
+        except Exception as exc:
+            logger.warning("Could not read metadata.pkl: %s", exc)
+            return
+
+        scale = getattr(metadata, "model_scale", "1b")
+        scale_key = str(scale).lower().rstrip("b").strip() + "b"
+        cfg = _SCALE_REGISTRY.get(scale_key) or _SCALE_REGISTRY.get(scale.lower()) or _SCALE_REGISTRY["1b"]
+
+        try:
+            from sub_models.capibaras.capibara_jax_ssm import TPUOptimizedSSM  # type: ignore
+            self.model_module = TPUOptimizedSSM(**cfg)
+            logger.info(
+                "Autoloaded model_module: TPUOptimizedSSM(hidden_size=%d) for scale %r",
+                cfg["hidden_size"],
+                scale,
+            )
+        except Exception as exc:
+            logger.warning("Cannot autoload model_module for scale %r: %s", scale, exc)
+
     def _compile_generation_function(self):
         """Compile a real JAX generation step when a Flax module is wired.
 
@@ -267,18 +337,19 @@ class TPUv6eInferenceEngine:
         
         generated_tokens = []
         current_ids = input_ids
+        rng = jax.random.PRNGKey(0)
 
         # Autoregressive generation
         with self.mesh:
             for step in range(max_tokens):
                 # Forward pass
                 logits = self.compiled_generate(self.model_params, current_ids, step)
-                
-                # Sampling
+
+                # Sampling: temperature > 0 → multinomial; temperature == 0 → greedy
                 if temperature > 0:
-                    probs = jax.nn.softmax(logits[:, -1, :] / temperature)
-                    # Sampling simulation
-                    next_token = jnp.argmax(probs, axis=-1, keepdims=True)
+                    rng, sample_rng = jax.random.split(rng)
+                    log_probs = jax.nn.log_softmax(logits[:, -1, :] / temperature)
+                    next_token = jax.random.categorical(sample_rng, log_probs)[..., None]
                 else:
                     next_token = jnp.argmax(logits[:, -1, :], axis=-1, keepdims=True)
                 
@@ -291,11 +362,15 @@ class TPUv6eInferenceEngine:
 
         # Decode result
         generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-        
+
+        # Strip Think-Anywhere thinking blocks when mode is enabled
+        if self.config.think_anywhere_mode and THINK_ANYWHERE_AVAILABLE:
+            generated_text = _TA_PROCESSOR.strip_thinking(generated_text)
+
         end_time = time.time()
         time_taken = end_time - start_time
         tokens_per_second = len(generated_tokens) / time_taken if time_taken > 0 else 0
-        
+
         return InferenceResult(
             text=generated_text,
             tokens_generated=len(generated_tokens),
@@ -307,18 +382,59 @@ class TPUv6eInferenceEngine:
         )
     
     async def generate_stream(self, prompt: str, **kwargs) -> AsyncGenerator[str, None]:
-        """Generate text with streaming."""
+        """Generate text streaming one decoded token at a time."""
         if not self.loaded:
             self.load_model()
 
-        # For streaming, we would send tokens one by one
-        # For now, we simulate with chunks
-        result = await self.generate(prompt, **kwargs)
-        words = result.text.split()
+        if self.compiled_generate is None:
+            raise RuntimeError(
+                "TPU inference engine has no compiled generation function. "
+                "Attach a Flax model_module before calling generate_stream()."
+            )
 
-        for word in words:
-            yield word + " "
-            await asyncio.sleep(0.05)  # Simulate generation speed
+        inputs = self.tokenizer(prompt, return_tensors="np", padding=True)
+        current_ids = jnp.array(inputs["input_ids"])
+        max_tokens = kwargs.get('max_tokens', self.config.max_tokens)
+        temperature = kwargs.get('temperature', self.config.temperature)
+        rng = jax.random.PRNGKey(0)
+
+        ta_filter = (
+            _ThinkStreamFilter()
+            if self.config.think_anywhere_mode and THINK_ANYWHERE_AVAILABLE
+            else None
+        )
+
+        with self.mesh:
+            for step in range(max_tokens):
+                logits = self.compiled_generate(self.model_params, current_ids, step)
+
+                if temperature > 0:
+                    rng, sample_rng = jax.random.split(rng)
+                    log_probs = jax.nn.log_softmax(logits[:, -1, :] / temperature)
+                    next_token = jax.random.categorical(sample_rng, log_probs)[..., None]
+                else:
+                    next_token = jnp.argmax(logits[:, -1, :], axis=-1, keepdims=True)
+
+                token_id = int(next_token[0])
+                current_ids = jnp.concatenate([current_ids, next_token], axis=1)
+
+                if token_id == self.tokenizer.eos_token_id:
+                    break
+
+                token_text = self.tokenizer.decode([token_id], skip_special_tokens=True)
+                if token_text:
+                    if ta_filter is not None:
+                        chunk = ta_filter.feed(token_text)
+                        if chunk:
+                            yield chunk
+                    else:
+                        yield token_text
+
+        # Flush any remaining buffered text from the Think-Anywhere filter
+        if ta_filter is not None:
+            tail = ta_filter.flush()
+            if tail:
+                yield tail
 
 class GPUInferenceEngine:
     """Inference engine for GPU/CPU using PyTorch."""
@@ -530,12 +646,9 @@ class HybridInferenceEngine:
             async for token in self.active_engine.generate_stream(prompt, **kwargs):
                 yield token
         else:
-            # Fallback: generate complete and simulate streaming
+            # Fallback for engines that don't support streaming: yield full result
             result = await self.generate(prompt, **kwargs)
-            words = result.text.split()
-            for word in words:
-                yield word + " "
-                await asyncio.sleep(0.05)
+            yield result.text
     
     def get_backend_info(self) -> Dict[str, Any]:
         """Get current backend information."""

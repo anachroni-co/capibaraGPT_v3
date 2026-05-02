@@ -256,7 +256,7 @@ class INT8Quantizer:
         
         if filepath.suffix == '.pkl' and PICKLE_AVAILABLE:
             with open(filepath, 'rb') as f:
-                self.quantized_params = pickle.load(f)
+                self.quantized_params = pickle.load(f)  # nosec B301
         else:
             self.quantized_params = np.load(
                 filepath.with_suffix('.npy'), allow_pickle=True

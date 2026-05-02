@@ -7,8 +7,22 @@ detection, health monitoring, and layer management functionality.
 Author: Skydesk International Dev Team.
 """
 
+import pytest
+
 import core.modular_model as modular_model
 from core.experts import MoEControlAPI
+
+_JAX_AVAILABLE = False
+try:
+    import jax  # noqa: F401
+    _JAX_AVAILABLE = True
+except ImportError:
+    pass
+
+pytestmark = pytest.mark.skipif(
+    not _JAX_AVAILABLE,
+    reason="MoE layers require JAX for initialization"
+)
 
 
 def test_moe_control_api_detects_layers(monkeypatch):

@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 import pytest
 
+pytest.importorskip("httpx")  # starlette.testclient requires httpx at runtime
 testclient = pytest.importorskip("fastapi.testclient")
 
 from capibara.mvp_api import create_app
