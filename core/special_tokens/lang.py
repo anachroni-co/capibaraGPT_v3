@@ -65,17 +65,23 @@ class LangTokenStreamFilter(SpecialTokenStreamFilter):
     """
     Streaming filter for <lang:XX>…</lang> with variable open tags.
 
-    Overrides _find_earliest to detect any <lang:??> opener dynamically
-    using a regex scan instead of exact string match.
+    Uses regex instead of exact string matching to handle the dynamic
+    language-code portion of the opener (<lang:gl>, <lang:pt>, …).
+    _safe_boundary_lang holds back any buffer suffix that could be the
+    start of a <lang:XX> tag, including the variable lang-code chars.
     """
 
     _OPEN_RE = re.compile(r"<lang:[a-z]{2,3}>", re.IGNORECASE)
+    # Matches any suffix that could be a partial <lang:XX> opener
+    _PARTIAL_RE = re.compile(
+        r"<(?:l(?:a(?:n(?:g(?::(?:[a-z]{0,3}>?)?)?)?)?)?)?$",
+        re.IGNORECASE,
+    )
 
     def __init__(self) -> None:
         super().__init__(LANG_TOKEN)
-        # Override: open tags are variable so we use regex in feed()
-        self._open_tags = []  # disable base class exact matching
-        self._max_open_len = 12  # len("<lang:XXX>") = 10, leave margin
+        self._open_tags = []   # disable base class exact matching
+        self._max_open_len = 12
 
     def feed(self, token: str) -> str:
         self._buf += token
@@ -105,9 +111,5 @@ class LangTokenStreamFilter(SpecialTokenStreamFilter):
 
     def _safe_boundary_lang(self) -> int:
         """Hold back any suffix that could be the start of <lang:XX>."""
-        buf = self._buf
-        prefix = "<lang:"
-        for suffix_len in range(min(len(prefix), len(buf)), 0, -1):
-            if prefix.startswith(buf[len(buf) - suffix_len:].lower()):
-                return len(buf) - suffix_len
-        return len(buf)
+        m = self._PARTIAL_RE.search(self._buf)
+        return m.start() if m else len(self._buf)
