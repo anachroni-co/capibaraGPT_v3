@@ -13,7 +13,7 @@ Key Components:
 
 Example:
     >>> from agents.capibara_agent import CapibaraAgent, CapibaraTool
-    >>> tool = CapibaraTool("calculator", lambda x: eval(x))
+    >>> tool = CapibaraTool("calculator", lambda x: float(x) * 2)
     >>> agent = CapibaraAgent("assistant", llm, tools=[tool])
     >>> response = agent.ask("What is 2 + 2?")
 

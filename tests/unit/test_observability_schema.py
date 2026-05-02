@@ -18,6 +18,7 @@ from typing import Any, Dict, Iterable, List
 import pytest
 
 fastapi = pytest.importorskip("fastapi")
+pytest.importorskip("httpx")  # starlette.testclient requires httpx at runtime
 testclient = pytest.importorskip("fastapi.testclient")
 
 import capibara.mvp_api as mvp_api

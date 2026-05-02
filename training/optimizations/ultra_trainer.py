@@ -26,7 +26,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 # Import base training infrastructure
-from ..unified_trainer import UnifiedTrainer, TrainingMetrics
+try:
+    from ..unified_trainer import UnifiedTrainer, TrainingMetrics
+except ImportError:
+    UnifiedTrainer = None  # type: ignore[assignment,misc]
+    TrainingMetrics = None  # type: ignore[assignment]
 from ..training_config import ModelScale, get_config_for_scale
 from ..consensus_strategies import should_use_consensus_for_scale
 

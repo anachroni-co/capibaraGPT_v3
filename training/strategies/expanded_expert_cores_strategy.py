@@ -779,9 +779,9 @@ class ExpandedExpertCoresStrategy:
         self._pipeline_cache[model_id] = pipe
         return pipe
 
-def _apply_core_consensus(
-        self, 
-        model_responses: List[Dict[str, Any]], 
+    def _apply_core_consensus(
+        self,
+        model_responses: List[Dict[str, Any]],
         prompt: str
     ) -> Dict[str, Any]:
         """Apply consensus algorithm within a single expert core."""

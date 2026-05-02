@@ -356,7 +356,7 @@ class _WhitespaceTokenizer:
         return [self.decode(ids, skip_special_tokens=skip_special_tokens) for ids in batch_ids]
 
 
-def _load_tokenizer_impl(model_name: str = "gpt2") -> PreTrainedTokenizerBase:
+def load_tokenizer(model_name: str = "gpt2") -> PreTrainedTokenizerBase:
     """Load a HuggingFace tokenizer or minimal fallback tokenizer.
 
     Attempts to load the specified tokenizer from HuggingFace's model hub.
@@ -392,11 +392,9 @@ def _load_tokenizer_impl(model_name: str = "gpt2") -> PreTrainedTokenizerBase:
     return _WhitespaceTokenizer()
 
 
-# Wrap with cache: same model_name → same tokenizer instance
+# Apply LRU cache with TTL when available: same model_name → same tokenizer instance
 if cached_computation is not None:
-    load_tokenizer = cached_computation(maxsize=8, ttl_seconds=3600)(_load_tokenizer_impl)
-else:
-    load_tokenizer = _load_tokenizer_impl
+    load_tokenizer = cached_computation(maxsize=8, ttl_seconds=3600)(load_tokenizer)
 
 
 def load_tokenizer_from_config(

@@ -11,6 +11,18 @@ import importlib.util
 from pathlib import Path
 import pytest
 
+_ANYIO_AVAILABLE = False
+try:
+    import anyio  # noqa: F401
+    _ANYIO_AVAILABLE = True
+except ImportError:
+    pass
+
+pytestmark = pytest.mark.skipif(
+    not _ANYIO_AVAILABLE,
+    reason="anyio not installed; skipping async integration test"
+)
+
 
 @pytest.fixture
 def anyio_backend():

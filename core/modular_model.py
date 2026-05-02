@@ -14,7 +14,10 @@ except ImportError:
     toml = None
     TOML_AVAILABLE = False
 
-from capibara.jax.numpy import jnp
+try:
+    import jax.numpy as jnp
+except ImportError:
+    import numpy as jnp
 from capibara.core.memory_monitors import CoreIntegratedMemoryMonitor
 from capibara.core.metrics import MetricsCollector
 from capibara.core.module_registry import ModuleRegistry
