@@ -53,6 +53,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Maps model_scale strings saved in CheckpointMetadata to TPUOptimizedSSM hidden_size.
+_SCALE_REGISTRY: dict = {
+    "1b": {"hidden_size": 2048},
+    "3b": {"hidden_size": 4096},
+    "7b": {"hidden_size": 6144},
+}
+
+
 class InferenceBackend(Enum):
     """Available inference backend types."""
     TPU_V6E = "tpu_v6e"
@@ -143,7 +151,10 @@ class TPUv6eInferenceEngine:
             
             # Load model parameters
             self._load_model_params()
-            
+
+            # Autoload Flax model_module from checkpoint metadata when available
+            self._autoload_model_module()
+
             # Compile generation function
             self._compile_generation_function()
             
@@ -214,7 +225,47 @@ class TPUv6eInferenceEngine:
               "params.msgpack, or an orbax checkpoint/ directory. "
             "Aborting instead of returning mock parameters."
         )
-    
+
+    def _autoload_model_module(self) -> None:
+        """Read metadata.pkl and instantiate the correct TPUOptimizedSSM variant.
+
+        Reads ``CheckpointMetadata.model_scale`` (written by TPUv6eRobustTrainer)
+        to pick the matching hidden_size from ``_SCALE_REGISTRY``, then sets
+        ``self.model_module`` so that ``_compile_generation_function`` can JIT the
+        real forward pass.  If metadata is absent or the import fails, the method
+        logs a warning and leaves ``self.model_module`` unset — generation will
+        fail fast with the existing clear error message.
+        """
+        if getattr(self, "model_module", None) is not None:
+            return  # already wired externally
+
+        metadata_path = Path(self.model_path) / "metadata.pkl"
+        if not metadata_path.exists():
+            logger.debug("No metadata.pkl at %s; skipping model_module autoload", self.model_path)
+            return
+
+        try:
+            with open(metadata_path, "rb") as f:
+                metadata = pickle.load(f)  # nosec B301 - trusted checkpoint
+        except Exception as exc:
+            logger.warning("Could not read metadata.pkl: %s", exc)
+            return
+
+        scale = getattr(metadata, "model_scale", "1b")
+        scale_key = str(scale).lower().rstrip("b").strip() + "b"
+        cfg = _SCALE_REGISTRY.get(scale_key) or _SCALE_REGISTRY.get(scale.lower()) or _SCALE_REGISTRY["1b"]
+
+        try:
+            from sub_models.capibaras.capibara_jax_ssm import TPUOptimizedSSM  # type: ignore
+            self.model_module = TPUOptimizedSSM(**cfg)
+            logger.info(
+                "Autoloaded model_module: TPUOptimizedSSM(hidden_size=%d) for scale %r",
+                cfg["hidden_size"],
+                scale,
+            )
+        except Exception as exc:
+            logger.warning("Cannot autoload model_module for scale %r: %s", scale, exc)
+
     def _compile_generation_function(self):
         """Compile a real JAX generation step when a Flax module is wired.
 
