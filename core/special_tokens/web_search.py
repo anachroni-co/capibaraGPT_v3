@@ -35,6 +35,13 @@ from typing import Any, Dict, List, Optional, Tuple
 from .base import SpecialTokenConfig, SpecialTokenProcessor
 from .registry import register_token
 
+# TOON serialization — reduces prompt tokens by 30-60% for uniform arrays
+try:
+    from utils.jsonld_toon import _format_array as _toon_format_array
+    _TOON_AVAILABLE = True
+except Exception:
+    _TOON_AVAILABLE = False
+
 WEB_SEARCH_TOKEN = SpecialTokenConfig(
     name="web_search",
     open_tag="<web_search>",
@@ -145,10 +152,36 @@ class WebSearchRetriever:
         return snippets, urls
 
 
+def _format_results_toon(
+    snippets: List[str], urls: List[str], query: str
+) -> str:
+    """
+    Serialize search results as TOON tabular format to minimize prompt tokens.
+    Falls back to plain text if TOON is unavailable or results are non-uniform.
+
+    TOON example (3 results, ~40% fewer tokens than JSON):
+        results[3]{snippet,url}:
+          First result snippet,https://example.com
+          Second result,https://example.org
+    """
+    if not snippets:
+        return ""
+    if _TOON_AVAILABLE and len(snippets) > 1:
+        try:
+            rows = [{"snippet": s, "url": u} for s, u in zip(snippets, urls)]
+            return _toon_format_array("results", rows, indent=0)
+        except Exception:
+            pass
+    # Fallback: plain inline text
+    return snippets[0]
+
+
 class WebSearchHandler:
     """
     Replace <web_search>query</web_search> blocks with live web results.
 
+    Results are serialized in TOON format when multiple snippets are
+    available — reducing prompt token overhead by ~30-40% vs JSON.
     Optionally indexes results into a RAG store and logs (query, result)
     pairs for training-data capture.
     """
@@ -158,10 +191,12 @@ class WebSearchHandler:
         retriever: Optional[WebSearchRetriever] = None,
         rag_store=None,
         data_logger=None,
+        use_toon: bool = True,
     ) -> None:
         self._retriever = retriever or WebSearchRetriever()
-        self._rag_store = rag_store       # rag.retriever.Retriever or compatible
-        self._data_logger = data_logger   # TrainingDataCapture (built next)
+        self._rag_store = rag_store
+        self._data_logger = data_logger
+        self._use_toon = use_toon and _TOON_AVAILABLE
         self._proc = SpecialTokenProcessor(WEB_SEARCH_TOKEN)
 
     def process(self, text: str, context: Optional[Dict[str, Any]] = None) -> str:
@@ -195,9 +230,12 @@ class WebSearchHandler:
                 except Exception:
                     pass
 
-            if result.top_snippet:
-                return f"[Web: {result.top_snippet}]"
-            return ""
+            if not result.snippets:
+                return ""
+            if self._use_toon and len(result.snippets) > 1:
+                toon = _format_results_toon(result.snippets, result.urls, query)
+                return f"[Web:\n{toon}]"
+            return f"[Web: {result.top_snippet}]"
 
         return _FULL_PATTERN.sub(_replace, text).strip()
 
