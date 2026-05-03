@@ -125,6 +125,7 @@ python -m benchmarks run
   - `core/think_anywhere/` — Think-Anywhere reasoning module (see below).
   - `core/special_tokens/` — structured meta-token framework (see below).
 - `training/`: training systems and strategies.
+  - `training/data_capture/` — training data capture pipeline (see below).
 - `inference/`: inference engines and quantization paths.
 - `data/`: datasets, processing, and loading.
 - `capibara/`: specialized modules (VQ, SSM, routers, optimizations).
@@ -218,37 +219,45 @@ embedding initialization, a real-time streaming filter, and a global registry.
 | `<verify>` / `</verify>` | ✅ | Self-verification: model checks its output before continuing |
 | `<plan>` / `</plan>` | ✅ | Task decomposition: outline algorithm before writing code |
 | `<uncertain>` / `</uncertain>` | ❌ kept | Low-confidence marker: preserved for caller post-processing |
-| `<search>query</search>` | ✅ | On-demand RAG trigger at the exact token position needed |
+| `<search>query</search>` | ✅ | On-demand local RAG trigger at the exact token position needed |
+| `<web_search>query</web_search>` | ✅ | Real-time internet search (Brave/Serper/DuckDuckGo) |
+| `<fact_check>claim</fact_check>` | ❌ kept | Contradiction/misinformation signal: surfaces to UI for verification |
 | `<lang:XX>` / `</lang>` | ✅ | Inline language switch (gl/pt/es/en/…) |
 | `<debug>` / `</debug>` | ✅ | Error diagnosis before writing a fix |
 
 ### Quick usage
 
 ```python
-from core.special_tokens import get_registry, SearchTokenHandler, LangTokenProcessor
+from core.special_tokens import (
+    get_registry, SearchTokenHandler, LangTokenProcessor,
+    WebSearchHandler, WebSearchRetriever, FactCheckHandler,
+)
 
 reg = get_registry()
-print(reg.list_tokens())  # ['verify', 'plan', 'uncertain', 'search', 'lang', 'debug']
+print(reg.list_tokens())
+# ['verify', 'plan', 'uncertain', 'search', 'lang', 'debug', 'fact_check', 'web_search']
 
-# Strip all strippable tokens from a model response
+# Strip all strippable tokens (keeps <uncertain> and <fact_check>)
 clean = reg.strip_all(model_output)
 
-# <search> with RAG
-from rag.retriever import Retriever
-handler = SearchTokenHandler(retriever=Retriever(...))
-output = handler.process(model_output)  # <search>q</search> → [Retrieved: …]
+# <web_search> with live internet retrieval + RAG indexing
+handler = WebSearchHandler(
+    retriever=WebSearchRetriever(engine="brave", api_key="…"),
+    rag_store=my_rag_store,      # optional: index results for future queries
+    data_logger=my_capture,      # optional: log for training data
+)
+output = handler.process(model_output)  # <web_search>q</web_search> → [Web: …]
 
-# <lang:XX> parsing
-proc = LangTokenProcessor()
-clean, blocks = proc.parse(model_output)
-# blocks = [("gl", "Ola mundo"), ("pt", "Olá mundo")]
+# <fact_check> claim extraction and verification
+fc = FactCheckHandler(verifier=my_verifier)
+processed, verdicts = fc.verify(model_output)
 ```
 
 ### Inference integration
 
 `InferenceConfig.strip_special_tokens=True` (default) wires the registry into
 the inference engine — all strip tokens are removed from `generate()` output.
-`<uncertain>` is intentionally preserved so callers can detect low-confidence spans.
+`<uncertain>` and `<fact_check>` are intentionally preserved.
 
 ```python
 from inference.hybrid_inference_engine import InferenceConfig, InferenceBackend
@@ -256,7 +265,7 @@ from inference.hybrid_inference_engine import InferenceConfig, InferenceBackend
 config = InferenceConfig(
     backend=InferenceBackend.AUTO,
     think_anywhere_mode=True,     # strips <think> / <thinkanywhere>
-    strip_special_tokens=True,    # strips verify/plan/search/lang/debug
+    strip_special_tokens=True,    # strips verify/plan/search/web_search/lang/debug
 )
 ```
 
@@ -272,6 +281,80 @@ register_token(SpecialTokenConfig(
     seed_tokens=["source", "reference", "citation"],
     strip_from_output=False,  # keep citations in output
 ))
+```
+
+## Training data capture
+
+`training/data_capture/` intercepts high-signal inference interactions and
+converts them into training pairs automatically — building a self-improving
+dataset as the model is used.
+
+### Signal sources
+
+| Source | Trigger | Pair type | File |
+|---|---|---|---|
+| `web_search` | `<web_search>` fired | SFT — grounded response | `web_search.jsonl` |
+| `fact_check` | `<fact_check>` verified | DPO — corrected vs original | `fact_check.jsonl` |
+| `api_routing` | `<uncertain>`/`<fact_check>` → external API | DPO — teacher vs student | `api_routing.jsonl` |
+| `uncertain` | `<uncertain>` spans present | SFT — queued for review | `uncertain.jsonl` |
+
+### Pipeline
+
+```
+User query
+    ↓
+ConfidenceRouter.generate()
+    ├── local model response
+    │       ↓
+    │   <uncertain> or <fact_check> detected?
+    │       ├── YES → route to external API (OpenRouter / Llama / etc.)
+    │       │           ├── return api_response to user
+    │       │           └── log (prompt, local, api) → api_routing.jsonl  [DPO pair]
+    │       └── NO  → return local response
+    │                   └── log uncertain spans   → uncertain.jsonl
+    │
+    └── <web_search> in response?
+            ↓
+        WebSearchHandler.process()
+            ├── fetch live results (Brave / Serper / DDG)
+            ├── inject [Web: snippet] inline
+            ├── index into local RAG store
+            └── log (query, result)              → web_search.jsonl  [SFT pair]
+```
+
+### Quick usage
+
+```python
+from training.data_capture import TrainingDataCapture, CaptureConfig, ConfidenceRouter, RouterConfig
+from core.special_tokens import WebSearchHandler, WebSearchRetriever
+
+capture = TrainingDataCapture(CaptureConfig(output_dir="data/captured"))
+
+# Wrap your inference function
+router = ConfidenceRouter(
+    local_fn=my_model.generate,
+    config=RouterConfig(
+        sample_rate=0.1,                                    # 10% random exploration
+        api_model="meta-llama/llama-3.1-8b-instruct:free", # via OpenRouter
+        api_key="sk-or-…",
+    ),
+    capture=capture,
+)
+
+# Wire web search with RAG indexing + data logging
+web_handler = WebSearchHandler(
+    retriever=WebSearchRetriever(engine="brave", api_key="…"),
+    rag_store=my_rag,
+    data_logger=capture,
+)
+
+# Use normally — data is captured automatically
+response = router.generate(user_prompt)
+response = web_handler.process(response)
+
+# Stats
+print(capture.get_stats())
+# {'web_search': 42, 'api_routing': 18, 'uncertain': 7, 'fact_check': 3}
 ```
 
 ## Limitations
