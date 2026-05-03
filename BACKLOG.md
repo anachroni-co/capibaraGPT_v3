@@ -131,6 +131,38 @@ Coverage ratio is roughly one test file per 3,800 LOC and ~0.85 test functions p
 
 ---
 
+## ISSUE-007 — `core/special_tokens`: validate TOON context parsing on 3B base model
+
+**Labels:** `inference`, `toon`, `fine-tuning`, `quality`
+
+**Scope**
+
+- `core/special_tokens/search.py` — `SearchTokenHandler(use_toon=True)`
+- `core/special_tokens/web_search.py` — `WebSearchHandler(use_toon=True)`
+- Fine-tuning pipeline that prepares training data for the 3B model
+
+**Problem**
+
+TOON tabular format reduces RAG/web-search prompt tokens by ~30–40%, but
+a 3B base model trained before TOON existed (pre-Nov 2025) has not seen
+this format during pretraining. When context is dense (many results, long
+snippets), the model may misparse tabular rows or ignore them, degrading
+response quality. The `use_toon=False` fallback exists but has not been
+empirically evaluated on the target model.
+
+**Exit criteria**
+
+- Benchmark: compare accuracy with `use_toon=True` vs `False` on a
+  held-out RAG-dependent eval set (min 200 examples).
+- If accuracy drops >2 points: add TOON-formatted examples to fine-tuning
+  data via `training/data_capture` pipeline and re-evaluate after one
+  fine-tuning run.
+- If accuracy is equivalent or better: document as validated in this entry.
+- Once validated, confirm `use_toon=True` as default or flip to `False`
+  and defer TOON fine-tuning to a later milestone.
+
+---
+
 ## Resolved
 
 - **Sanitize per-folder TODO documentation** — removed all 20 per-folder `TODOs.md`, the two global aggregators (`TODOs.md`, `TODOs_PRIORITIZED.md`) and the generator script `scripts/clean_todos.py`. Pending work now lives only in this file.
