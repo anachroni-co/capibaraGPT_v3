@@ -38,6 +38,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 # Component availability flags
+ARM_INFERENCE_AVAILABLE = False
 QUANTIZED_INFERENCE_AVAILABLE = False
 QUANTIZATION_SYSTEM_AVAILABLE = False
 
