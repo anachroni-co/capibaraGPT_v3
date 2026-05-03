@@ -23,6 +23,13 @@ from typing import Any, List, Optional, Tuple
 from .base import SpecialTokenConfig, SpecialTokenProcessor
 from .registry import register_token
 
+# TOON serialization for compact RAG context injection
+try:
+    from utils.jsonld_toon import _format_array as _toon_format_array
+    _TOON_AVAILABLE = True
+except Exception:
+    _TOON_AVAILABLE = False
+
 SEARCH_TOKEN = SpecialTokenConfig(
     name="search",
     open_tag="<search>",
@@ -46,11 +53,20 @@ class SearchTokenHandler:
     """
     Replace <search>query</search> blocks with retrieved context.
 
+    When multiple results are returned and use_toon=True (default),
+    results are serialized as TOON tabular format to reduce prompt
+    token overhead by ~30-40% vs JSON or repeated key-value pairs.
+
     If no retriever is provided the blocks are simply stripped.
     """
 
-    def __init__(self, retriever: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        retriever: Optional[Any] = None,
+        use_toon: bool = True,
+    ) -> None:
         self._retriever = retriever
+        self._use_toon = use_toon and _TOON_AVAILABLE
         self._proc = SpecialTokenProcessor(SEARCH_TOKEN)
 
     def process(self, text: str) -> str:
@@ -65,9 +81,26 @@ class SearchTokenHandler:
             query = match.group(1).strip()
             try:
                 results = self._retriever.retrieve(query)
-                if results:
-                    ctx = results[0] if isinstance(results, list) else results
+                if not results:
+                    return ""
+                if isinstance(results, list):
+                    if self._use_toon and len(results) > 1:
+                        # Normalize to list of dicts if needed
+                        rows = [
+                            r if isinstance(r, dict) else {"text": str(r)}
+                            for r in results
+                        ]
+                        # Only use tabular TOON if all rows share same keys
+                        keys = [set(r.keys()) for r in rows]
+                        if all(k == keys[0] for k in keys):
+                            try:
+                                toon = _toon_format_array("results", rows, indent=0)
+                                return f"[Retrieved:\n{toon}]"
+                            except Exception:
+                                pass
+                    ctx = results[0]
                     return f"[Retrieved: {ctx}]"
+                return f"[Retrieved: {results}]"
             except Exception:
                 pass
             return ""
