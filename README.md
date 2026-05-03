@@ -283,6 +283,40 @@ register_token(SpecialTokenConfig(
 ))
 ```
 
+### TOON context compression
+
+`SearchTokenHandler` and `WebSearchHandler` serialize multi-result context
+using **TOON (Token-Oriented Object Notation)** before injecting it into
+the prompt — reducing input token overhead by ~30–40% for uniform arrays.
+
+```
+# Before (JSON-style, ~40 tokens):
+[Retrieved: {"text": "Paris is the capital", "score": "0.9"}]
+[Retrieved: {"text": "Population 2M", "score": "0.8"}]
+
+# After (TOON, ~25 tokens):
+[Retrieved:
+results[2]{text,score}:
+  Paris is the capital,0.9
+  Population 2M,0.8]
+```
+
+**Impact:**
+- ~30–40% fewer input tokens for RAG / web-search context injections
+- Direct cost saving on external API calls (`ConfidenceRouter`) charged per input token
+- Larger effective context window: more results fit in the same token budget → better quality
+
+**Known limitation:** a 3B base model without TOON fine-tuning may misparse
+dense tabular context. Disable with `use_toon=False` if accuracy degrades,
+and track via `BACKLOG.md ISSUE-007`. Single-result queries always fall back
+to plain text regardless of this setting.
+
+```python
+# Opt out if the model struggles with TOON context
+handler = SearchTokenHandler(retriever=my_rag, use_toon=False)
+handler = WebSearchHandler(retriever=my_web, use_toon=False)
+```
+
 ## Training data capture
 
 `training/data_capture/` intercepts high-signal inference interactions and
