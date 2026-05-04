@@ -167,6 +167,7 @@ empirically evaluated on the target model.
 
 - **Sanitize per-folder TODO documentation** — removed all 20 per-folder `TODOs.md`, the two global aggregators (`TODOs.md`, `TODOs_PRIORITIZED.md`) and the generator script `scripts/clean_todos.py`. Pending work now lives only in this file.
 - **Restore `capibara/` directory** — the `capibara/` tree (~14,600 LOC in 43 Python files covering VQ, SSM, `mvp_api`) was restored after being removed by mistake in commit `e164e01`.
+- **ISSUE-005 — `training/data_lineage`: split mock demo from real runtime** — `demo_traceability_system.py` was already isolated (private `_DemoMockModel`, env-var guard `CAPIBARA_DATA_LINEAGE_DEMO=1`, not exported from `__init__.py`). Remaining fix: guarded the bare `import jax.numpy as jnp` with a try/except fallback to numpy so the file is importable in non-JAX environments. `inference_safe_parameter_controller.py` runtime path has no mocks; the `__main__` CLI block already uses plain numpy as example input.
 
 ## How to add a new item
 
