@@ -52,82 +52,127 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # ---------------------------------------------------------------------------
 
 class ByteLM:
-    """Embedding → ReLU → Linear byte-level language model."""
+    """Embedding → [ReLU → Hidden]* → Linear byte-level language model.
 
-    def __init__(self, vocab: int, hidden: int, lr: float = 0.05, momentum: float = 0.9):
+    Supports multiple hidden layers via the `num_layers` parameter.
+    Each hidden layer is a square W[H, H] matrix with ReLU activation.
+    """
+
+    def __init__(
+        self,
+        vocab: int,
+        hidden: int,
+        num_layers: int = 1,
+        lr: float = 0.05,
+        momentum: float = 0.9,
+    ):
         self.vocab = vocab
         self.H = hidden
+        self.num_layers = num_layers
         self.lr = lr
+        self.momentum = momentum
 
-        scale = 0.01
-        self.W_emb = np.random.randn(vocab, hidden).astype(np.float32) * scale
-        self.W_out = np.random.randn(hidden, vocab).astype(np.float32) * scale
+        scale = 0.02
+        rng = np.random.default_rng(42)
+
+        self.W_emb = (rng.standard_normal((vocab, hidden)) * scale).astype(np.float32)
+        # Hidden layers (may be empty if num_layers == 1)
+        self.W_hidden = [
+            (rng.standard_normal((hidden, hidden)) * scale).astype(np.float32)
+            for _ in range(num_layers - 1)
+        ]
+        self.W_out = (rng.standard_normal((hidden, vocab)) * scale).astype(np.float32)
 
         # SGD momentum buffers
         self.v_emb = np.zeros_like(self.W_emb)
+        self.v_hidden = [np.zeros_like(w) for w in self.W_hidden]
         self.v_out = np.zeros_like(self.W_out)
-        self.momentum = momentum
 
     @property
     def num_params(self) -> int:
-        return self.W_emb.size + self.W_out.size
+        return (self.W_emb.size
+                + sum(w.size for w in self.W_hidden)
+                + self.W_out.size)
 
-    def forward(self, ids: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    def forward(self, ids: np.ndarray) -> tuple[np.ndarray, list[np.ndarray]]:
         """
         ids: (B, T) int32
-        Returns (logits (B, T, vocab), H (B, T, hidden))
+        Returns (logits (B, T, vocab), activations list)
         """
-        H = self.W_emb[ids]                        # (B, T, hidden)
-        H_act = np.maximum(H, 0)                   # ReLU
-        logits = H_act @ self.W_out                # (B, T, vocab)
-        return logits, H_act
+        acts = []
+        h = self.W_emb[ids]           # (B, T, H)
+        h = np.maximum(h, 0)          # ReLU
+        acts.append(h)
+
+        for W in self.W_hidden:
+            h = h @ W                 # (B, T, H)
+            h = np.maximum(h, 0)      # ReLU
+            acts.append(h)
+
+        logits = h @ self.W_out       # (B, T, vocab)
+        return logits, acts
 
     def loss_and_grad(
         self, ids: np.ndarray, targets: np.ndarray, mask: np.ndarray
-    ) -> tuple[float, np.ndarray, np.ndarray]:
+    ) -> tuple[float, np.ndarray, list[np.ndarray], np.ndarray]:
         """
-        ids, targets, mask: (B, T) int32 / float32
-        Returns (scalar_loss, dW_emb, dW_out)
+        Returns (scalar_loss, dW_emb, dW_hidden list, dW_out)
         """
         B, T = ids.shape
-        logits, H_act = self.forward(ids)           # (B, T, vocab)
+        logits, acts = self.forward(ids)
 
         # Numerically stable softmax
         shift = logits.max(axis=-1, keepdims=True)
         exp_l = np.exp(logits - shift)
-        probs = exp_l / exp_l.sum(axis=-1, keepdims=True)  # (B, T, vocab)
+        probs = exp_l / exp_l.sum(axis=-1, keepdims=True)
 
-        # Cross-entropy loss (masked, mean over non-pad tokens)
+        # Cross-entropy loss
         tgt_probs = probs[np.arange(B)[:, None], np.arange(T)[None, :], targets]
         tgt_probs = np.clip(tgt_probs, 1e-9, None)
-        loss_per_tok = -np.log(tgt_probs) * mask
         n_valid = mask.sum() + 1e-8
-        loss = float(loss_per_tok.sum() / n_valid)
+        loss = float((-np.log(tgt_probs) * mask).sum() / n_valid)
 
-        # Backward
-        d_logits = probs.copy()                                    # (B, T, vocab)
-        d_logits[np.arange(B)[:, None], np.arange(T)[None, :], targets] -= 1
-        d_logits *= mask[..., None] / n_valid                      # scale + mask
+        # Backprop through output layer
+        d = probs.copy()
+        d[np.arange(B)[:, None], np.arange(T)[None, :], targets] -= 1
+        d *= mask[..., None] / n_valid                             # (B, T, vocab)
 
-        # dW_out: H_act^T @ d_logits  averaged over B,T
-        dW_out = (H_act.reshape(-1, self.H).T
-                  @ d_logits.reshape(-1, self.vocab))              # (H, vocab)
+        flat_acts = acts[-1].reshape(-1, self.H)                   # (B*T, H)
+        dW_out = flat_acts.T @ d.reshape(-1, self.vocab)           # (H, vocab)
 
-        # dH_act → dH (through ReLU)
-        d_H_act = d_logits @ self.W_out.T                         # (B, T, H)
-        d_H = d_H_act * (H_act > 0)                               # ReLU gate
+        d_h = d @ self.W_out.T                                     # (B, T, H)
+        d_h *= (acts[-1] > 0)                                      # ReLU gate
 
-        # dW_emb: scatter-add
+        # Backprop through hidden layers (reverse order)
+        dW_hidden = []
+        for i in range(len(self.W_hidden) - 1, -1, -1):
+            prev_act = acts[i]                                     # input to layer i+1
+            dW = prev_act.reshape(-1, self.H).T @ d_h.reshape(-1, self.H)
+            dW_hidden.insert(0, dW)
+            d_h = d_h @ self.W_hidden[i].T
+            d_h *= (prev_act > 0)                                  # ReLU gate on prev
+
+        # dW_emb via scatter-add
         dW_emb = np.zeros_like(self.W_emb)
-        np.add.at(dW_emb, ids.flatten(), d_H.reshape(-1, self.H))
+        np.add.at(dW_emb, ids.flatten(), d_h.reshape(-1, self.H))
 
-        return loss, dW_emb, dW_out
+        return loss, dW_emb, dW_hidden, dW_out
 
-    def step(self, dW_emb: np.ndarray, dW_out: np.ndarray) -> None:
+    def step(
+        self,
+        dW_emb: np.ndarray,
+        dW_hidden: list[np.ndarray],
+        dW_out: np.ndarray,
+    ) -> None:
         """SGD with momentum update."""
         self.v_emb = self.momentum * self.v_emb + dW_emb
-        self.v_out = self.momentum * self.v_out + dW_out
         self.W_emb -= self.lr * self.v_emb
+
+        for i, (dW, v) in enumerate(zip(dW_hidden, self.v_hidden)):
+            self.v_hidden[i] = self.momentum * v + dW
+            self.W_hidden[i] -= self.lr * self.v_hidden[i]
+
+        self.v_out = self.momentum * self.v_out + dW_out
         self.W_out -= self.lr * self.v_out
 
 
@@ -183,6 +228,7 @@ def sample_batch(
 def train(
     steps: int = 100,
     hidden: int = 128,
+    num_layers: int = 1,
     batch_size: int = 8,
     seq_len: int = 256,
     lr: float = 0.05,
@@ -191,36 +237,37 @@ def train(
 ) -> None:
     rng = np.random.default_rng(42)
 
-    # Build corpus from real repo source files
-    dirs = data_dirs or [
-        str(REPO_ROOT / "core"),
-        str(REPO_ROOT / "training"),
-        str(REPO_ROOT / "inference"),
-        str(REPO_ROOT / "data"),
+    # Build corpus — full repo by default (skip node_modules / .git / venv)
+    _skip = {"node_modules", ".git", ".venv", "venv", "__pycache__", "ui"}
+    repo_dirs = data_dirs or [
+        d for d in sorted(REPO_ROOT.iterdir())
+        if d.is_dir() and d.name not in _skip
     ]
     chunks = []
-    for d in dirs:
+    for d in repo_dirs:
         p = Path(d)
         if p.exists():
-            chunks.append(build_corpus(p, [".py", ".md"]))
+            try:
+                chunk = build_corpus(p, [".py", ".md"])
+                chunks.append(chunk)
+            except RuntimeError:
+                pass  # empty dir — skip silently
 
     corpus = np.concatenate(chunks)
     logger.info("Total corpus: %d bytes (%.2f MB)", len(corpus), len(corpus) / 1e6)
 
-    # vocab = 256 (raw bytes, 0–255); special tokens above that are not in corpus
     vocab = 256
-    model = ByteLM(vocab=vocab, hidden=hidden, lr=lr)
+    model = ByteLM(vocab=vocab, hidden=hidden, num_layers=num_layers, lr=lr)
+    layers_str = f"{num_layers}×[{hidden}→{hidden}]" if num_layers > 1 else f"[{hidden}]"
     logger.info(
-        "Model: vocab=%d hidden=%d params=%d (%.1f KB)",
-        vocab, hidden, model.num_params, model.num_params * 4 / 1024,
+        "Model: vocab=%d  emb→%s→vocab  params=%d (%.1f KB)",
+        vocab, layers_str, model.num_params, model.num_params * 4 / 1024,
     )
     logger.info(
-        "Training: steps=%d batch=%d seq_len=%d",
-        steps, batch_size, seq_len,
+        "Training: steps=%d  batch=%d  seq_len=%d  lr=%.4f",
+        steps, batch_size, seq_len, lr,
     )
-
-    # Baseline: random model loss should be ~log(256) ≈ 5.55 bits/byte
-    logger.info("Baseline loss (random model) ≈ %.3f", np.log(vocab))
+    logger.info("Baseline loss (random) ≈ %.4f nats/byte", np.log(vocab))
 
     losses: list[float] = []
     t0_total = time.perf_counter()
@@ -229,8 +276,8 @@ def train(
         t0 = time.perf_counter()
         ids, targets, mask = sample_batch(corpus, batch_size, seq_len, rng)
 
-        loss, dW_emb, dW_out = model.loss_and_grad(ids, targets, mask)
-        model.step(dW_emb, dW_out)
+        loss, dW_emb, dW_hidden, dW_out = model.loss_and_grad(ids, targets, mask)
+        model.step(dW_emb, dW_hidden, dW_out)
 
         losses.append(loss)
         elapsed = time.perf_counter() - t0
@@ -240,25 +287,26 @@ def train(
             avg = sum(recent) / len(recent)
             tokens_per_s = (batch_size * seq_len) / elapsed
             logger.info(
-                "step %4d/%d | loss=%.4f | avg(last %d)=%.4f | %.0f tok/s",
+                "step %5d/%d | loss=%.4f | avg_%d=%.4f | %.0f tok/s",
                 step, steps, loss, len(recent), avg, tokens_per_s,
             )
 
     total_time = time.perf_counter() - t0_total
     first_loss = losses[0]
-    last_avg = sum(losses[-10:]) / min(10, len(losses))
+    last_avg = sum(losses[-20:]) / min(20, len(losses))
     delta = first_loss - last_avg
 
-    logger.info("=" * 60)
-    logger.info("Training complete in %.1fs", total_time)
-    logger.info("Initial loss : %.4f", first_loss)
-    logger.info("Final avg    : %.4f  (Δ = %.4f)", last_avg, delta)
-    logger.info("Throughput   : %.0f tok/s avg", (steps * batch_size * seq_len) / total_time)
-
-    if delta > 0.05:
-        logger.info("Loss decreased — model is learning byte patterns from real source code.")
-    else:
-        logger.info("Loss decrease small — increase --steps or --hidden for more capacity.")
+    logger.info("=" * 62)
+    logger.info("Training complete in %.1fs  (%.0f tok/s avg)",
+                total_time, (steps * batch_size * seq_len) / total_time)
+    logger.info("Initial loss : %.4f nats/byte", first_loss)
+    logger.info("Final avg    : %.4f nats/byte  (Δ = %.4f)", last_avg, delta)
+    pct = delta / first_loss * 100
+    logger.info("Improvement  : %.1f%%", pct)
+    logger.info(
+        "In bits/byte : %.3f → %.3f",
+        first_loss / np.log(2), last_avg / np.log(2),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +316,8 @@ def train(
 def main() -> None:
     p = argparse.ArgumentParser(description="Byte-level CPU training on repo source")
     p.add_argument("--steps",   type=int,   default=100,  help="Training steps")
-    p.add_argument("--hidden",  type=int,   default=128,  help="Hidden size")
+    p.add_argument("--hidden",  type=int,   default=128,  help="Hidden size per layer")
+    p.add_argument("--layers",  type=int,   default=1,    help="Number of hidden layers")
     p.add_argument("--batch",   type=int,   default=8,    help="Batch size (sequences)")
     p.add_argument("--seq-len", type=int,   default=256,  help="Sequence length (bytes)")
     p.add_argument("--lr",      type=float, default=0.05, help="Learning rate")
@@ -278,6 +327,7 @@ def main() -> None:
     train(
         steps=args.steps,
         hidden=args.hidden,
+        num_layers=args.layers,
         batch_size=args.batch,
         seq_len=args.seq_len,
         lr=args.lr,
