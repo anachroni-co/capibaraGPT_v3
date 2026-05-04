@@ -123,6 +123,27 @@ Demo paths are mixed with potentially production runtime paths.
 
 Coverage ratio is roughly one test file per 3,800 LOC and ~0.85 test functions per production module. `core/backends`, `core/routers`, `core/cot` and `training/consensus` lack basic unit tests.
 
+**Progress** (2026-05-04)
+
+Added 25 new unit tests across `test_routers_bto.py` and `test_cot_module.py` (total now 548 pass):
+
+| Area | Before | After | Notes |
+|---|---|---|---|
+| `core/cot/__init__.py` | 67% | 100% | ChainOfThought, create_cot_handler |
+| `core/cot/factory.py` | 33% | 100% | All three factory functions |
+| `core/cot/module.py` | 85% | 87% | Pre-initialized call path |
+| `core/cot/enhanced_cot_module.py` | 57% | 58% | Loop completion branch |
+| `core/routers/base.py` | 35% | 69% | setup(), matmul, fallback, recovery, metrics |
+| **core/cot (combined)** | ~60% | **68%** | 2% gap is JAX-specific paths (need hardware) |
+| **core/routers (combined)** | ~65% | **76%** | ✓ above 70% |
+
+**Remaining gaps**
+
+- `core/cot` at 68% (not yet 70%): uncovered lines are in the Flax/JAX class body (`EnhancedCoTModule` lines 38–217) and two dead-code branches (245, 247). These require JAX hardware to execute.
+- `core/backends`: ~60% overall; `gpu_backend.py` (28%) and `tpu_backend.py` (27%) require GPU/TPU hardware.
+- `training/consensus` integration tests: not yet added.
+- CI coverage gate: not yet configured.
+
 **Exit criteria**
 
 - At least 70% coverage in `core/backends`, `core/routers`, `core/cot`.
