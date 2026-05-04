@@ -116,8 +116,11 @@ class WebSearchRetriever:
         )
 
     def _brave(self, query: str) -> Tuple[List[str], List[str]]:
-        import urllib.request, json
-        url = f"https://api.search.brave.com/res/v1/web/search?q={urllib.parse.quote(query)}&count={self.max_results}"
+        import json
+        import urllib.parse
+        import urllib.request
+        base = "https://api.search.brave.com/res/v1/web/search"
+        url = f"{base}?q={urllib.parse.quote(query)}&count={self.max_results}"
         req = urllib.request.Request(url, headers={
             "Accept": "application/json",
             "X-Subscription-Token": self.api_key or "",
@@ -128,7 +131,9 @@ class WebSearchRetriever:
         return [r.get("description", "") for r in results], [r.get("url", "") for r in results]
 
     def _serper(self, query: str) -> Tuple[List[str], List[str]]:
-        import urllib.request, urllib.parse, json
+        import json
+        import urllib.parse
+        import urllib.request
         payload = json.dumps({"q": query, "num": self.max_results}).encode()
         req = urllib.request.Request(
             "https://google.serper.dev/search",
@@ -141,7 +146,9 @@ class WebSearchRetriever:
         return [r.get("snippet", "") for r in results], [r.get("link", "") for r in results]
 
     def _duckduckgo(self, query: str) -> Tuple[List[str], List[str]]:
-        import urllib.request, urllib.parse, json
+        import json
+        import urllib.parse
+        import urllib.request
         encoded = urllib.parse.quote(query)
         url = f"https://api.duckduckgo.com/?q={encoded}&format=json&no_html=1&skip_disambig=1"
         with urllib.request.urlopen(url, timeout=self.timeout) as r:
