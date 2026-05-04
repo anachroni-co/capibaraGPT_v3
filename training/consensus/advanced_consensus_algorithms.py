@@ -17,10 +17,23 @@ from dataclasses import dataclass, field
 from enum import Enum
 import math
 from collections import defaultdict
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.cluster import KMeans
-import scipy.stats as stats
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+    from sklearn.cluster import KMeans
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
+    TfidfVectorizer = None  # type: ignore[assignment,misc]
+    cosine_similarity = None  # type: ignore[assignment]
+    KMeans = None  # type: ignore[assignment,misc]
+
+try:
+    import scipy.stats as stats
+    SCIPY_AVAILABLE = True
+except ImportError:
+    SCIPY_AVAILABLE = False
+    stats = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

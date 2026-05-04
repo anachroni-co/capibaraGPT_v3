@@ -49,9 +49,9 @@ except ImportError:
     JAX_AVAILABLE = False
     jnp = None
 
-# Import base components
-from .hybrid_expert_router import (
-    HybridExpertRouter, HybridExpertConfig, ExpertTier, 
+# Import base components (lives one level up at training/, not inside consensus/)
+from ..hybrid_expert_router import (
+    HybridExpertRouter, HybridExpertConfig, ExpertTier,
     RoutingStrategy, RoutingMetrics
 )
 
@@ -67,6 +67,13 @@ try:
     OPTIMIZATIONS_AVAILABLE = True
 except ImportError:
     OPTIMIZATIONS_AVAILABLE = False
+    def cached(*args, **kwargs):  # no-op decorator fallback
+        def decorator(func): return func
+        return decorator if args and callable(args[0]) else decorator
+    class CacheConfig: pass  # type: ignore[misc]
+    class MemoryPool: pass  # type: ignore[misc]
+    class GPUAccelerator: pass  # type: ignore[misc]
+    managed_array = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 

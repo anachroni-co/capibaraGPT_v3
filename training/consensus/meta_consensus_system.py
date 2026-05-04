@@ -22,8 +22,8 @@ import numpy as np
 
 # Import meta-consensus components
 from .enhanced_hf_consensus_strategy import EnhancedHFConsensusStrategy, ServerlessExpertConfig
-from .hybrid_expert_router import HybridExpertRouter, ExpertTier, RoutingStrategy, HybridExpertConfig
-from .btx_training_system import BTXTrainingSystem, BTXExpertConfig, BTXStage
+from ..hybrid_expert_router import HybridExpertRouter, ExpertTier, RoutingStrategy, HybridExpertConfig
+from ..btx_training_system import BTXTrainingSystem, BTXExpertConfig, BTXStage
 from .unified_consensus import UnifiedConsensusStrategy, ConsensusConfig
 
 logger = logging.getLogger(__name__)

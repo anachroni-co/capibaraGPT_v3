@@ -21,14 +21,24 @@ import time
 import re
 from collections import defaultdict
 
-# Data processing libraries
-import pandas as pd
 import numpy as np
-from tqdm import tqdm
 import pickle
 import gzip
 import bz2
 import lzma
+
+try:
+    import pandas as pd
+    PANDAS_AVAILABLE = True
+except ImportError:
+    PANDAS_AVAILABLE = False
+    pd = None  # type: ignore[assignment]
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(it, **_):  # type: ignore[misc]
+        return it
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +174,8 @@ class UnifiedDataPipeline:
                                 continue
             
             elif format_type == 'csv':
+                if not PANDAS_AVAILABLE:
+                    raise ImportError("pandas is required to load CSV files: pip install pandas")
                 df = pd.read_csv(file_path)
                 data = df.to_dict('records')
             
@@ -202,6 +214,8 @@ class UnifiedDataPipeline:
                         data.append({"text": ''.join(current_message), "source": str(file_path)})
             
             elif format_type == 'parquet':
+                if not PANDAS_AVAILABLE:
+                    raise ImportError("pandas is required to load Parquet files: pip install pandas")
                 df = pd.read_parquet(file_path)
                 data = df.to_dict('records')
             
