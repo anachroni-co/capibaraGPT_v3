@@ -534,11 +534,19 @@ class GPUInferenceEngine:
         # Decode
         generated_ids = outputs[0][len(inputs["input_ids"][0]):]
         generated_text = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
-        
+
+        # Strip Think-Anywhere thinking blocks when mode is enabled
+        if self.config.think_anywhere_mode and THINK_ANYWHERE_AVAILABLE:
+            generated_text = _TA_PROCESSOR.strip_thinking(generated_text)
+
+        # Strip registered special-token blocks (verify/plan/search/lang/debug)
+        if self.config.strip_special_tokens and SPECIAL_TOKENS_AVAILABLE:
+            generated_text = _SPECIAL_TOKEN_REGISTRY.strip_all(generated_text)
+
         end_time = time.time()
         time_taken = end_time - start_time
         tokens_per_second = len(generated_ids) / time_taken if time_taken > 0 else 0
-        
+
         return InferenceResult(
             text=generated_text,
             tokens_generated=len(generated_ids),
