@@ -122,7 +122,7 @@ def _eval_backbone(backbone, corpus=None):
         logger.info("[%s] %r", task.task_id, gen[:80])
 
     logger.info("")
-    evaluator = Evaluator(backbone=None, heads=None,
+    evaluator = Evaluator(backbone=backbone, heads=None,
                           decode_fn=lambda p, n: backbone.generate(p, n,
                               temperature=0.8, top_k=8))
     report = evaluator.run(tasks=BUILTIN_TASKS, k=4, max_new_tokens=96,

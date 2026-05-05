@@ -1,0 +1,30 @@
+{
+  "backbone": "TransformerNumpy-6L6H384d",
+  "training": {
+    "steps": 3000,
+    "n_layers": 6,
+    "n_heads": 6,
+    "d_model": 384,
+    "num_params": 10884096,
+    "baseline_loss": 6.306,
+    "final_loss": 3.1525,
+    "improvement_pct": 50.0,
+    "tok_per_s": 1347,
+    "note": "Only wte+wpe embeddings trained; attention/FFN weights remain random"
+  },
+  "tasks": [
+    {"task_id": "add_two",       "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 32289},
+    {"task_id": "factorial",     "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 32266},
+    {"task_id": "is_palindrome", "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 33647},
+    {"task_id": "max_list",      "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 33640},
+    {"task_id": "fizzbuzz",      "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 35730},
+    {"task_id": "count_vowels",  "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 32629},
+    {"task_id": "flatten",       "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 31260},
+    {"task_id": "is_prime",      "exact_match": false, "prefix_match": false, "pass_at_k": false, "k": 4, "latency_ms": 32356}
+  ],
+  "pass_at_k_pct": 0.0,
+  "ntp_loss": 3.1525,
+  "token_accuracy": null,
+  "elapsed_s": 1431.0,
+  "diagnosis": "Random attention/FFN weights dominate; embedding-only training cannot teach causal reasoning. Full backprop through attention required for non-zero pass@k."
+}
