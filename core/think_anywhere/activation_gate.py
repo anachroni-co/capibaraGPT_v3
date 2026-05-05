@@ -270,7 +270,7 @@ class ThinkAnywhereGate:
         Clears the buffer after the step.
         """
         if not self._hidden_buf:
-            return {"loss": 0.0, "n": 0}
+            return {"loss": 0.0, "n": 0, "buffer_size": 0}
 
         X = np.stack(self._hidden_buf).astype(np.float32)  # (N, H)
         y = np.array(self._label_buf, dtype=np.float32)    # (N,)
@@ -280,7 +280,7 @@ class ThinkAnywhereGate:
             logger.debug("Gate train_step skipped: pos_frac=%.3f < %.3f",
                          pos_frac, self.cfg.min_positive_frac)
             self._hidden_buf.clear(); self._label_buf.clear()
-            return {"loss": 0.0, "n": len(y), "skipped": True}
+            return {"loss": 0.0, "n": len(y), "buffer_size": len(y), "skipped": True}
 
         loss, dW1, db1, dW2, db2 = self._backward(X, y)
 
@@ -311,7 +311,8 @@ class ThinkAnywhereGate:
         self.metrics["train_steps"] += 1
         self.metrics["positive_rate"] = float(pos_frac)
 
-        return {"loss": float(loss), "n": len(y), "pos_frac": float(pos_frac)}
+        return {"loss": float(loss), "n": len(y), "pos_frac": float(pos_frac),
+                "buffer_size": len(y)}
 
     # ------------------------------------------------------------------
     # Evaluation helper
