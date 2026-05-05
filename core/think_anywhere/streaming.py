@@ -3,8 +3,22 @@ Streaming filter for Think-Anywhere inference.
 
 Suppresses <think> and <thinkanywhere> blocks in real-time token streams so
 callers receive only clean code/text without buffering the entire response.
+
+Gate integration
+----------------
+Pass a ThinkAnywhereGate (or None to disable) at construction time.  Before
+each <thinkanywhere> block is opened, the gate is consulted via
+PositionalFeatures.  If gate.should_think() returns False the block is
+suppressed as if it never appeared — the opening tag is discarded and the
+stream continues in normal mode.
 """
 from __future__ import annotations
+
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from .activation_gate import ThinkAnywhereGate
+    from .config import ThinkAnywhereConfig
 
 
 class ThinkAnywhereStreamFilter:
@@ -24,16 +38,32 @@ class ThinkAnywhereStreamFilter:
         tail = filt.flush()   # remaining safe text after EOS
         if tail:
             print(tail)
+
+    With gate::
+
+        gate = ThinkAnywhereGate(GateConfig(...))
+        filt = ThinkAnywhereStreamFilter(gate=gate)
+        # <thinkanywhere> blocks are suppressed when gate.should_think() is False
     """
 
     _OPEN_TAGS = ("<think>", "<thinkanywhere>")
     _CLOSE_TAGS = ("</think>", "</thinkanywhere>")
+    _TA_OPEN = "<thinkanywhere>"
     _MAX_OPEN_LEN = max(len(t) for t in _OPEN_TAGS)
     _MAX_CLOSE_LEN = max(len(t) for t in _CLOSE_TAGS)
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        gate: Optional["ThinkAnywhereGate"] = None,
+        config: Optional["ThinkAnywhereConfig"] = None,
+    ) -> None:
+        self._gate = gate
+        self._cfg = config
         self._buf = ""
-        self._depth = 0  # nesting depth inside thinking blocks
+        self._depth = 0
+        self._tokens_generated = 0
+        self._think_blocks_open = 0
+        self._think_tokens_used = 0
 
     # ------------------------------------------------------------------
     # Public interface
@@ -42,23 +72,42 @@ class ThinkAnywhereStreamFilter:
     def feed(self, token: str) -> str:
         """Append a token fragment; returns the safe portion to yield."""
         self._buf += token
+        self._tokens_generated += len(token)
         out_parts: list[str] = []
 
         while True:
             if self._depth == 0:
                 # Look for the earliest *complete* opening tag
                 earliest_pos = len(self._buf)
+                earliest_tag: str | None = None
                 for tag in self._OPEN_TAGS:
                     idx = self._buf.find(tag)
                     if 0 <= idx < earliest_pos:
                         earliest_pos = idx
+                        earliest_tag = tag
 
-                if earliest_pos < len(self._buf):
+                if earliest_tag is not None:
                     # Found a complete opening tag: yield safe prefix, consume tag
                     out_parts.append(self._buf[:earliest_pos])
-                    tag_end = earliest_pos + self._buf[earliest_pos:].index(">") + 1
+                    tag_end = earliest_pos + len(earliest_tag)
                     self._buf = self._buf[tag_end:]
+
+                    # Gate check: only for <thinkanywhere>, never for <think>
+                    gate_allows = True
+                    if earliest_tag == self._TA_OPEN and self._gate is not None:
+                        from .activation_gate import PositionalFeatures
+                        feats = PositionalFeatures(
+                            tokens_generated=self._tokens_generated,
+                            think_blocks_open=self._think_blocks_open,
+                            think_tokens_used=self._think_tokens_used,
+                        )
+                        gate_allows = self._gate.should_think(features=feats)
+
+                    # Always enter block-suppression mode so content+close tag
+                    # are discarded regardless of gate decision.
                     self._depth += 1
+                    if gate_allows:
+                        self._think_blocks_open += 1
                     # Loop continues to handle subsequent tags / closing tags
                 else:
                     # No complete opening tag: yield up to the last safe position
@@ -78,12 +127,14 @@ class ThinkAnywhereStreamFilter:
 
                 if chosen_close is not None:
                     # Found closing tag: discard content up through close tag
+                    self._think_tokens_used += earliest_close  # chars discarded
                     close_end = earliest_close + len(chosen_close)
                     self._buf = self._buf[close_end:]
                     self._depth -= 1
+                    self._think_blocks_open = max(0, self._think_blocks_open - 1)
                     # Loop continues to handle text after closing tag
                 else:
-                    # Still inside block: hold entire buffer
+                    # Still inside block: hold entire buffer (may complete later)
                     break
 
         return "".join(out_parts)

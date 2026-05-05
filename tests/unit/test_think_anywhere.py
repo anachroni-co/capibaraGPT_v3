@@ -7,6 +7,9 @@ from core.think_anywhere import (
     ThinkAnywhereStreamFilter,
     ParsedResponse,
     RewardResult,
+    ThinkAnywhereGate,
+    GateConfig,
+    PositionalFeatures,
 )
 
 
@@ -335,3 +338,119 @@ class TestThinkStreamFilter:
         chunks = ["x = ", "<think", "anywhere>", "skip", "</thinkanywhere>", "42"]
         out = "".join(f.feed(c) for c in chunks) + f.flush()
         assert out == "x = 42"
+
+
+# ---------------------------------------------------------------------------
+# ThinkAnywhereGate + PositionalFeatures
+# ---------------------------------------------------------------------------
+
+class TestPositionalFeatures:
+    def test_to_vector_shape(self):
+        f = PositionalFeatures(
+            tokens_generated=100,
+            think_blocks_open=1,
+            think_tokens_used=20,
+        )
+        v = f.to_vector(max_tokens=4096)
+        assert v.shape == (4,)
+
+    def test_to_vector_clamp(self):
+        f = PositionalFeatures(
+            tokens_generated=9999,
+            think_blocks_open=5,
+            think_tokens_used=9999,
+        )
+        v = f.to_vector(max_tokens=4096)
+        # All values should be in [0, 1] (or close due to ratio)
+        assert (v >= 0).all()
+
+    def test_entropy_default_zero(self):
+        f = PositionalFeatures(
+            tokens_generated=50,
+            think_blocks_open=0,
+            think_tokens_used=0,
+        )
+        v = f.to_vector()
+        # 4th element is response_entropy (default 0.0)
+        assert v[3] == 0.0
+
+
+class TestThinkAnywhereGate:
+    def _make_gate(self, threshold: float = 0.5) -> ThinkAnywhereGate:
+        cfg = GateConfig(hidden_size=8, gate_hidden=4, threshold=threshold)
+        return ThinkAnywhereGate(cfg)
+
+    def test_should_think_returns_bool(self):
+        gate = self._make_gate()
+        import numpy as np
+        h = np.zeros(8)
+        result = gate.should_think(hidden=h)
+        assert isinstance(result, bool)
+
+    def test_positional_path_returns_bool(self):
+        gate = self._make_gate()
+        feats = PositionalFeatures(tokens_generated=100, think_blocks_open=0, think_tokens_used=10)
+        result = gate.should_think(features=feats)
+        assert isinstance(result, bool)
+
+    def test_threshold_zero_always_thinks(self):
+        gate = self._make_gate(threshold=0.0)
+        feats = PositionalFeatures(tokens_generated=100, think_blocks_open=0, think_tokens_used=0)
+        # threshold=0 → any score ≥ 0 → always True
+        assert gate.should_think(features=feats) is True
+
+    def test_threshold_one_never_thinks(self):
+        gate = self._make_gate(threshold=1.0)
+        feats = PositionalFeatures(tokens_generated=100, think_blocks_open=0, think_tokens_used=0)
+        # sigmoid output ∈ (0,1) strictly → never reaches 1.0
+        assert gate.should_think(features=feats) is False
+
+    def test_max_think_ratio_hard_cap(self):
+        cfg = GateConfig(hidden_size=8, gate_hidden=4, threshold=0.0, max_think_ratio=0.1)
+        gate = ThinkAnywhereGate(cfg)
+        # tokens_generated=100, think_tokens_used=50 → ratio=0.5 > 0.1 → False
+        feats = PositionalFeatures(tokens_generated=100, think_blocks_open=0, think_tokens_used=50)
+        assert gate.should_think(features=feats) is False
+
+    def test_save_load_roundtrip(self, tmp_path):
+        import numpy as np
+        gate = self._make_gate()
+        path = str(tmp_path / "gate.npz")
+        gate.save(path)
+        gate2 = ThinkAnywhereGate.load(path)
+        h = np.zeros(8)
+        assert gate.should_think(hidden=h) == gate2.should_think(hidden=h)
+
+
+class TestStreamFilterWithGate:
+    def _make_filter(self, threshold: float) -> ThinkAnywhereStreamFilter:
+        cfg = GateConfig(hidden_size=8, gate_hidden=4, threshold=threshold)
+        gate = ThinkAnywhereGate(cfg)
+        return ThinkAnywhereStreamFilter(gate=gate)
+
+    def test_gate_suppresses_thinkanywhere_when_threshold_one(self):
+        filt = self._make_filter(threshold=1.0)
+        text = "before<thinkanywhere>reasoning</thinkanywhere>after"
+        out = "".join(filt.feed(c) for c in text) + filt.flush()
+        # Gate never allows (threshold=1.0) → block still enters suppression mode
+        # so content AND closing tag are both discarded, just like with gate=None
+        assert out == "beforeafter"
+
+    def test_gate_allows_thinkanywhere_when_threshold_zero(self):
+        filt = self._make_filter(threshold=0.0)
+        text = "x<thinkanywhere>skip this</thinkanywhere>y"
+        out = "".join(filt.feed(c) for c in text) + filt.flush()
+        # Gate always allows → block entered → content suppressed
+        assert out == "xy"
+
+    def test_think_tag_always_suppressed_regardless_of_gate(self):
+        filt = self._make_filter(threshold=1.0)
+        text = "a<think>hidden</think>b"
+        out = "".join(filt.feed(c) for c in text) + filt.flush()
+        assert out == "ab"
+
+    def test_no_gate_behaviour_unchanged(self):
+        filt = ThinkAnywhereStreamFilter()
+        text = "x<thinkanywhere>skip</thinkanywhere>y"
+        out = "".join(filt.feed(c) for c in text) + filt.flush()
+        assert out == "xy"

@@ -53,6 +53,15 @@ class ThinkAnywhereConfig:
     delimiter_close_token: str = "<im_end>"
     semantic_mix_alpha: float = 0.5   # weight between semantic / delimiter
 
+    # --- activation gate --------------------------------------------------
+    gate_enabled: bool = True           # enable ThinkAnywhereGate at inference
+    gate_hidden_size: int = 2048        # must match backbone hidden_size
+    gate_threshold: float = 0.5         # score >= threshold → allow thinking
+    gate_reward_threshold: float = 0.5  # min RewardResult.combined for label=1
+    gate_max_think_ratio: float = 0.30  # hard cap: fraction of tokens in think blocks
+    gate_update_every: int = 32         # training buffer size before a grad step
+    gate_checkpoint: str = ""           # path to pre-trained gate .npz ("" = fresh)
+
     @property
     def open_tag(self) -> str:
         return self.ta_special_open if self.use_special_tokens else self.ta_open
