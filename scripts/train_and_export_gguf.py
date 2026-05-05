@@ -108,7 +108,13 @@ def _gpt2_b2u() -> dict:
     return dict(zip(bs, cs))
 
 
-def export_gguf(backbone: TransformerNumpyBackbone, out_path: str) -> None:
+def export_gguf(backbone: TransformerNumpyBackbone, out_path: str,
+                ctx_export: int = 512) -> None:
+    """Export backbone weights to GGUF.
+
+    ctx_export: declared context length in the GGUF (must be >= backbone.max_seq).
+    We pad position_embd.weight by tiling so llama.cpp can use any n_ctx <= ctx_export.
+    """
     try:
         import gguf
     except ImportError:
@@ -118,7 +124,7 @@ def export_gguf(backbone: TransformerNumpyBackbone, out_path: str) -> None:
     D   = backbone.d_model
     DFF = backbone.d_ff
     V   = N_BYTE + 1   # 256 byte-tokens + 1 BPE merge (required by llama.cpp)
-    CTX = backbone.max_seq
+    CTX = max(ctx_export, backbone.max_seq)
 
     log.info("Exporting GGUF: vocab=%d  d=%d  layers=%d  ctx=%d → %s",
              V, D, backbone.n_layers, CTX, out_path)
@@ -155,8 +161,17 @@ def export_gguf(backbone: TransformerNumpyBackbone, out_path: str) -> None:
     # Our forward:     x @ W  (right-multiply) → GGUF W = our_W.T
 
     wte_export = backbone.wte[:V].astype(np.float32)        # (V, D)
-    writer.add_tensor("token_embd.weight",    wte_export)   # [V, D] — already [d_out=V, d_in=D]
-    writer.add_tensor("position_embd.weight", backbone.wpe.astype(np.float32))  # [CTX, D]
+    writer.add_tensor("token_embd.weight", wte_export)      # [V, D]
+
+    # Pad position embeddings to CTX by tiling backbone.wpe (trained on max_seq rows).
+    # This lets llama.cpp run at any n_ctx <= CTX without an out-of-bounds crash.
+    wpe_src = backbone.wpe.astype(np.float32)               # [max_seq, D]
+    if CTX > backbone.max_seq:
+        reps = -(-CTX // backbone.max_seq)                  # ceil division
+        wpe_ext = np.tile(wpe_src, (reps, 1))[:CTX]        # [CTX, D]
+    else:
+        wpe_ext = wpe_src[:CTX]
+    writer.add_tensor("position_embd.weight", wpe_ext)      # [CTX, D]
 
     for i, blk in enumerate(backbone.blocks):
         p = f"blk.{i}"
@@ -211,12 +226,12 @@ def export_gguf(backbone: TransformerNumpyBackbone, out_path: str) -> None:
 # Evaluation with LlamaCppBackbone
 # ---------------------------------------------------------------------------
 
-def evaluate(gguf_path: str) -> None:
-    from models.pretrained_backbone import auto_backbone
+def evaluate(gguf_path: str, n_ctx: int = 512) -> None:
+    from models.pretrained_backbone import LlamaCppBackbone
     from evaluation.code_eval import Evaluator, BUILTIN_TASKS
 
-    log.info("\n── Loading GGUF with llama.cpp ──")
-    backbone = auto_backbone(gguf_path=gguf_path)
+    log.info("\n── Loading GGUF with llama.cpp (n_ctx=%d) ──", n_ctx)
+    backbone = LlamaCppBackbone(gguf_path, n_ctx=n_ctx)
     log.info("Backend: %s", backbone.name)
 
     log.info("\n── Sample generations ──")
@@ -259,11 +274,12 @@ def main():
 
     # Export
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    export_gguf(backbone, args.out)
+    ctx_export = max(512, args.seq)   # always export >= 512 positions
+    export_gguf(backbone, args.out, ctx_export=ctx_export)
 
-    # Eval
+    # Eval — use ctx_export so n_ctx matches the exported position table
     if args.eval:
-        evaluate(args.out)
+        evaluate(args.out, n_ctx=ctx_export)
 
 
 if __name__ == "__main__":
