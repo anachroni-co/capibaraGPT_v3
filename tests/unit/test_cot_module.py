@@ -85,6 +85,15 @@ def test_cot_module_call_returns_expected_shape():
     assert m.initialized is True
 
 
+def test_cot_module_call_when_already_initialized():
+    m = EnhancedChainOfThoughtModule()
+    m.initialize()
+    # Second call skips the if-not-initialized branch
+    result = m("already initialized query")
+    assert result["query"] == "already initialized query"
+    assert m.initialized is True
+
+
 def test_cot_module_call_with_context():
     m = EnhancedChainOfThoughtModule()
     result = m("query", initial_context="prior")
@@ -266,6 +275,15 @@ def test_enhanced_cot_module_cpu_no_meta_cognition():
     assert result["metrics"]["num_steps"] >= 1
 
 
+def test_enhanced_cot_module_cpu_loop_completes_all_steps():
+    # confidence_threshold=0.0 → step_reward is always >= 0 → loop never breaks
+    # early, all max_reasoning_steps iterations execute, covering the 270->283 branch.
+    cfg = ReasoningConfig(max_reasoning_steps=3, confidence_threshold=0.0)
+    m = _EnhancedCoTModule(config=cfg)
+    result = m([0.5, 0.5])
+    assert result["metrics"]["num_steps"] == 3
+
+
 # ---------------------------------------------------------------------------
 # CapibaraEnhancedCoT CPU fallback (BACKLOG-006)
 # ---------------------------------------------------------------------------
@@ -310,3 +328,100 @@ def test_ensure_backend_cached_return():
     # calls must return immediately via the early-exit guard.
     result = _enhanced._ensure_backend()
     assert isinstance(result, bool)
+
+
+# ---------------------------------------------------------------------------
+# core/cot/factory.py (BACKLOG-006)
+# Tests for create_enhanced_cot_config, create_enhanced_cot_module,
+# enhanced_chain_of_thought.  Imported via the real package (not standalone
+# importlib) since factory.py pulls in config and module.py — both importable.
+# ---------------------------------------------------------------------------
+
+from core.cot.factory import (
+    create_enhanced_cot_config,
+    create_enhanced_cot_module,
+    enhanced_chain_of_thought,
+)
+
+
+def _gen_fn(x):
+    return f"answer: {x}"
+
+
+def test_factory_create_enhanced_cot_config_production_mode():
+    cfg = create_enhanced_cot_config(core_model_generate_fn=_gen_fn, device_type="cpu")
+    # Returns an AdvancedCoTConfig (or equivalent from config module)
+    assert cfg is not None
+    assert cfg.core_model_generate_fn is _gen_fn
+    assert cfg.hidden_size == 768
+    assert cfg.max_steps == 8
+
+
+def test_factory_create_enhanced_cot_config_debug_mode():
+    cfg = create_enhanced_cot_config(
+        core_model_generate_fn=_gen_fn,
+        device_type="cpu",
+        debug_mode=True,
+    )
+    assert cfg is not None
+
+
+def test_factory_create_enhanced_cot_config_custom_params():
+    cfg = create_enhanced_cot_config(
+        core_model_generate_fn=_gen_fn,
+        hidden_size=256,
+        max_steps=4,
+        device_type="cpu",
+    )
+    assert cfg.hidden_size == 256
+    assert cfg.max_steps == 4
+
+
+def test_factory_create_enhanced_cot_module():
+    cfg = create_enhanced_cot_config(core_model_generate_fn=_gen_fn, device_type="cpu")
+    mod = create_enhanced_cot_module(cfg, cache_size=64)
+    assert mod is not None
+    assert mod.cache_size == 64
+
+
+def test_factory_enhanced_chain_of_thought_returns_dict():
+    result = enhanced_chain_of_thought(
+        "what is 2+2?",
+        core_model_generate_fn=_gen_fn,
+        device_type="cpu",
+    )
+    assert isinstance(result, dict)
+    assert "query" in result
+
+
+def test_factory_enhanced_chain_of_thought_debug_mode():
+    result = enhanced_chain_of_thought(
+        "test query",
+        core_model_generate_fn=_gen_fn,
+        device_type="cpu",
+        debug_mode=True,
+    )
+    assert isinstance(result, dict)
+
+
+# ---------------------------------------------------------------------------
+# core/cot/__init__.py — ChainOfThought and create_cot_handler (BACKLOG-006)
+# ---------------------------------------------------------------------------
+
+from core.cot import ChainOfThought, create_cot_handler
+
+
+def test_chain_of_thought_solve_problem():
+    cot = ChainOfThought()
+    assert cot.steps == []
+    result = cot.solve_problem("what is gravity?")
+    assert result["problem"] == "what is gravity?"
+    assert result["solution"] == "ok"
+    assert len(result["steps"]) == 3
+    assert result["confidence"] == pytest.approx(0.9)
+    assert len(cot.steps) == 3
+
+
+def test_create_cot_handler_returns_chain_of_thought():
+    handler = create_cot_handler()
+    assert isinstance(handler, ChainOfThought)

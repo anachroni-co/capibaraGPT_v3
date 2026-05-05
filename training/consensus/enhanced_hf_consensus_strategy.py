@@ -10,15 +10,40 @@ This module extends the original HuggingFace consensus strategy with:
 
 import logging
 import asyncio
-import aiohttp
 from typing import Dict, List, Optional, Any, Tuple, Union
 from dataclasses import dataclass, field
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 import numpy as np
+
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+    aiohttp = None  # type: ignore[assignment]
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None  # type: ignore[assignment]
+
+try:
+    from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline as hf_pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    AutoTokenizer = None  # type: ignore[assignment,misc]
+    AutoModelForCausalLM = None  # type: ignore[assignment,misc]
+    hf_pipeline = None  # type: ignore[assignment]
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm
 import time
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(it, **_):  # type: ignore[misc]
+        return it
 import json
 from datetime import datetime
 
@@ -83,7 +108,7 @@ class EnhancedHFConsensusStrategy(HuggingFaceConsensusStrategy):
         self.metrics = ConsensusMetrics()
         
         # Request session for serverless API
-        self.session_timeout = aiohttp.ClientTimeout(total=30)
+        self.session_timeout = aiohttp.ClientTimeout(total=30) if AIOHTTP_AVAILABLE else None
         
         logger.info(f" Enhanced HF Consensus Strategy initialized with {len(self.serverless_experts)} serverless experts")
     

@@ -13,9 +13,28 @@ from dataclasses import dataclass, field
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
-import torch
-from transformers import AutoTokenizer, pipeline
-import aiohttp
+
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None  # type: ignore[assignment]
+
+try:
+    from transformers import AutoTokenizer, pipeline as hf_pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    AutoTokenizer = None  # type: ignore[assignment,misc]
+    hf_pipeline = None  # type: ignore[assignment]
+
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    AIOHTTP_AVAILABLE = False
+    aiohttp = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +215,7 @@ class HuggingFaceConsensusStrategy:
                     device = 0 if torch.cuda.is_available() else -1
                     dtype = torch.float16 if device >= 0 else torch.float32
 
-                    self.pipelines[domain] = pipeline(
+                    self.pipelines[domain] = hf_pipeline(
                         "text-generation",
                         model=config.model_id,
                         tokenizer=self.tokenizers[domain],

@@ -23,7 +23,13 @@ import time
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Any
-import jax.numpy as jnp
+
+try:
+    import jax.numpy as jnp
+    _JAX_AVAILABLE = True
+except ImportError:
+    import numpy as jnp  # type: ignore[no-redef]
+    _JAX_AVAILABLE = False
 
 # BACKLOG-005: this file is a demo-only script. Do NOT configure the root
 # logger at import time - that side-effect leaks into any process that

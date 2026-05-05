@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import ast
 import contextlib
-import io
 import logging
 import subprocess
 import sys
@@ -25,7 +24,7 @@ import tempfile
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List, Optional
 
 from .config import ThinkAnywhereConfig
 from .token_processor import ThinkAnywhereProcessor

@@ -234,3 +234,213 @@ def test_base_router_v2_combine_outputs_non_dict(monkeypatch):
     v2 = _make_v2(monkeypatch)
     assert v2.combine_outputs(None) is None
     assert v2.combine_outputs({}) == {}
+
+
+# ---------------------------------------------------------------------------
+# Helpers for testing BaseRouter/BaseRouterV2 internal methods
+# ---------------------------------------------------------------------------
+
+
+class _MockRouterConfig:
+    """Minimal router config substitute with the attrs that setup() needs."""
+    hidden_size = 64
+    num_heads = 4
+    dropout_rate = 0.1
+    batch_size = 8
+
+
+def _make_v2_ready(monkeypatch):
+    """Create a BaseRouterV2 with memory-monitor patched and setup attrs set."""
+    class _FakeMM:
+        def get_memory_usage(self):
+            return 0.1  # well below 0.85 threshold → no fallback triggered
+
+    monkeypatch.setattr(_base, "MemoryMonitor", _FakeMM)
+    v2 = _base.BaseRouterV2(config=_MockRouterConfig())
+    # Mirror what setup() sets so individual methods can be exercised without
+    # relying on Flax lifecycle calling setup() automatically.
+    v2.fallback_config = _base.FallbackConfig()
+    v2.current_batch_size = 8
+    v2.in_fallback_mode = False
+    v2.last_fallback_time = 0
+    v2.linalg_ops = None
+    v2.sparse_ops = None
+    v2.neural_ops = None
+    return v2
+
+
+# ---------------------------------------------------------------------------
+# setup() covers lines 88-105, _initialize_cpu_ops() covers 120-123
+# ---------------------------------------------------------------------------
+
+
+def test_base_router_v2_setup_initializes_cpu_ops(monkeypatch):
+    class _FakeMM:
+        def get_memory_usage(self):
+            return 0.0
+
+    monkeypatch.setattr(_base, "MemoryMonitor", _FakeMM)
+    v2 = _base.BaseRouterV2(config=_MockRouterConfig())
+    v2.setup()
+    assert v2.hidden_size == 64
+    assert v2.num_heads == 4
+    assert v2.in_fallback_mode is False
+    assert v2.linalg_ops is None  # CPU fallback, no TPU
+
+
+# ---------------------------------------------------------------------------
+# _check_memory_usage (lines 127-128)
+# ---------------------------------------------------------------------------
+
+
+def test_check_memory_usage_below_threshold(monkeypatch):
+    v2 = _make_v2_ready(monkeypatch)
+    assert v2._check_memory_usage() is False  # 0.1 < 0.85
+
+
+def test_check_memory_usage_above_threshold(monkeypatch):
+    class _HighMM:
+        def get_memory_usage(self):
+            return 0.99
+
+    monkeypatch.setattr(_base, "MemoryMonitor", _HighMM)
+    v2 = _base.BaseRouterV2(config=_MockRouterConfig())
+    v2.fallback_config = _base.FallbackConfig()
+    v2.memory_monitor = _HighMM()
+    assert v2._check_memory_usage() is True
+
+
+# ---------------------------------------------------------------------------
+# _check_latency (lines 132-134)
+# ---------------------------------------------------------------------------
+
+
+def test_check_latency_below_threshold(monkeypatch):
+    import time
+    v2 = _make_v2_ready(monkeypatch)
+    # start_time is now → latency ≈ 0 ms, well below 100 ms
+    assert v2._check_latency(time.time()) is False
+
+
+def test_check_latency_above_threshold(monkeypatch):
+    v2 = _make_v2_ready(monkeypatch)
+    # start_time far in the past → latency >> 100 ms
+    assert v2._check_latency(0.0) is True
+
+
+# ---------------------------------------------------------------------------
+# _activate_fallback (lines 138-150)
+# ---------------------------------------------------------------------------
+
+
+def test_activate_fallback_sets_mode_and_reduces_batch(monkeypatch):
+    v2 = _make_v2_ready(monkeypatch)
+    assert v2.in_fallback_mode is False
+    v2._activate_fallback()
+    assert v2.in_fallback_mode is True
+    assert v2.current_batch_size == 4  # 8 * 0.5
+
+
+def test_activate_fallback_idempotent(monkeypatch):
+    v2 = _make_v2_ready(monkeypatch)
+    v2._activate_fallback()
+    batch_after_first = v2.current_batch_size
+    v2._activate_fallback()
+    # already in fallback → no-op, batch_size unchanged
+    assert v2.current_batch_size == batch_after_first
+
+
+# ---------------------------------------------------------------------------
+# _check_recovery (lines 154-163)
+# ---------------------------------------------------------------------------
+
+
+def test_check_recovery_triggers_when_conditions_met(monkeypatch):
+    v2 = _make_v2_ready(monkeypatch)
+    v2.in_fallback_mode = True
+    v2.last_fallback_time = 0  # far in the past → elapsed >> 300 s
+    v2._check_recovery()
+    assert v2.in_fallback_mode is False
+    assert v2.current_batch_size == _MockRouterConfig.batch_size
+
+
+def test_check_recovery_disabled_when_auto_recovery_off(monkeypatch):
+    v2 = _make_v2_ready(monkeypatch)
+    v2.fallback_config = _base.FallbackConfig(enable_auto_recovery=False)
+    v2.in_fallback_mode = True
+    v2._check_recovery()
+    assert v2.in_fallback_mode is True  # unchanged
+
+
+# ---------------------------------------------------------------------------
+# _optimized_matmul (lines 165-193)
+# ---------------------------------------------------------------------------
+
+
+def test_optimized_matmul_basic(monkeypatch):
+    import numpy as np
+    v2 = _make_v2_ready(monkeypatch)
+    a = np.ones((3, 4))
+    b = np.ones((4, 5))
+    result = v2._optimized_matmul(a, b)
+    assert result.shape == (3, 5)
+    assert result[0, 0] == pytest.approx(4.0)
+
+
+def test_optimized_matmul_transpose_a(monkeypatch):
+    import numpy as np
+    v2 = _make_v2_ready(monkeypatch)
+    a = np.ones((4, 3))  # will be transposed to (3, 4)
+    b = np.ones((4, 5))
+    result = v2._optimized_matmul(a, b, transpose_a=True)
+    assert result.shape == (3, 5)
+
+
+def test_optimized_matmul_transpose_b(monkeypatch):
+    import numpy as np
+    v2 = _make_v2_ready(monkeypatch)
+    a = np.ones((3, 4))
+    b = np.ones((5, 4))  # will be transposed to (4, 5)
+    result = v2._optimized_matmul(a, b, transpose_b=True)
+    assert result.shape == (3, 5)
+
+
+# ---------------------------------------------------------------------------
+# get_performance_metrics (lines 234-241)
+# ---------------------------------------------------------------------------
+
+
+def test_get_performance_metrics_keys(monkeypatch):
+    v2 = _make_v2_ready(monkeypatch)
+    m = v2.get_performance_metrics()
+    assert "in_fallback_mode" in m
+    assert "current_batch_size" in m
+    assert "memory_usage" in m
+    assert "tpu_available" in m
+    assert m["in_fallback_mode"] is False
+    assert m["current_batch_size"] == 8
+
+
+# ---------------------------------------------------------------------------
+# combine_outputs success path — uniform-shape arrays (lines 253-262)
+# ---------------------------------------------------------------------------
+
+
+def test_combine_outputs_uniform_arrays(monkeypatch):
+    import numpy as np
+    v2 = _make_v2_ready(monkeypatch)
+    arr1 = np.array([1.0, 2.0])
+    arr2 = np.array([3.0, 4.0])
+    result = v2.combine_outputs({"a": arr1, "b": arr2})
+    assert result.shape == (2,)
+    assert result[0] == pytest.approx(2.0)  # mean([1, 3])
+    assert result[1] == pytest.approx(3.0)  # mean([2, 4])
+
+
+def test_combine_outputs_non_uniform_falls_back_to_dict(monkeypatch):
+    import numpy as np
+    v2 = _make_v2_ready(monkeypatch)
+    # Different shapes — stack will fail, fall through to return dict
+    d = {"a": np.ones((2,)), "b": np.ones((3,))}
+    result = v2.combine_outputs(d)
+    assert result is d

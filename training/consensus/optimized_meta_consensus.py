@@ -56,7 +56,7 @@ from .meta_consensus_system import (
     ConsensusResult, ConsensusMode, SystemState
 )
 from .enhanced_hf_consensus_strategy import EnhancedHFConsensusStrategy
-from .hybrid_expert_router import HybridExpertRouter, ExpertTier, RoutingStrategy
+from ..hybrid_expert_router import HybridExpertRouter, ExpertTier, RoutingStrategy
 from .advanced_consensus_algorithms import AdvancedConsensusEngine, ConsensusAlgorithm
 
 # Import optimization components from comp branch
@@ -75,10 +75,23 @@ try:
     from capibara.core.adaptive_batching import AdaptiveBatchSizer, get_batch_sizer
     COMP_OPTIMIZATIONS_AVAILABLE = True
 except ImportError as e:
-    logger.warning(f"Comp optimizations not available: {e}")
     COMP_OPTIMIZATIONS_AVAILABLE = False
+    def cached(*args, **kwargs):  # no-op decorator fallback
+        def decorator(func): return func
+        return decorator if args and callable(args[0]) else decorator
+    class MemoryPool: pass  # type: ignore[misc]
+    class MemoryPoolConfig: pass  # type: ignore[misc]
+    class GPUAccelerator: pass  # type: ignore[misc]
+    class DistributedCache: pass  # type: ignore[misc]
+    class AdvancedQuantizer: pass  # type: ignore[misc]
+    class QuantizationConfig: pass  # type: ignore[misc]
+    class AdaptiveBatchSizer: pass  # type: ignore[misc]
+    get_memory_pool = get_gpu_accelerator = get_distributed_cache = None  # type: ignore[assignment]
+    get_quantizer = get_batch_sizer = get_optimized_integration = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
+if not COMP_OPTIMIZATIONS_AVAILABLE:
+    logger.debug("Comp optimizations not available — running without hardware acceleration")
 
 
 class _TextEmbedder:

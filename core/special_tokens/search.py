@@ -18,7 +18,7 @@ Stripped from final output (strip_from_output=True).
 from __future__ import annotations
 
 import re
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Optional
 
 from .base import SpecialTokenConfig, SpecialTokenProcessor
 from .registry import register_token

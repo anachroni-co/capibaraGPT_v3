@@ -123,6 +123,27 @@ Demo paths are mixed with potentially production runtime paths.
 
 Coverage ratio is roughly one test file per 3,800 LOC and ~0.85 test functions per production module. `core/backends`, `core/routers`, `core/cot` and `training/consensus` lack basic unit tests.
 
+**Progress** (2026-05-04)
+
+Added 25 new unit tests across `test_routers_bto.py` and `test_cot_module.py` (total now 548 pass):
+
+| Area | Before | After | Notes |
+|---|---|---|---|
+| `core/cot/__init__.py` | 67% | 100% | ChainOfThought, create_cot_handler |
+| `core/cot/factory.py` | 33% | 100% | All three factory functions |
+| `core/cot/module.py` | 85% | 87% | Pre-initialized call path |
+| `core/cot/enhanced_cot_module.py` | 57% | 58% | Loop completion branch |
+| `core/routers/base.py` | 35% | 69% | setup(), matmul, fallback, recovery, metrics |
+| **core/cot (combined)** | ~60% | **68%** | 2% gap is JAX-specific paths (need hardware) |
+| **core/routers (combined)** | ~65% | **76%** | ✓ above 70% |
+
+**Remaining gaps**
+
+- `core/cot` at 68% (not yet 70%): uncovered lines are in the Flax/JAX class body (`EnhancedCoTModule` lines 38–217) and two dead-code branches (245, 247). These require JAX hardware to execute.
+- `core/backends`: ~60% overall; `gpu_backend.py` (28%) and `tpu_backend.py` (27%) require GPU/TPU hardware.
+- `training/consensus` integration tests: not yet added.
+- CI coverage gate: not yet configured.
+
 **Exit criteria**
 
 - At least 70% coverage in `core/backends`, `core/routers`, `core/cot`.
@@ -167,6 +188,7 @@ empirically evaluated on the target model.
 
 - **Sanitize per-folder TODO documentation** — removed all 20 per-folder `TODOs.md`, the two global aggregators (`TODOs.md`, `TODOs_PRIORITIZED.md`) and the generator script `scripts/clean_todos.py`. Pending work now lives only in this file.
 - **Restore `capibara/` directory** — the `capibara/` tree (~14,600 LOC in 43 Python files covering VQ, SSM, `mvp_api`) was restored after being removed by mistake in commit `e164e01`.
+- **ISSUE-005 — `training/data_lineage`: split mock demo from real runtime** — `demo_traceability_system.py` was already isolated (private `_DemoMockModel`, env-var guard `CAPIBARA_DATA_LINEAGE_DEMO=1`, not exported from `__init__.py`). Remaining fix: guarded the bare `import jax.numpy as jnp` with a try/except fallback to numpy so the file is importable in non-JAX environments. `inference_safe_parameter_controller.py` runtime path has no mocks; the `__main__` CLI block already uses plain numpy as example input.
 
 ## How to add a new item
 

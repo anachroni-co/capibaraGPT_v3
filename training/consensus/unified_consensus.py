@@ -1245,7 +1245,10 @@ import numpy as np
 from typing import Any, Dict, List, Optional, Tuple, Union, Callable
 from dataclasses import dataclass, field
 from collections import defaultdict, Counter
-from jax import numpy as jnp
+try:
+    from jax import numpy as jnp
+except ImportError:
+    import numpy as jnp  # type: ignore[assignment]
 try:
     import optax
 except ImportError:
@@ -1865,5 +1868,40 @@ class UnifiedCrossTeachingConsensus:
             return "No outputs for cross-teaching"
         
         # Simple cross-teaching: select best output
-        return f"Cross-taught result: {outputs[0]}" if outputs else "cross_teaching_fallback" 
+        return f"Cross-taught result: {outputs[0]}" if outputs else "cross_teaching_fallback"
+
+
+@dataclass
+class ConsensusConfig:
+    """Configuration for UnifiedConsensusStrategy."""
+    consensus_threshold: float = 0.7
+    validation_patience: int = 5
+    consensus_window: int = 10
+    min_agreement_ratio: float = 0.7
+
+
+class UnifiedConsensusStrategy:
+    """Unified consensus strategy (fallback implementation used by MetaConsensusSystem)."""
+
+    def __init__(self, config: ConsensusConfig):
+        self.config = config
+        self.history: list = []
+
+    def update(self, responses: list, context: dict | None = None) -> dict:
+        """Record responses and return a simple majority-vote result."""
+        self.history.append(responses)
+        if not responses:
+            return {"consensus": "", "agreement": 0.0, "success": False}
+        # Simple majority: pick the most common response
+        counts: dict = {}
+        for r in responses:
+            key = str(r)
+            counts[key] = counts.get(key, 0) + 1
+        best = max(counts, key=lambda k: counts[k])
+        agreement = counts[best] / len(responses)
+        return {
+            "consensus": best,
+            "agreement": agreement,
+            "success": agreement >= self.config.min_agreement_ratio,
+        }
 
