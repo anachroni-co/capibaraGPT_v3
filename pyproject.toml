@@ -3,18 +3,18 @@ requires = ["setuptools>=68.0", "wheel", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "capibaragpt"
+name = "capibara-slim"
 dynamic = ["version"]
-description = "CapibaraGPT - Advanced Modular AI System with TPU/GPU Support"
+description = "Capibara Slim — JAX/Flax foundation model stack for TPU v5 training"
 readme = "README.md"
 license = {file = "LICENSE"}
 requires-python = ">=3.9"
 authors = [
-    {name = "CapibaraGPT Team", email = "team@capibaragpt.io"}
+    {name = "Anacroni S.Coop.Gal.", email = "info@anachroni.co"}
 ]
 keywords = [
-    "ai", "deep-learning", "transformer", "mamba", "tpu", "gpu",
-    "mixture-of-experts", "neural-network", "nlp", "multimodal"
+    "ai", "deep-learning", "transformer", "mamba", "tpu", "jax", "flax",
+    "mixture-of-experts", "nlp", "think-anywhere", "grpo", "quantization"
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -28,7 +28,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 
-# Core dependencies (backend-agnostic)
+# Minimal core — backend-agnostic, no heavy ML deps required
 dependencies = [
     "numpy>=1.24.0",
     "scipy>=1.10.0",
@@ -38,92 +38,72 @@ dependencies = [
     "toml>=0.10.2",
     "pydantic>=2.0.0",
     "rich>=13.0.0",
-    "typer>=0.9.0",
     "httpx>=0.24.0",
     "aiofiles>=23.0.0",
-    "tensorboardX>=2.6",
-    "wandb>=0.15.0",
-    "datasets>=2.14.0",
-    "tokenizers>=0.15.0",
-    "sentencepiece>=0.1.99",
-    "transformers>=4.35.0",
 ]
 
 [project.optional-dependencies]
-# TPU backend (JAX-based)
+# TPU v5 training (primary backend)
 tpu = [
     "jax[tpu]>=0.4.20",
     "flax>=0.8.0",
     "optax>=0.1.7",
     "orbax-checkpoint>=0.4.0",
-    "clu>=0.0.9",
 ]
 
-# GPU backend (PyTorch/CUDA for A-100)
+# GPU training
 gpu = [
     "torch>=2.1.0",
-    "torchvision>=0.16.0",
-    "torchaudio>=2.1.0",
     "flash-attn>=2.4.0",
-    "xformers>=0.0.23",
-    "bitsandbytes>=0.41.0",
-    "deepspeed>=0.12.0",
     "accelerate>=0.25.0",
     "peft>=0.7.0",
 ]
 
-# Mamba/SSM support
-mamba = [
-    "mamba-ssm>=1.2.0",
-    "causal-conv1d>=1.1.0",
+# GGUF export + llama.cpp inference (CPU dev)
+gguf = [
+    "gguf>=0.6.0",
+    "llama-cpp-python>=0.2.0",
 ]
 
-# Development dependencies
+# API server
+api = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+]
+
+# Development + testing
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
     "pytest-cov>=4.1.0",
     "pytest-xdist>=3.3.0",
-    "pytest-benchmark>=4.0.0",
-    "hypothesis>=6.82.0",
     "mypy>=1.5.0",
     "ruff>=0.1.0",
-    "black>=23.9.0",
-    "isort>=5.12.0",
     "pre-commit>=3.4.0",
+    "gguf>=0.6.0",
 ]
 
-# Documentation
-docs = [
-    "sphinx>=7.0.0",
-    "sphinx-rtd-theme>=1.3.0",
-    "myst-parser>=2.0.0",
-    "autodoc-pydantic>=2.0.0",
-]
-
-# All dependencies
+# All extras
 all = [
-    "capibaragpt[tpu,gpu,mamba,dev,docs]",
+    "capibara-slim[tpu,gpu,gguf,api,dev]",
 ]
-
-[project.scripts]
-# Minimal CLI available (info/health/demo).
-capibara = "capibara.cli:main"
-capibara-api = "capibara.mvp_api:run"
-# TODO(2026-02-05): Implement these CLIs in capibara/training/cli.py,
-# and capibara/inference/cli.py.
-# capibara-train = "capibara.training.cli:main"
-# capibara-inference = "capibara.inference.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/anachroni-co/capibaraGPT_v3"
-Documentation = "https://capibaragpt.readthedocs.io"
-Repository = "https://github.com/anachroni-co/capibaraGPT_v3"
-Issues = "https://github.com/anachroni-co/capibaraGPT_v3/issues"
+Homepage = "https://github.com/anachroni-co/capibara-slim"
+Repository = "https://github.com/anachroni-co/capibara-slim"
+Issues    = "https://github.com/anachroni-co/capibara-slim/issues"
 
 [tool.setuptools.packages.find]
-include = ["capibara*", "core*", "config*", "utils*", "training*", "benchmarks*", "layers*", "sub_models*", "interfaces*", "modules*"]
-exclude = ["tests*", "docs*"]
+include = [
+    "capibara*", "core*", "config*", "utils*",
+    "training*", "inference*", "models*", "evaluation*",
+    "scripts*", "data*", "pipeline*", "services*",
+    "layers*", "interfaces*", "modules*", "safety*",
+    "serving*", "mcp*", "prompts*", "rag*",
+]
+exclude = ["tests*", "docs*", "benchmarks*"]
 
 [tool.setuptools_scm]
 write_to = "_version.py"
@@ -136,20 +116,13 @@ pythonpath = ["."]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--tb=short",
-    "-ra",
-    "--strict-markers",
-]
+addopts = ["-v", "--tb=short", "-ra", "--strict-markers"]
 filterwarnings = [
-    "ignore:Implicit None on return values is deprecated and will raise KeyErrors\\.:DeprecationWarning:importlib\\.metadata",
     "ignore::pydantic.warnings.PydanticDeprecatedSince20",
-    "ignore:Type google\\._upb\\._message\\.(MessageMapContainer|ScalarMapContainer) uses PyType_Spec.*:DeprecationWarning",
+    "ignore:Type google\\._upb\\._message.*:DeprecationWarning",
 ]
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "benchmark: performance benchmarks (requires pytest-benchmark)",
+    "slow: marks tests as slow",
     "tpu: marks tests that require TPU",
     "gpu: marks tests that require GPU",
     "integration: marks integration tests",
@@ -161,64 +134,25 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
-exclude = [
-    "tests/",
-    "docs/",
-    "scripts/",
-]
+exclude = ["tests/", "docs/", "scripts/"]
 
 [tool.ruff]
 target-version = "py310"
 line-length = 100
-select = [
-    "E",   # pycodestyle errors
-    "W",   # pycodestyle warnings
-    "F",   # pyflakes
-    "I",   # isort
-    "C4",  # flake8-comprehensions
-    "B",   # flake8-bugbear
-    "UP",  # pyupgrade
-]
-ignore = [
-    "E501",  # line too long (handled by black)
-    "B008",  # do not perform function calls in argument defaults
-    "C901",  # too complex
-]
+select = ["E", "W", "F", "I", "C4", "B", "UP"]
+ignore = ["E501", "B008", "C901"]
 
 [tool.ruff.isort]
-known-first-party = ["capibara"]
+known-first-party = ["capibara", "core", "training", "inference", "models"]
 
 [tool.black]
 line-length = 100
 target-version = ["py310"]
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.eggs
-  | \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
 
 [tool.coverage.run]
-# BACKLOG-006: include core/ and training/ in coverage. The old single-source
-# "capibara" left the routers, cot module and consensus package invisible to
-# the CI gate, so regressions in those areas never failed coverage.
-source = ["capibara", "core", "training"]
+source = ["capibara", "core", "training", "inference", "models", "evaluation"]
 branch = true
-omit = [
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/demo_*",
-    "*/_deprecated/*",
-]
+omit = ["*/tests/*", "*/__pycache__/*", "*/demo_*"]
 
 [tool.coverage.report]
 exclude_lines = [

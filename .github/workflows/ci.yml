@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install lint tools
+        run: pip install ruff
+
+      - name: Syntax errors and undefined names
+        run: ruff check . --select=E9,F63,F7,F82
+
+      - name: Compile all Python files
+        run: python -m compileall -q . -x '__pycache__|\.git|build|\.egg|venv'
+
+  unit:
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install numpy scipy einops tqdm pyyaml toml pydantic rich
+          pip install pytest pytest-cov pytest-asyncio
+          pip install fastapi uvicorn httpx
+
+      - name: Core model + config
+        run: |
+          pytest tests/unit/test_core_model.py \
+                 tests/unit/test_config.py \
+                 tests/unit/test_config_manager.py \
+                 -v
+
+      - name: Think-Anywhere
+        run: pytest tests/unit/test_think_anywhere.py -v
+
+      - name: Special tokens
+        run: pytest tests/unit/test_special_tokens.py -v
+
+      - name: Tokenizer
+        run: pytest tests/unit/test_tokenizer.py -v
+
+      - name: Backends + module gate
+        run: |
+          pytest tests/unit/test_backends.py \
+                 tests/unit/test_backends_utils.py \
+                 tests/unit/test_module_gate.py \
+                 tests/unit/test_module_registry.py \
+                 -v
+
+      - name: Inference layers
+        run: |
+          pytest tests/unit/test_layers_smoke.py \
+                 tests/unit/test_inference_attention_mask.py \
+                 -v
+
+      - name: Routers + CoT
+        run: |
+          pytest tests/unit/test_routers_bto.py \
+                 tests/unit/test_cot_module.py \
+                 -v
+
+      - name: Training data capture + quality filter
+        run: |
+          pytest tests/unit/test_data_capture.py \
+                 tests/unit/test_quality_filter.py \
+                 -v
+
+      - name: Factorization guardrails
+        run: pytest tests/unit/test_factorization.py -v
+
+      - name: Observability schema
+        run: pytest tests/unit/test_observability_schema.py -v
+
+      - name: Toon integration + metrics
+        run: |
+          pytest tests/unit/test_toon_integration.py \
+                 tests/unit/test_metrics.py \
+                 -v
+
+  coverage:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install numpy scipy einops tqdm pyyaml toml pydantic rich
+          pip install pytest pytest-cov pytest-asyncio
+          pip install fastapi uvicorn httpx
+
+      - name: Coverage gate — core/routers + core/cot (≥55%)
+        run: |
+          pytest \
+            tests/unit/test_routers_bto.py \
+            tests/unit/test_cot_module.py \
+            --cov=core/routers \
+            --cov=core/cot \
+            --cov-report=term-missing \
+            --cov-fail-under=55
+
+      - name: Coverage gate — core/backends (≥40%)
+        run: |
+          pytest \
+            tests/unit/test_backends_utils.py \
+            --cov=core/backends \
+            --cov-report=term-missing \
+            --cov-fail-under=40
+
+      - name: Coverage gate — think_anywhere (≥60%)
+        run: |
+          pytest \
+            tests/unit/test_think_anywhere.py \
+            --cov=core/think_anywhere \
+            --cov-report=term-missing \
+            --cov-fail-under=60
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install numpy scipy einops tqdm pyyaml toml pydantic rich
+          pip install pytest pytest-cov pytest-asyncio
+          pip install fastapi uvicorn httpx
+
+      - name: Engine integration (no mock params)
+        run: pytest tests/integration/test_engines_no_mock_params.py -v
+
+      - name: Training pipeline
+        run: pytest tests/integration/test_training_pipeline.py -v
+
+  docker-smoke:
+    runs-on: ubuntu-latest
+    needs: integration
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start API container
+        run: docker compose up -d --build
+
+      - name: API smoke test
+        run: bash scripts/smoke_mvp_api.sh
+
+      - name: API happy-path smoke test
+        run: bash scripts/smoke_mvp_api_happy.sh
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v
