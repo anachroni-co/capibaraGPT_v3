@@ -54,9 +54,17 @@ except ImportError:
         LARGE_1T = "1T"
     
     class TrainingConfigFactory:
+        _DEFAULTS = {
+            "300M": {"batch_size": 32,  "lr": 3e-4, "warmup_steps": 500,  "grad_clip": 1.0, "weight_decay": 0.1},
+            "3B":   {"batch_size": 16,  "lr": 2e-4, "warmup_steps": 1000, "grad_clip": 1.0, "weight_decay": 0.1},
+            "30B":  {"batch_size": 4,   "lr": 1e-4, "warmup_steps": 2000, "grad_clip": 1.0, "weight_decay": 0.1},
+            "1T":   {"batch_size": 1,   "lr": 5e-5, "warmup_steps": 5000, "grad_clip": 1.0, "weight_decay": 0.1},
+        }
+
         @staticmethod
         def get_config(scale):
-            return {}
+            key = scale.value if hasattr(scale, "value") else str(scale)
+            return dict(TrainingConfigFactory._DEFAULTS.get(key, TrainingConfigFactory._DEFAULTS["300M"]))
 
 logger = logging.getLogger(__name__)
 
@@ -423,8 +431,8 @@ class EnhancedRefiner(CapibaraRefiner):
                 with open(cache_path, 'r') as f:
                     data = json.load(f)
                     return data['refined_code']
-            except:
-                pass
+            except Exception as exc:
+                logger.warning("Could not load refinement cache from %s: %s", cache_path, exc)
         return None
     
     def _save_refinement_cache(self, cache_key: str, refined_code: str, iterations: int):

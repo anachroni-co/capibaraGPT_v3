@@ -95,7 +95,9 @@ class AdvancedMetaConsensusSystem(MetaConsensusSystem):
         self.quantized_engine = None
         self.federated_node = None
         self.consensus_cache = {}
-        
+        self._cache_hits = 0
+        self._cache_misses = 0
+
         logger.info(" Advanced Meta-Consensus System initialized")
     
     async def initialize(self):
@@ -225,13 +227,18 @@ class AdvancedMetaConsensusSystem(MetaConsensusSystem):
         
         # Check cache first
         cache_key = self._generate_cache_key(query, context)
-        if (self.advanced_config.enable_consensus_caching and 
-            cache_key in self.consensus_cache):
-            
+        if (self.advanced_config.enable_consensus_caching and
+                cache_key in self.consensus_cache):
+
             cached_result = self.consensus_cache[cache_key]
             if self._is_cache_valid(cached_result):
+                self._cache_hits += 1
                 logger.info(" Returning cached consensus result")
                 return cached_result
+            else:
+                self._cache_misses += 1
+        elif self.advanced_config.enable_consensus_caching:
+            self._cache_misses += 1
         
         # Get expert responses using base system
         base_result = await super()._execute_consensus_strategy(query, context)
@@ -442,9 +449,11 @@ class AdvancedMetaConsensusSystem(MetaConsensusSystem):
         return {**base_stats, 'advanced_features': advanced_stats}
     
     def _calculate_cache_hit_ratio(self) -> float:
-        """Calculate cache hit ratio."""
-        # Mock implementation
-        return 0.85  # 85% cache hit rate
+        """Calculate cache hit ratio from actual hit/miss counters."""
+        total = self._cache_hits + self._cache_misses
+        if total == 0:
+            return 0.0
+        return self._cache_hits / total
     
     async def cleanup(self):
         """Clean up resources."""

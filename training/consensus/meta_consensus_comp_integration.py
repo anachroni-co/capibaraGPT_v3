@@ -533,8 +533,8 @@ class MetaConsensusCompSystem:
             process = psutil.Process()
             self.status.memory_usage_mb = process.memory_info().rss / (1024 * 1024)
             self.status.cpu_usage_percent = process.cpu_percent()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("Could not read process resource usage: %s", exc)
         
         # Update cache metrics
         if self.cache_system:

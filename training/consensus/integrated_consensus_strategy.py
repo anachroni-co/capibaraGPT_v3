@@ -107,8 +107,8 @@ class IntegratedConsensusStrategy:
                     data = toml.load(cfg_path)
                     if isinstance(data, dict) and "hierarchical_reasoning" in data:
                         self.hr_cfg.update(data["hierarchical_reasoning"])  # type: ignore
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("Failed to load TOML config from %s: %s", cfg_path, exc)
 
     def _init_hierarchical_reasoning(self) -> None:
         self.hierarchical_reasoning = None

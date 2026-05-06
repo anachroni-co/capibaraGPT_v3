@@ -474,36 +474,75 @@ else:
     # Fallback implementations when Flax is not available
     logger.warning("Flax not available - using fallback quantized layer implementations")
     
+    import numpy as _np
+
     class QuantDense:
-        """Fallback quantized dense layer."""
-        
-        def __init__(self, features: int, **kwargs):
+        """NumPy INT8 fallback for quantized dense layer."""
+
+        def __init__(self, features: int, use_bias: bool = True, **kwargs):
             self.features = features
-            logger.warning("QuantDense fallback - quantization disabled")
-        
-        def __call__(self, inputs):
-            raise NotImplementedError("Flax required for quantized layers")
-    
+            self.use_bias = use_bias
+            self._kernel: Optional[_np.ndarray] = None
+            self._bias: Optional[_np.ndarray] = None
+
+        def init_weights(self, in_features: int, rng=None):
+            rng = rng or _np.random.default_rng(0)
+            scale = (2.0 / in_features) ** 0.5
+            w = rng.normal(0, scale, (in_features, self.features)).astype(_np.float32)
+            self._kernel = _np.clip(_np.round(w / scale * 127), -128, 127).astype(_np.int8)
+            self._scale = scale
+            self._bias = _np.zeros(self.features, dtype=_np.float32) if self.use_bias else None
+
+        def __call__(self, inputs: _np.ndarray) -> _np.ndarray:
+            if self._kernel is None:
+                self.init_weights(inputs.shape[-1])
+            w = self._kernel.astype(_np.float32) * self._scale
+            out = inputs @ w
+            if self._bias is not None:
+                out = out + self._bias
+            return out
+
     class QuantAttention:
-        """Fallback quantized attention layer."""
-        
+        """NumPy INT8 fallback for quantized multi-head attention."""
+
         def __init__(self, num_heads: int, **kwargs):
             self.num_heads = num_heads
-            logger.warning("QuantAttention fallback - quantization disabled")
-        
-        def __call__(self, inputs):
-            raise NotImplementedError("Flax required for quantized layers")
-    
+            self._qkv: Optional[QuantDense] = None
+            self._proj: Optional[QuantDense] = None
+
+        def __call__(self, inputs: _np.ndarray) -> _np.ndarray:
+            B, T, D = inputs.shape
+            if self._qkv is None:
+                self._qkv = QuantDense(3 * D)
+                self._qkv.init_weights(D)
+                self._proj = QuantDense(D)
+                self._proj.init_weights(D)
+
+            qkv = self._qkv(inputs).reshape(B, T, 3, self.num_heads, D // self.num_heads)
+            q, k, v = qkv[:, :, 0], qkv[:, :, 1], qkv[:, :, 2]
+            scale = (D // self.num_heads) ** -0.5
+            attn = _np.einsum("bthd,bshd->bhts", q, k) * scale
+            mask = _np.tril(_np.ones((T, T), dtype=_np.float32))
+            attn = attn * mask - 1e9 * (1 - mask)
+            attn = _np.exp(attn - attn.max(-1, keepdims=True))
+            attn = attn / (attn.sum(-1, keepdims=True) + 1e-6)
+            out = _np.einsum("bhts,bshd->bthd", attn, v).reshape(B, T, D)
+            return self._proj(out)
+
     class QuantEmbedding:
-        """Fallback quantized embedding layer."""
-        
+        """NumPy INT8 fallback for quantized embedding layer."""
+
         def __init__(self, num_embeddings: int, features: int, **kwargs):
             self.num_embeddings = num_embeddings
             self.features = features
-            logger.warning("QuantEmbedding fallback - quantization disabled")
-        
-        def __call__(self, inputs):
-            raise NotImplementedError("Flax required for quantized layers")
+            rng = _np.random.default_rng(0)
+            scale = (2.0 / features) ** 0.5
+            w = rng.normal(0, scale, (num_embeddings, features)).astype(_np.float32)
+            self._table = _np.clip(_np.round(w / scale * 127), -128, 127).astype(_np.int8)
+            self._scale = scale
+
+        def __call__(self, inputs: _np.ndarray) -> _np.ndarray:
+            return self._table[inputs].astype(_np.float32) * self._scale
 
 
 # Utility functions for layer quantization
