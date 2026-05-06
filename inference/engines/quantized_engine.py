@@ -393,31 +393,16 @@ class QuantizedInferenceEngine:
         if self.kv_cache:
             self.kv_cache.clear_cache()
         
-        for step in range(max_length):
-            # This is a simplified implementation
-            # Real implementation would use the quantized model layers
-            
-            # Simulate token generation
-            if len(current_tokens) > 0:
-                # Mock next token prediction
-                next_token = (current_tokens[-1] + 1) % 50000  # Dummy logic
-                generated_tokens.append(next_token)
-                current_tokens = np.append(current_tokens, next_token)
-            
-            # Simulate KV-cache updates
-            if self.kv_cache and step < 10:  # Limit for demo
-                # Mock K,V tensors
-                seq_len, num_heads, head_dim = 1, 32, 128
-                k_mock = np.random.randn(seq_len, num_heads, head_dim).astype(np.float16)
-                v_mock = np.random.randn(seq_len, num_heads, head_dim).astype(np.float16)
-                
-                self.kv_cache.add_kv_to_cache(0, k_mock, v_mock)  # Layer 0
-        
-        return {
-            'generated_tokens': generated_tokens,
-            'total_tokens': len(current_tokens),
-            'kv_cache_stats': self.kv_cache.get_stats() if self.kv_cache else {}
-        }
+        if self.base_engine:
+            logger.warning(
+                "Quantized model layers not yet implemented; delegating to base engine"
+            )
+            return self._fallback_inference(input_tokens, max_length, **kwargs)
+
+        raise RuntimeError(
+            "Quantized inference requires implemented model layers or a base_engine. "
+            "Pass base_engine= when constructing QuantizedInferenceEngine."
+        )
     
     def _fallback_inference(self, input_tokens: np.ndarray, 
                           max_length: int, **kwargs) -> Dict[str, Any]:

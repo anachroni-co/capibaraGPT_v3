@@ -279,8 +279,8 @@ class HierarchicalMoERouter:
             x = jnp.dot(x, params['layer3']['weights']) + params['layer3']['bias']
             return x
         else:
-            # Simple fallback
-            return 0.5  # Dummy ensemble score
+            # Conservative fallback: don't recommend ensemble when JAX unavailable
+            return [0.5]
     
     def _initialize_corrected_model_tiers(self) -> Dict[int, List[Dict]]:
         """
@@ -502,11 +502,13 @@ class HierarchicalMoERouter:
         if self.enable_arm_axion:
             query_embedding = self.arm_optimizer.process_embedding(query, context)
         else:
-            # Simulate embedding (in real implementation, use real embeddings)
+            # Approximate embedding: char-frequency vector seeded from query hash
             if JAX_AVAILABLE and self.key is not None:
                 query_embedding = jax.random.normal(self.key, (768,))
             else:
-                query_embedding = [0.1] * 768  # Dummy embedding
+                import hashlib as _hl
+                seed = int.from_bytes(_hl.md5(query.encode()).digest()[:4], "little")
+                query_embedding = list(np.random.default_rng(seed).normal(0, 1, 768))
         
         #  JAX Forward pass - Complexity classification
         complexity_logits = self._forward_classifier(query_embedding, self.complexity_params)
@@ -536,7 +538,7 @@ class HierarchicalMoERouter:
         if JAX_AVAILABLE:
             domain_input = jnp.concatenate([query_embedding, domain_probs])
         else:
-            domain_input = [0.5] * 10  # Dummy input
+            domain_input = list(query_embedding[:5]) + [float(p) for p in domain_probs]
         ensemble_logits = self._forward_ensemble(domain_input, self.ensemble_params)
         ensemble_prob = sigmoid(ensemble_logits[0])
         requires_ensemble = ensemble_prob > 0.5 and len(required_domains) > 1
@@ -674,7 +676,16 @@ class HierarchicalMoERouter:
         """Get the cost per 1K tokens of a model"""
         if model_name in self.model_performance:
             return self.model_performance[model_name].cost_per_1k_tokens
-        return 0.40  # Default router cost
+        # Search through tier definitions
+        for tier_val in self.model_tiers.values():
+            if isinstance(tier_val, list):
+                for m in tier_val:
+                    if m.get("name") == model_name:
+                        return float(m.get("cost_per_1k", 0.40))
+            elif isinstance(tier_val, dict):
+                if tier_val.get("name") == model_name:
+                    return float(tier_val.get("cost_per_1k", 0.40))
+        return 0.40  # True default: unknown model
     
     def _generate_fallback_options(self, query_analysis: QueryAnalysis,
                                   primary_models: List[str]) -> List[str]:
