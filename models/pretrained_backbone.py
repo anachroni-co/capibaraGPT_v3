@@ -460,7 +460,7 @@ def auto_backbone(gguf_path: Optional[str] = None,
         logger.info("Backend: %s", bb.name)
         return bb
     except FileNotFoundError:
-        pass
+        logger.debug("GGUF file not found: %s", gguf_path)
     except Exception as e:
         logger.debug("LlamaCpp unavailable: %s", e)
 

@@ -358,8 +358,8 @@ class FederatedConsensusNode:
         if hasattr(self, "endpoint"):
             try:
                 port = int(self.endpoint.split(":")[-1])
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not parse port from %r, using default %d: %s", self.endpoint, port, exc)
 
         self.http_site = web.TCPSite(self.http_runner, "0.0.0.0", port)
         await self.http_site.start()

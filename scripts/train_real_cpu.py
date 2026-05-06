@@ -250,8 +250,8 @@ def train(
             try:
                 chunk = build_corpus(p, [".py", ".md"])
                 chunks.append(chunk)
-            except RuntimeError:
-                pass  # empty dir — skip silently
+            except RuntimeError as exc:
+                logger.debug("Skipping %s: %s", d, exc)
 
     corpus = np.concatenate(chunks)
     logger.info("Total corpus: %d bytes (%.2f MB)", len(corpus), len(corpus) / 1e6)

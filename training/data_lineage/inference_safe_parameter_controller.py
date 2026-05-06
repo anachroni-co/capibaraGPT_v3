@@ -587,8 +587,8 @@ class InferenceSafeParameterController:
                             current_mean = float(current_val.mean()) if hasattr(current_val.mean(), '__float__') else 0
                             if abs(base_mean - current_mean) > 1e-6:
                                 modified_params += 1
-                except Exception:
-                    pass  # Skip comparison if it fails
+                except Exception as exc:
+                    logger.debug("Param comparison skipped for key: %s", exc)
         
         health_score = (total_params - len(param_issues)) / total_params if total_params > 0 else 0
         

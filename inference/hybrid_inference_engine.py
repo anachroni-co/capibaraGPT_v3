@@ -589,8 +589,8 @@ class HybridInferenceEngine:
                 devices = jax.devices()
                 if devices and devices[0].platform == 'tpu':
                     backends.append(InferenceBackend.TPU_V6E)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("TPU device query failed: %s", exc)
 
         # GPU CUDA
         if TORCH_AVAILABLE and torch.cuda.is_available():

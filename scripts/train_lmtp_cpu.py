@@ -276,8 +276,8 @@ def train(
         if p.exists():
             try:
                 chunks.append(build_corpus(p, [".py", ".md"]))
-            except RuntimeError:
-                pass
+            except RuntimeError as exc:
+                logger.debug("Skipping %s: %s", d, exc)
     corpus = np.concatenate(chunks)
     logger.info("Corpus: %d bytes (%.2f MB)", len(corpus), len(corpus) / 1e6)
 

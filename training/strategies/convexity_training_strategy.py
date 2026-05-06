@@ -311,7 +311,7 @@ class ConvexityTrainingStrategy:
                 import wandb
                 wandb.log(metrics, step=step)
             except ImportError:
-                pass
+                logger.debug("wandb not installed; skipping metric log at step %d", step)
     
     def _checkpoint_controller(self, step: int) -> None:
         """Save controller state for recovery."""

@@ -24,8 +24,8 @@ try:
     np = jnp
     JAX_AVAILABLE = True
     logger.debug("Using capibara.jax with optax")
-except ImportError:
-    pass
+except ImportError as exc:
+    logger.debug("JAX/optax not available, will use numpy fallback: %s", exc)
 
 # Fallback to numpy
 if not JAX_AVAILABLE:

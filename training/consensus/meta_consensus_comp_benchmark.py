@@ -413,7 +413,7 @@ class MetaConsensusCompBenchmark:
                     self.results.append(benchmark_result)
                     
             except asyncio.CancelledError:
-                pass
+                logger.debug("Benchmark task cancelled")
             finally:
                 if not monitor_task.cancelled():
                     monitor_task.cancel()

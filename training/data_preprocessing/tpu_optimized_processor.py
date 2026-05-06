@@ -418,8 +418,8 @@ class TPUOptimizedProcessor:
         if JAX_AVAILABLE:
             try:
                 return jax.process_index()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not get JAX process index: %s", exc)
         
         # Fallback to simple modulo
         return self.stats['total_processed'] % self.config.tpu_cores
@@ -441,11 +441,7 @@ class TPUOptimizedProcessor:
     def _clear_processing_cache(self):
         """Clear processing caches to free memory."""
         if JAX_AVAILABLE:
-            try:
-                # Clear JAX compilation cache
-                logger.debug("Clearing JAX compilation cache")
-            except Exception:
-                pass
+            logger.debug("Clearing JAX compilation cache")
         
         logger.debug("Processing cache cleared")
     
