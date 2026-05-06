@@ -1,0 +1,264 @@
+{
+  "audit_dirs": [
+    "layers",
+    "sub_models",
+    "capibara/sub_models"
+  ],
+  "entries": [
+    {
+      "classification": "alive",
+      "defined_symbols": [],
+      "dotted": "capibara.sub_models",
+      "external_importers": [
+        "core/adapters/language_processing_adapter.py",
+        "core/csa_router_integration.py",
+        "core/modular_model.py",
+        "core/observers/expert_activation_manager.py",
+        "core/router.py"
+      ],
+      "notes": [],
+      "path": "capibara/sub_models/__init__.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [],
+      "dotted": "layers",
+      "external_importers": [
+        "layers/attention_utils.py",
+        "layers/jax_compat.py",
+        "layers/self_attention.py",
+        "layers/sparsity/__init__.py",
+        "layers/sparsity/sparse_capibara.py",
+        "tests/benchmarks/test_e2e_latency.py",
+        "tests/unit/test_factorization.py",
+        "tests/unit/test_layers_smoke.py"
+      ],
+      "notes": [],
+      "path": "layers/__init__.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "split_heads",
+        "merge_heads"
+      ],
+      "dotted": "layers.attention_utils",
+      "external_importers": [
+        "tests/unit/test_factorization.py"
+      ],
+      "notes": [],
+      "path": "layers/attention_utils.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "LayerConfig",
+        "BaseLayer",
+        "main"
+      ],
+      "dotted": "layers.base",
+      "external_importers": [
+        "layers/self_attention.py"
+      ],
+      "notes": [],
+      "path": "layers/base.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [],
+      "dotted": "layers.jax_compat",
+      "external_importers": [
+        "layers/attention_utils.py",
+        "layers/self_attention.py",
+        "layers/sparsity/sparse_capibara.py",
+        "tests/benchmarks/test_e2e_latency.py",
+        "tests/unit/test_factorization.py",
+        "tests/unit/test_layers_smoke.py"
+      ],
+      "notes": [
+        "availability-shim"
+      ],
+      "path": "layers/jax_compat.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "SelfAttentionConfig",
+        "SelfAttention",
+        "TpuAttentionCache",
+        "main"
+      ],
+      "dotted": "layers.self_attention",
+      "external_importers": [
+        "tests/unit/test_layers_smoke.py"
+      ],
+      "notes": [],
+      "path": "layers/self_attention.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [],
+      "dotted": "layers.sparsity",
+      "external_importers": [
+        "tests/benchmarks/test_e2e_latency.py"
+      ],
+      "notes": [],
+      "path": "layers/sparsity/__init__.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "main"
+      ],
+      "dotted": "layers.sparsity.sparse_capibara",
+      "external_importers": [
+        "tests/benchmarks/test_e2e_latency.py"
+      ],
+      "notes": [],
+      "path": "layers/sparsity/sparse_capibara.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [],
+      "dotted": "sub_models",
+      "external_importers": [
+        "sub_models/hybrid/__init__.py",
+        "sub_models/hybrid/hybrid_attention_module.py",
+        "tests/unit/test_submodels_cpu_ready.py",
+        "tests/unit/test_submodels_import.py"
+      ],
+      "notes": [],
+      "path": "sub_models/__init__.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [],
+      "dotted": "sub_models._quarantine",
+      "external_importers": [
+        "sub_models/hybrid/hybrid_attention_module.py",
+        "tests/unit/test_submodels_cpu_ready.py"
+      ],
+      "notes": [],
+      "path": "sub_models/_quarantine/__init__.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "JAX_AVAILABLE",
+        "FLAX_AVAILABLE",
+        "MambaConfig",
+        "MambaModule"
+      ],
+      "dotted": "sub_models._quarantine.mamba_module",
+      "external_importers": [
+        "sub_models/hybrid/hybrid_attention_module.py",
+        "tests/unit/test_submodels_cpu_ready.py"
+      ],
+      "notes": [
+        "availability-shim",
+        "broken:unsqueeze"
+      ],
+      "path": "sub_models/_quarantine/mamba_module.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "CSATaskType",
+        "Hypothesis",
+        "WorldState",
+        "CFResult",
+        "CSAExpertConfig",
+        "sigmoid",
+        "safe_log",
+        "cosine_similarity",
+        "enhanced_tokenize",
+        "EnhancedCSAGenerator",
+        "KnowledgeBaseRetriever",
+        "EnhancedWorldModel",
+        "EnhancedCSAScorer",
+        "CSAExpert",
+        "main"
+      ],
+      "dotted": "sub_models.csa_expert",
+      "external_importers": [
+        "tests/unit/test_submodels_cpu_ready.py"
+      ],
+      "notes": [
+        "availability-shim"
+      ],
+      "path": "sub_models/csa_expert.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "DeepDialogConfig"
+      ],
+      "dotted": "sub_models.deep_dialog",
+      "external_importers": [
+        "tests/unit/test_submodels_cpu_ready.py"
+      ],
+      "notes": [
+        "availability-shim"
+      ],
+      "path": "sub_models/deep_dialog.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [],
+      "dotted": "sub_models.hybrid",
+      "external_importers": [
+        "tests/unit/test_submodels_cpu_ready.py"
+      ],
+      "notes": [],
+      "path": "sub_models/hybrid/__init__.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "JAX_AVAILABLE",
+        "FLAX_AVAILABLE",
+        "HybridConfig",
+        "TransformerModule",
+        "HybridAttentionModule"
+      ],
+      "dotted": "sub_models.hybrid.hybrid_attention_module",
+      "external_importers": [
+        "tests/unit/test_submodels_cpu_ready.py"
+      ],
+      "notes": [
+        "availability-shim"
+      ],
+      "path": "sub_models/hybrid/hybrid_attention_module.py"
+    },
+    {
+      "classification": "referenced",
+      "defined_symbols": [
+        "JAX_AVAILABLE",
+        "FLAX_AVAILABLE",
+        "ReasoningType",
+        "ReasoningComplexity",
+        "ReasoningConfig",
+        "ReasoningEnhancementExpert",
+        "create_reasoning_expert",
+        "main"
+      ],
+      "dotted": "sub_models.reasoning_enhancement",
+      "external_importers": [
+        "tests/unit/test_submodels_cpu_ready.py"
+      ],
+      "notes": [
+        "availability-shim"
+      ],
+      "path": "sub_models/reasoning_enhancement.py"
+    }
+  ],
+  "generated_by": "tools/audit/inventory_layers_submodels.py",
+  "productive_dirs": [
+    "core",
+    "scripts",
+    "training"
+  ],
+  "test_dirs": [
+    "tests"
+  ]
+}

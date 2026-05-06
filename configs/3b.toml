@@ -1,0 +1,93 @@
+# =============================================================================
+#  CapibaraGPT recipe :: 3B (Mixtral-style MoE, decoder-only)
+# =============================================================================
+#  ~2.93B active params  |  ~5.43B total params
+#
+#  Architecture rationale:
+#   - Same 4-expert top-2 family as 1b.toml (symmetric compute profile).
+#   - GQA 4:1 (32 query heads / 8 KV heads) - more aggressive KV reduction
+#     because 3B inference KV-cache dominates memory.
+#   - 36 layers x 2048 d_model ~= sweet spot for ~3B active / ~5B total.
+#
+#  Hardware target:
+#   - Multi-host TPU v4-32 or v5e-32 minimum.
+#   - 16x H100-80GB single node also feasible with FSDP + grad ckpt + bf16.
+#
+#  Tokens-per-step at default batch_size_global=1024 + seq_len=4096:
+#     1024 * 4096 = 4,194,304 tokens/step (~4.2M)
+#   At 200k steps that is ~840B tokens.
+# -----------------------------------------------------------------------------
+
+[model]
+name              = "capibara-moe-3b"
+vocab_size        = 32000
+max_seq_len       = 4096
+
+# trunk
+d_model           = 2048
+n_layers          = 36
+n_heads           = 32
+n_kv_heads        = 8              # GQA 4:1
+head_dim          = 64             # 32 * 64 = 2048
+ff_dim            = 5632
+
+# MoE
+n_experts         = 4
+top_k             = 2
+router_jitter     = 0.0
+load_balance_weight = 0.01
+
+# attention/positional
+rope_theta        = 500000.0
+attn_dropout      = 0.0
+ff_dropout        = 0.0
+
+# numerics
+rms_norm_eps      = 1.0e-6
+tie_word_embeddings = true
+dtype             = "bfloat16"
+param_dtype       = "float32"
+
+
+[training]
+seed              = 42
+seq_len           = 4096
+batch_size_global = 1024
+grad_accum_steps  = 2              # bigger model -> more accum to reach 4M tokens
+total_steps       = 200000
+warmup_steps      = 4000
+lr_peak           = 1.5e-4         # half of 1B; 3B is harder to stabilize
+lr_min_ratio      = 0.1
+weight_decay      = 0.1
+beta1             = 0.9
+beta2             = 0.95
+epsilon           = 1.0e-8
+grad_clip         = 1.0
+label_smoothing   = 0.0
+grad_ckpt_ratio   = 1.0
+
+[training.schedule]
+type              = "cosine"
+init_value        = 0.0
+end_value         = 1.5e-5         # = lr_peak * lr_min_ratio
+
+
+[checkpoint]
+out_dir           = "checkpoints/capibara-moe-3b"
+keep_last         = 3
+save_every        = 1000
+
+
+[logging]
+wandb_project     = "capibara-moe"
+wandb_run_name    = "capibara-moe-3b"
+log_every         = 50
+eval_every        = 1000
+eval_seq_count    = 256
+
+
+[data]
+train_split       = "train"
+val_split         = "validation"
+streaming         = true
+shuffle_buffer    = 65536

@@ -1,0 +1,97 @@
+# =============================================================================
+#  CapibaraGPT recipe :: 1B (Mixtral-style MoE, decoder-only)
+# =============================================================================
+#  ~1.10B active params  |  ~2.01B total params
+#
+#  Architecture rationale:
+#   - 4 experts top-2 (Mixtral-style) gives a 2x active/total ratio.
+#   - GQA 3:1 (24 query heads / 8 KV heads) cuts KV-cache by 3x for inference.
+#   - head_dim = 64 keeps each attention shard cheap on TPU/A100.
+#   - SwiGLU ff_dim = 4096 ~= 8/3 * d_model rounded up to a power of 2.
+#
+#  Hardware target:
+#   - Single host: 8x A100-80GB or 8x H100-80GB at bf16 with grad ckpt.
+#   - TPU v4-8 minimum, v4-16 preferred. v6e-8 also fits.
+#
+#  Tokens-per-step at default batch_size_global=1024 + seq_len=4096:
+#     1024 * 4096 = 4,194,304 tokens/step (~4.2M)
+#   At 100k steps that is ~420B tokens (above Chinchilla optimum for 1B; MoE
+#   benefits from over-training).
+# -----------------------------------------------------------------------------
+
+[model]
+name              = "capibara-moe-1b"
+vocab_size        = 32000          # SentencePiece / Llama-3 tokenizer family
+max_seq_len       = 4096
+
+# trunk
+d_model           = 1536
+n_layers          = 24
+n_heads           = 24
+n_kv_heads        = 8              # GQA 3:1
+head_dim          = 64             # 24 * 64 = 1536
+ff_dim            = 4096
+
+# MoE
+n_experts         = 4
+top_k             = 2
+router_jitter     = 0.0            # set 0.01 for noisy training if MoE collapses
+load_balance_weight = 0.01
+
+# attention/positional
+rope_theta        = 500000.0
+attn_dropout      = 0.0
+ff_dropout        = 0.0
+
+# numerics
+rms_norm_eps      = 1.0e-6
+tie_word_embeddings = true
+dtype             = "bfloat16"
+param_dtype       = "float32"
+
+
+[training]
+seed              = 42
+seq_len           = 4096
+batch_size_global = 1024           # sequences per optimizer step (across all hosts)
+grad_accum_steps  = 1              # raise if memory-bound
+total_steps       = 100000
+warmup_steps      = 2000
+lr_peak           = 3.0e-4
+lr_min_ratio      = 0.1            # cosine bottoms at 0.1 * lr_peak
+weight_decay      = 0.1
+beta1             = 0.9
+beta2             = 0.95
+epsilon           = 1.0e-8
+grad_clip         = 1.0
+# label smoothing not used by default; set 0.1 if needed
+label_smoothing   = 0.0
+# fraction of layers to apply gradient checkpointing (0.0 = none, 1.0 = all)
+grad_ckpt_ratio   = 1.0
+
+[training.schedule]
+type              = "cosine"       # warmup_cosine_decay_schedule
+init_value        = 0.0
+end_value         = 3.0e-5         # = lr_peak * lr_min_ratio
+
+
+[checkpoint]
+out_dir           = "checkpoints/capibara-moe-1b"
+keep_last         = 3              # async Orbax keeps last N steps
+save_every        = 1000
+
+
+[logging]
+wandb_project     = "capibara-moe"
+wandb_run_name    = "capibara-moe-1b"
+log_every         = 50
+eval_every        = 1000
+eval_seq_count    = 256
+
+
+[data]
+# placeholder; BACKLOG-010 will wire the real tokenized loader
+train_split       = "train"
+val_split         = "validation"
+streaming         = true
+shuffle_buffer    = 65536
