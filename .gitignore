@@ -68,3 +68,5 @@ ui/
 .coverage
 htmlcov/
 .coverage.*
+*.gguf
+models/*.gguf

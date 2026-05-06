@@ -1,0 +1,28 @@
+{
+  "backbone": "LlamaCpp(capibara_trained.gguf)",
+  "architecture": "GPT-2 / 6L 6H d384",
+  "num_params": 10884096,
+  "training": {
+    "steps": 2000,
+    "corpus_bytes": 11122382,
+    "baseline_loss": 6.296,
+    "final_loss": 3.075,
+    "improvement_pct": 51.2,
+    "tok_per_s": 1344,
+    "note": "Only wte+wpe updated — attention/FFN weights random. Full backprop needed for pass@k > 0."
+  },
+  "export": {
+    "format": "GGUF v3",
+    "size_mb": 44.2,
+    "n_tensors": 77,
+    "vocab": 257,
+    "ctx": 512
+  },
+  "eval": {
+    "n_tasks": 8,
+    "pass_at_k_pct": 0.0,
+    "exact_match_pct": 0.0,
+    "latency_ms_per_task": 570,
+    "elapsed_s": 4.6
+  }
+}
