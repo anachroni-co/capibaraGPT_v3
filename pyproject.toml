@@ -208,11 +208,16 @@ exclude = '''
 '''
 
 [tool.coverage.run]
-source = ["capibara"]
+# BACKLOG-006: include core/ and training/ in coverage. The old single-source
+# "capibara" left the routers, cot module and consensus package invisible to
+# the CI gate, so regressions in those areas never failed coverage.
+source = ["capibara", "core", "training"]
 branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
+    "*/demo_*",
+    "*/_deprecated/*",
 ]
 
 [tool.coverage.report]

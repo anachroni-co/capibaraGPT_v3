@@ -302,16 +302,15 @@ class InferenceSafeParameterController:
         dataset_params = self.dataset_lineage.get(dataset_id, [])
         
         if not dataset_params:
-            # Create mock lineage for testing
-            all_params = list(self.base_parameters.keys())
-            dataset_params = all_params[:len(all_params)//3]  # Assign 1/3 of parameters
-            self.dataset_lineage[dataset_id] = dataset_params
-            
-            # Update reverse mapping
-            for param in dataset_params:
-                if param not in self.parameter_lineage:
-                    self.parameter_lineage[param] = []
-                self.parameter_lineage[param].append(dataset_id)
+            # BACKLOG-005: do NOT fabricate 1/3 of parameters as a fake lineage.
+            # Returning an empty parameter list makes the caller get an empty mask
+            # so downstream code cannot confuse 'unknown dataset' with 'real lineage'.
+            logger.warning(
+                "No lineage registered for dataset %s - returning empty mask "
+                "(BACKLOG-005: no mock fallback).",
+                dataset_id,
+            )
+            dataset_params = []
         
         # Create safe scale factors
         scale_factors = {}

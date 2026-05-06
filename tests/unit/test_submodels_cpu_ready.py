@@ -13,7 +13,7 @@ import numpy as np
 
 
 def test_mamba_cpu_ready():
-    from sub_models.mamba.mamba_module import MambaModule
+    from sub_models._quarantine.mamba_module import MambaModule
 
     x = np.ones((1, 4, 8), dtype=np.float32)
     module = MambaModule({"hidden_size": 8, "d_state": 4, "d_conv": 2, "expand_factor": 2})

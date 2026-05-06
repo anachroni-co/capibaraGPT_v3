@@ -1,11 +1,130 @@
 """
-Unified Trainer for CapibaraGPT v3
+Unified Trainer for CapibaraGPT v3 (consensus-distillation oriented).
 
-This module merges all training functionality into a unified system
-that includes auto-detection of hardware, automatic consensus distilling for 3B+ models,
-and tpu v4-32 optimizations.
+==============================================================================
+  STATUS: NOT THE CANONICAL TRAINER. DO NOT IMPORT FROM PRODUCTION CODE YET.
+==============================================================================
 
-Merges: trainer.py + train_unified.py + train_TPU.py + parts of train_300M_scale.py
+This file was preserved from the v2 generation of CapibaraGPT and is kept
+on disk as the seed for a future *consensus-distillation* training path
+(many-teachers + critic + progressive distillation). It is NOT what you
+want for a regular pretraining run of a 1B / 3B Mixtral-style model.
+
+For canonical pretraining of `core.model_factory.CapibaraMoEModel`, use
+`core/trainer/` (introduced in BACKLOG-009 - see BACKLOG.md). That module
+loads `configs/1b.toml` / `configs/3b.toml`, sums the MoE load-balance
+auxiliary loss, applies warmup-cosine + grad-clip + Orbax checkpointing,
+and ships a `scripts/train.py` launcher.
+
+
+Why this file is currently dead code
+------------------------------------
+
+1. THREE IMPORTS POINT TO MOVED MODULES (lines below the docstring):
+
+       from .training_config       import ...     # NOT in training/
+       from .consensus_strategies  import ...     # NOT in training/
+       from .tpu_optimizations     import ...     # NOT in training/
+
+   The symbols exist, but the modules were reorganised after this file
+   was last touched. Reviving the file requires rewriting the imports to:
+
+       from config.training_config import (
+           ModelScale, TrainingConfigFactory, get_config_for_scale,
+       )
+       from training.consensus.unified_consensus import (
+           DistillationManager,
+           AdvancedVotingSystem,
+           should_use_consensus_for_scale,
+           create_consensus_system_for_scale,
+       )
+       from training.optimizations.tpu_optimizations import (
+           setup_tpu_environment, TPUOptimizer, verify_tpu_setup,
+       )
+
+2. FORWARD-PASS SIGNATURE INCOMPATIBLE WITH `CapibaraMoEModel`.
+
+   - This file calls `model.init(rng, dummy_input, training=True)` and
+     `state.apply_fn({'params': params}, batch['inputs'], training=True)`.
+   - `core.model_factory.CapibaraMoEModel.__call__` accepts
+     `(input_ids, deterministic=True)`, NOT `training=`. It also requires
+     `rngs={"router": <key>, "dropout": <key>}` because the Mixtral-style
+     top-k router consumes a PRNG key per call when `router_jitter > 0`.
+
+3. LOSS IGNORES THE MoE LOAD-BALANCE TERM.
+
+   `CapibaraMoEModel.__call__` returns
+       ModelOutput(logits=(B,T,V), aux_loss=scalar)
+   This trainer's `loss_fn(outputs, targets)` does
+       optax.softmax_cross_entropy_with_integer_labels(outputs, targets).mean()
+   directly on `outputs`, which would fail (ModelOutput is not a tensor)
+   AND, even if it were patched to use `outputs.logits`, it would still
+   drop `aux_loss`. Without
+       total_loss = ce_loss + cfg.load_balance_weight * outputs.aux_loss
+   the experts collapse to a single dispatch path within the first epoch
+   and the MoE FFN stops learning. This is the most important fix.
+
+4. HARDCODED HYPER-PARAMETERS / SHAPES.
+
+   - `optimizer = optax.adamw(learning_rate=3e-4)` ignores the
+     `[training]` section of the TOML configs (warmup, cosine schedule,
+     weight_decay, beta1/beta2, grad_clip).
+   - `dummy_input = jnp.ones((1, 2048), dtype=jnp.int32)` is hardcoded;
+     1b.toml and 3b.toml both use seq_len=4096.
+   - `jax.grad(step_fn)` then re-calls `step_fn(state.params)` to get a
+     loss for logging; should be `jax.value_and_grad(step_fn)` to avoid
+     a second forward pass.
+
+5. CHECKPOINTING IS A STUB.
+
+   The "_initialize_training_state" method has a placeholder comment
+   "Restoration logic would go here". There is no Orbax integration,
+   no async checkpoint, no resume-from-step. The new trainer in
+   `core/trainer/` covers this end-to-end.
+
+6. WANDB IS HARD-WIRED.
+
+   `wandb.init(...)` runs unconditionally when `use_wandb=True`. Smoke
+   tests in CI cannot afford an external service call; the new trainer
+   makes wandb fully optional behind an `--enable-wandb` flag.
+
+7. CONSENSUS-DISTILLATION PATH IS COUPLED IN BY DEFAULT.
+
+   `_consensus_train_step` builds teacher signals from the student's own
+   logits, which is a placeholder, not a real teacher ensemble. The
+   realistic plan is to load N independent teacher checkpoints and run
+   them in parallel - that infrastructure does not exist here yet.
+
+
+When this file becomes useful
+-----------------------------
+
+The reason we keep it on disk (instead of moving it to `_deprecated/`) is
+that the consensus-distillation track is on the roadmap. Once the basic
+pretraining trainer is producing 1B / 3B checkpoints, the natural next
+step is:
+
+  (a) Train M independent students with `core/trainer/` to get teachers.
+  (b) Reuse the scaffold here -- `UnifiedTrainer.__init__`, the metrics
+      dataclass, the consensus init in `_initialize_components`, and the
+      structure of `_consensus_train_step` -- to wire those teachers
+      into a distillation run, replacing the placeholder
+      student-as-teacher block with real teacher forward passes.
+  (c) Drop the wandb hard-wiring and align the optimizer with the
+      `[training]` section of the TOML, exactly as `core/trainer/` does.
+
+By that point, items 1-4 of the "Why this file is dead code" section
+will need to be addressed regardless. The integration plan is therefore:
+
+  Phase 1 (BACKLOG-009, separate file): build `core/trainer/`. Done first.
+  Phase 2 (future): port `_consensus_train_step` and the metrics scaffold
+                    into `core/trainer/distillation.py`, drop this file.
+
+Until Phase 2, this module stays here as documentation-of-intent. Do
+not import it; the relative imports below will raise ModuleNotFoundError.
+
+History (preserved for grep): merges of trainer.py + train_unified.py +
+train_TPU.py + parts of train_300M_scale.py from CapibaraGPT v2.
 """
 
 import os
@@ -24,13 +143,22 @@ from flax.training import train_state
 import jax
 from jax import numpy as jnp
 
+# ----------------------------------------------------------------------------
+# INTEGRATION-TODO (consensus-distillation track) - see module docstring above.
+#
+# These three relative imports are broken by design: the modules they point to
+# live elsewhere now. Importing this file will raise ModuleNotFoundError. When
+# you wire this trainer back in, replace them with the absolute paths shown
+# in item 1 of the "Why this file is currently dead code" section above.
+# ----------------------------------------------------------------------------
+
 # Import optimized modules
 from .training_config import ModelScale, TrainingConfigFactory, get_config_for_scale
 from .consensus_strategies import (
     DistillationManager,
     AdvancedVotingSystem,
     should_use_consensus_for_scale,
-    create_consensus_system_for_scale, 
+    create_consensus_system_for_scale,
 )
 from .tpu_optimizations import setup_tpu_environment, TPUOptimizer, verify_tpu_setup
 

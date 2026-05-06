@@ -87,7 +87,7 @@ except ImportError:
 
 # Import interfaces and modules
 from interfaces.imodules import IModule
-from sub_models.mamba.mamba_module import MambaModule, MambaConfig
+from sub_models._quarantine.mamba_module import MambaModule, MambaConfig
 
 logger = logging.getLogger(__name__)
 

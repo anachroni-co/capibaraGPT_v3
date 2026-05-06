@@ -805,8 +805,16 @@ class MetaConsensusSystem:
         context: QueryContext,
         strategy_config: Dict[str, Any]
     ) -> ConsensusResult:
-        """Execute hybrid expert routing."""
-        
+        """Execute hybrid expert routing.
+
+        The hybrid router selects experts but does not itself run inference.
+        Real responses are obtained by delegating to the enhanced HF consensus
+        strategy; if no executor is configured we return an explicit
+        no-executor result instead of fabricating a synthetic response.
+        (ISSUE-002)
+        """
+
+        route_start = time.time()
         routing_decision = await self.hybrid_router.route_hybrid_query(
             query=query,
             context=None,
@@ -816,61 +824,168 @@ class MetaConsensusSystem:
             quality_threshold=strategy_config["quality_threshold"],
             latency_threshold_ms=strategy_config["latency_limit_ms"]
         )
-        
-        # Mock consensus generation based on routing decision
-        mock_response = f"Based on the analysis from {len(routing_decision['selected_models'])} expert models, here's the consensus response to your query."
-        
+        routing_ms = (time.time() - route_start) * 1000.0
+
+        selected_models = routing_decision.get("selected_models", []) or []
+        expected_quality = routing_decision.get("expected_quality", 0.0)
+        estimated_cost = routing_decision.get("estimated_cost", 0.0)
+
+        # If an executor is available, delegate to it for real expert answers.
+        if self.enhanced_consensus is not None:
+            quality_preference = (
+                "quality_first"
+                if strategy_config["mode"] == ConsensusMode.QUALITY_FIRST
+                else "balanced"
+            )
+            hf_result = await self.enhanced_consensus.get_enhanced_consensus_response(
+                prompt=query,
+                domain_hint=context.domain_hint,
+                quality_preference=quality_preference,
+                max_experts=strategy_config["max_experts"],
+            )
+
+            response_text = hf_result["consensus_response"]
+            exec_latency_ms = hf_result.get("response_time_ms", 0.0)
+            total_cost = hf_result.get("cost_estimate", estimated_cost)
+            participating = hf_result.get("selected_models") or selected_models
+            expert_responses = hf_result.get("all_responses", []) or []
+
+            return ConsensusResult(
+                query_id=context.query_id,
+                response=response_text,
+                confidence=hf_result.get("confidence", 0.0),
+                quality_score=hf_result.get("quality_estimate", expected_quality),
+                participating_experts=participating,
+                expert_responses=expert_responses,
+                routing_decision=routing_decision,
+                consensus_method="hybrid_routing+enhanced_executor",
+                response_time_ms=routing_ms + float(exec_latency_ms),
+                total_cost=float(total_cost),
+                tokens_generated=len(response_text.split()),
+                consensus_mode=strategy_config["mode"],
+            )
+
+        # No executor: surface a truthful, low-confidence diagnostic result.
+        diag_response = (
+            "No expert executor is configured for hybrid routing. "
+            f"Router selected {len(selected_models)} model(s): "
+            f"{', '.join(selected_models) if selected_models else 'none'}. "
+            "Configure enhanced_consensus (HF serverless) or a local inference "
+            "backend to obtain a real response."
+        )
         return ConsensusResult(
             query_id=context.query_id,
-            response=mock_response,
-            confidence=0.85,
-            quality_score=routing_decision["expected_quality"],
-            participating_experts=routing_decision["selected_models"],
+            response=diag_response,
+            confidence=0.0,
+            quality_score=float(expected_quality),
+            participating_experts=selected_models,
             expert_responses=[],
             routing_decision=routing_decision,
-            consensus_method="hybrid_routing",
-            response_time_ms=routing_decision.get("estimated_latency_ms", 1000),
-            total_cost=routing_decision["estimated_cost"],
-            tokens_generated=len(mock_response.split()),
-            consensus_mode=strategy_config["mode"]
+            consensus_method="hybrid_routing_no_executor",
+            response_time_ms=routing_ms,
+            total_cost=float(estimated_cost),
+            tokens_generated=0,
+            consensus_mode=strategy_config["mode"],
         )
-    
+
     async def _execute_unified_consensus(
         self,
         query: str,
         context: QueryContext,
         strategy_config: Dict[str, Any]
     ) -> ConsensusResult:
-        """Execute unified consensus strategy (fallback)."""
-        
-        # Mock metrics for unified consensus
-        mock_metrics = {
-            "loss": 0.5,
-            "accuracy": 0.85,
-            "perplexity": 2.1
+        """Execute unified consensus strategy (fallback).
+
+        ISSUE-002: we no longer feed ``unified_consensus.update`` with
+        hard-coded ``mock_metrics`` nor return a hard-coded response. We
+        derive metrics from the live system state and reuse the most recent
+        real consensus result. If none exists we return an explicit
+        low-confidence result instead of fabricating one.
+        """
+
+        start = time.time()
+
+        recent_qualities = [
+            r.quality_score for r in self.query_history[-20:] if r.quality_score > 0.0
+        ]
+        recent_costs = [
+            r.total_cost for r in self.query_history[-20:] if r.total_cost > 0.0
+        ]
+        recent_confidences = [
+            r.confidence for r in self.query_history[-20:] if r.confidence > 0.0
+        ]
+
+        live_metrics = {
+            "loss": max(
+                0.0,
+                1.0 - (float(np.mean(recent_confidences)) if recent_confidences else 0.0),
+            ),
+            "accuracy": float(np.mean(recent_confidences)) if recent_confidences else 0.0,
+            "avg_quality": float(np.mean(recent_qualities)) if recent_qualities else 0.0,
+            "avg_cost": float(np.mean(recent_costs)) if recent_costs else 0.0,
+            "query_count": len(self.query_history),
         }
-        
-        unified_result = self.unified_consensus.update(
-            params={},
-            metrics=mock_metrics,
-            global_step=1000
+
+        try:
+            unified_result = self.unified_consensus.update(
+                params={},
+                metrics=live_metrics,
+                global_step=self.metrics.total_queries,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning(f"unified_consensus.update failed: {exc}")
+            unified_result = {
+                "consensus_score": 0.0,
+                "error": str(exc),
+                "metrics": live_metrics,
+            }
+
+        last_real = next(
+            (
+                r for r in reversed(self.query_history)
+                if r.confidence > 0.0
+                and r.consensus_method not in {
+                    "unified_no_history",
+                    "hybrid_routing_no_executor",
+                    "error_fallback",
+                }
+            ),
+            None,
         )
-        
-        mock_response = "This is a fallback response from the unified consensus strategy."
-        
+
+        if last_real is not None:
+            response_text = last_real.response
+            confidence = float(
+                unified_result.get("consensus_score", last_real.confidence)
+            )
+            quality_score = last_real.quality_score
+            participating = ["unified_consensus", *last_real.participating_experts]
+            method = "unified_consensus_reuse_last"
+        else:
+            response_text = (
+                "No prior consensus result is available to back the unified "
+                "fallback strategy. Run at least one successful query first."
+            )
+            confidence = 0.0
+            quality_score = 0.0
+            participating = ["unified_consensus"]
+            method = "unified_no_history"
+
+        elapsed_ms = (time.time() - start) * 1000.0
+
         return ConsensusResult(
             query_id=context.query_id,
-            response=mock_response,
-            confidence=unified_result["consensus_score"],
-            quality_score=8.0,
-            participating_experts=["unified_consensus"],
+            response=response_text,
+            confidence=confidence,
+            quality_score=quality_score,
+            participating_experts=participating,
             expert_responses=[],
             routing_decision=unified_result,
-            consensus_method="unified_consensus",
-            response_time_ms=500,
-            total_cost=0.0,
-            tokens_generated=len(mock_response.split()),
-            consensus_mode=strategy_config["mode"]
+            consensus_method=method,
+            response_time_ms=elapsed_ms,
+            total_cost=live_metrics["avg_cost"],
+            tokens_generated=len(response_text.split()),
+            consensus_mode=strategy_config["mode"],
         )
     
     async def _post_process_result(

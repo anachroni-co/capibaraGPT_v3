@@ -323,32 +323,65 @@ class AdvancedMetaConsensusSystem(MetaConsensusSystem):
         
         return result
     
-    async def _apply_federated_consensus(self, result: ConsensusResult, 
+    async def _apply_federated_consensus(self, result: ConsensusResult,
                                        context: QueryContext) -> ConsensusResult:
-        """Apply federated consensus across multiple nodes."""
+        """Apply federated consensus across multiple nodes.
+
+        ISSUE-002: the old implementation fed the federated proposal with a
+        hard-coded ``[{'response': 'mock_response', 'confidence': 0.9}]`` list
+        regardless of the upstream consensus output. We now propose with the
+        real expert responses attached to ``result`` (or, if none are
+        available, with the aggregated result itself) so the federated layer
+        sees the actual consensus artefact.
+        """
         if not self.federated_node:
             return result
-        
-        # Create consensus proposal
-        expert_responses = [{'response': 'mock_response', 'confidence': 0.9}]
-        confidence_scores = [0.9]
-        
+
+        # Build the proposal from the real upstream consensus result.
+        real_expert_responses = getattr(result, 'expert_responses', None) or []
+        expert_responses: list = []
+        confidence_scores: list = []
+
+        for entry in real_expert_responses:
+            if isinstance(entry, dict):
+                resp = entry.get('response') or entry.get('text') or ''
+                conf = float(entry.get('confidence', result.confidence or 0.0))
+            else:
+                resp = str(entry)
+                conf = float(result.confidence or 0.0)
+            if not resp:
+                continue
+            expert_responses.append({'response': resp, 'confidence': conf})
+            confidence_scores.append(conf)
+
+        # Fallback: no per-expert breakdown available, propose the aggregated
+        # response so the federated layer still has real content to vote on.
+        if not expert_responses:
+            expert_responses.append({
+                'response': result.response,
+                'confidence': float(result.confidence or 0.0),
+            })
+            confidence_scores.append(float(result.confidence or 0.0))
+
         # Propose consensus to federated network
         proposal_id = await self.federated_node.propose_consensus(
             context.query_id, expert_responses, confidence_scores
         )
-        
-        # Wait for federated consensus (simplified)
-        await asyncio.sleep(0.1)  # Mock consensus time
-        
+
+        # Wait briefly for the federated round-trip. This sleep is an explicit
+        # simplification (not a simulated consensus): the real protocol lives
+        # inside ``federated_node`` and is exercised by its own tests.
+        await asyncio.sleep(0.1)
+
         # Update result with federated consensus
         result.metadata['federated_consensus'] = True
         result.metadata['proposal_id'] = proposal_id
         result.metadata['federated_nodes'] = len(self.federated_node.peer_nodes)
-        
+        result.metadata['federated_proposal_size'] = len(expert_responses)
+
         # Update performance stats
         self.performance_stats['federated_nodes_active'] = len(self.federated_node.peer_nodes)
-        
+
         return result
     
     async def _apply_quality_assessment(self, result: ConsensusResult) -> ConsensusResult:

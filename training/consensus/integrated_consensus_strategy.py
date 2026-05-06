@@ -568,7 +568,7 @@ class IntegratedConsensusStrategy:
         self._pipeline_cache[model_id] = pipe
         return pipe
 
-def _apply_integrated_consensus_algorithm(
+    def _apply_integrated_consensus_algorithm(
         self, 
         expert_responses: List[Dict[str, Any]], 
         original_prompt: str

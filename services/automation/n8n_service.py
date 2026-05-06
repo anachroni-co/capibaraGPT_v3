@@ -570,39 +570,119 @@ class CapibaraN8nAutomationService:
         input_data: Dict[str, Any],
         session_id: Optional[str]
     ) -> ExecutionResult:
-        """Execute workflow using standard n8n API."""
-        try:
-            # This would execute via n8n API
-            # For now, simulate execution
-            
-            execution_id = f"n8n_{uuid.uuid4().hex[:8]}"
-            start_time = datetime.utcnow()
-            
-            # Simulate processing time
-            await asyncio.sleep(0.1)
-            
+        """Execute workflow using the real n8n REST API.
+
+        Previously this method returned a fabricated success result after
+        ``asyncio.sleep(0.1)``. That hid real connectivity issues with n8n
+        and made the ``workflows_executed`` counters meaningless.
+
+        The new behaviour:
+
+        - If no aiohttp session is configured (aiohttp missing or the
+          service never ran ``startup``), the call fails fast with an
+          explicit ``n8n_api_not_configured`` marker.
+        - Otherwise we create the workflow in n8n (if it is not already
+          registered) and trigger it via
+          ``POST /api/v1/workflows/{id}/execute`` with the provided
+          ``input_data``.
+        - The HTTP status code drives the ``ExecutionResult.status`` field
+          so callers can distinguish transport/API failures from in-
+          workflow failures.
+        """
+        start_time = datetime.utcnow()
+        execution_id = f"n8n_{uuid.uuid4().hex[:8]}"
+
+        if self._http_session is None:
             end_time = datetime.utcnow()
-            duration = (end_time - start_time).total_seconds() * 1000
-            
             return ExecutionResult(
                 workflow_id=workflow_spec.name,
                 execution_id=execution_id,
-                status="success",
-                output_data={"message": "Executed via n8n", "nodes_executed": len(workflow_spec.nodes)},
+                status="failed",
+                output_data={
+                    "reason": "n8n_api_not_configured",
+                    "nodes_executed": 0,
+                },
+                error_message=(
+                    "n8n HTTP session not initialised. Ensure aiohttp is "
+                    "installed and CapibaraN8nAutomationService.startup() has "
+                    "been awaited before executing workflows in standard mode."
+                ),
                 started_at=start_time,
                 finished_at=end_time,
-                duration_ms=int(duration)
+                duration_ms=int((end_time - start_time).total_seconds() * 1000),
             )
-            
-        except Exception as e:
+
+        try:
+            # Make sure the workflow exists on the n8n side - if creation
+            # fails (e.g. because the server rejects the payload) we surface
+            # that as the execution error rather than faking success.
+            n8n_workflow_id = await self._create_n8n_workflow(workflow_spec)
+            if not n8n_workflow_id:
+                end_time = datetime.utcnow()
+                return ExecutionResult(
+                    workflow_id=workflow_spec.name,
+                    execution_id=execution_id,
+                    status="failed",
+                    output_data={"reason": "workflow_registration_failed"},
+                    error_message="Could not create workflow on the n8n server.",
+                    started_at=start_time,
+                    finished_at=end_time,
+                    duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                )
+
+            base_url = self.n8n_config.get("base_url", "").rstrip("/")
+            execute_url = f"{base_url}/api/v1/workflows/{n8n_workflow_id}/execute"
+            payload = {"workflowData": {"input": input_data or {}}}
+
+            async with self._http_session.post(execute_url, json=payload) as response:
+                try:
+                    body = await response.json()
+                except Exception:
+                    body = {"raw": await response.text()}
+
+                end_time = datetime.utcnow()
+                duration = (end_time - start_time).total_seconds() * 1000
+                ok = 200 <= response.status < 300
+
+                return ExecutionResult(
+                    workflow_id=workflow_spec.name,
+                    execution_id=body.get("executionId", execution_id) if isinstance(body, dict) else execution_id,
+                    status="success" if ok else "failed",
+                    output_data={
+                        "n8n_workflow_id": n8n_workflow_id,
+                        "http_status": response.status,
+                        "nodes_executed": len(workflow_spec.nodes),
+                        "response": body,
+                    },
+                    error_message=None if ok else f"n8n API returned HTTP {response.status}",
+                    started_at=start_time,
+                    finished_at=end_time,
+                    duration_ms=int(duration),
+                )
+
+        except asyncio.TimeoutError:
+            end_time = datetime.utcnow()
             return ExecutionResult(
                 workflow_id=workflow_spec.name,
-                execution_id=f"failed_{uuid.uuid4().hex[:8]}",
+                execution_id=execution_id,
                 status="failed",
+                output_data={"reason": "n8n_api_timeout"},
+                error_message="Timed out while calling the n8n execute endpoint.",
+                started_at=start_time,
+                finished_at=end_time,
+                duration_ms=int((end_time - start_time).total_seconds() * 1000),
+            )
+        except Exception as e:
+            end_time = datetime.utcnow()
+            return ExecutionResult(
+                workflow_id=workflow_spec.name,
+                execution_id=execution_id,
+                status="failed",
+                output_data={"reason": "n8n_api_error"},
                 error_message=str(e),
-                started_at=datetime.utcnow(),
-                finished_at=datetime.utcnow(),
-                duration_ms=0
+                started_at=start_time,
+                finished_at=end_time,
+                duration_ms=int((end_time - start_time).total_seconds() * 1000),
             )
     
     async def _create_n8n_workflow(self, workflow_spec: WorkflowSpec) -> Optional[str]:

@@ -25,9 +25,19 @@ from pathlib import Path
 from typing import Dict, List, Any
 import jax.numpy as jnp
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# BACKLOG-005: this file is a demo-only script. Do NOT configure the root
+# logger at import time - that side-effect leaks into any process that
+# imports the data_lineage package. Logging is configured only inside the
+# CLI entrypoint below.
 logger = logging.getLogger(__name__)
+
+
+def _configure_demo_logging() -> None:
+    """Configure root logging for the demo CLI only."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+    )
 
 try:
     from .blockchain_audit_log import (
@@ -43,8 +53,8 @@ except ImportError:
     logger.warning("️ Full lineage system not available - running mock demo")
     FULL_LINEAGE_AVAILABLE = False
 
-class MockModel:
-    """Mock model for demonstration purposes."""
+class _DemoMockModel:
+    """Private demo mock model (BACKLOG-005: not exported)."""
     
     def __init__(self, size: str = "300M"):
         self.size = size
@@ -90,7 +100,7 @@ class TraceabilitySystemDemo:
         # Initialize components
         self.audit_log = None
         self.parameter_controller = None
-        self.mock_model = MockModel("300M")
+        self.mock_model = _DemoMockModel("300M")
         
         # Demo datasets
         self.demo_datasets = {
@@ -364,4 +374,14 @@ def main():
     asyncio.run(demo.run_complete_demo())
 
 if __name__ == "__main__":
+    import os
+    import sys
+
+    if os.environ.get("CAPIBARA_DATA_LINEAGE_DEMO") != "1":
+        sys.stderr.write(
+            "demo_traceability_system.py is a demo-only script.\n"
+            "Set CAPIBARA_DATA_LINEAGE_DEMO=1 to opt in (BACKLOG-005).\n"
+        )
+        sys.exit(2)
+    _configure_demo_logging()
     main()

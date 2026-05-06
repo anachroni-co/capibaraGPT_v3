@@ -25,6 +25,14 @@ from .models import (
     ExecutionResult, WorkflowSpec, WorkflowNode
 )
 
+# Optional aiohttp for real HTTP-request nodes. Falls back cleanly when absent.
+try:
+    import aiohttp  # type: ignore
+    AIOHTTP_AVAILABLE = True
+except ImportError:  # pragma: no cover - optional runtime dep
+    aiohttp = None  # type: ignore
+    AIOHTTP_AVAILABLE = False
+
 # Import existing Capibara agents
 try:
     from ...agents.capibara_agent import CapibaraTool
@@ -474,33 +482,133 @@ Please execute this node and return the output data.
             return await self._fallback_agent_execution(agent, node_prompt, node_context)
     
     async def _execute_node_standard(
-        self, 
-        node: WorkflowNode, 
+        self,
+        node: WorkflowNode,
         context: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Execute a node in standard n8n mode (simulated)."""
-        # This is a simulation of n8n node execution
-        # In a real implementation, this would interface with the n8n API
-        
-        result = {
+        """Execute a node in standard n8n mode.
+
+        This path is taken when the workflow is not using agent-based or
+        sandbox execution. We replace the previous hard-coded "simulated
+        response" / "Simulated output for <type>" strings with either a real
+        effect (HTTP requests, Set / Webhook pass-through) or an explicit
+        ``status="unsupported"`` marker so the caller knows the node was not
+        actually executed. Nothing is ever fabricated silently.
+        """
+        result: Dict[str, Any] = {
             "node_id": node.id,
             "node_name": node.name,
             "node_type": node.type,
             "executed_at": datetime.utcnow().isoformat(),
             "parameters": node.parameters,
-            "status": "completed"
+            "status": "completed",
         }
-        
-        # Simulate different node behaviors
-        if node.type == "n8n-nodes-base.set":
-            result["data"] = node.parameters
-        elif node.type == "n8n-nodes-base.httpRequest":
-            result["response"] = {"status": 200, "data": "simulated response"}
-        elif node.type == "n8n-nodes-base.webhook":
+
+        node_type = getattr(node.type, "value", node.type)
+
+        if node_type == "n8n-nodes-base.set":
+            # Pass-through: Set nodes materialise their parameters as
+            # the output data. Documented n8n behaviour.
+            result["data"] = dict(node.parameters)
+            return result
+
+        if node_type == "n8n-nodes-base.webhook":
+            # Webhook nodes expose the input payload received from the
+            # triggering caller - no synthetic response.
             result["webhook_data"] = context.get("input_data", {})
-        else:
-            result["output"] = f"Simulated output for {node.type}"
-        
+            return result
+
+        if node_type == "n8n-nodes-base.httpRequest":
+            return await self._execute_http_request_node(node, result)
+
+        # Unknown / unsupported node type: declare it truthfully instead of
+        # returning a fake string. The orchestrator can escalate this to
+        # an agent or fail the workflow.
+        result["status"] = "unsupported"
+        result["error"] = (
+            f"Node type {node_type!r} has no standard-mode executor. "
+            "Route the workflow through AGENT_BASED / HYBRID mode or add "
+            "a dedicated handler."
+        )
+        return result
+
+    async def _execute_http_request_node(
+        self,
+        node: WorkflowNode,
+        result: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Perform a real HTTP request for ``n8n-nodes-base.httpRequest``.
+
+        The n8n schema carries the method/url/headers/body on
+        ``node.parameters``. If any required piece is missing or aiohttp is
+        not installed we mark the node as failed with a descriptive error
+        instead of returning a fake 200 response.
+        """
+        params = node.parameters or {}
+        url = params.get("url") or params.get("uri")
+        method = str(params.get("method", "GET")).upper()
+
+        if not url:
+            result["status"] = "failed"
+            result["error"] = "httpRequest node missing required 'url' parameter"
+            return result
+
+        if not AIOHTTP_AVAILABLE or aiohttp is None:
+            result["status"] = "failed"
+            result["error"] = (
+                "aiohttp not installed - cannot execute real HTTP request "
+                "for httpRequest node. Install with: pip install aiohttp"
+            )
+            return result
+
+        headers = params.get("headers") or params.get("headerParameters") or {}
+        # n8n encodes headers as [{"name": "X", "value": "Y"}] - normalise.
+        if isinstance(headers, list):
+            headers = {
+                entry.get("name", ""): entry.get("value", "")
+                for entry in headers
+                if isinstance(entry, dict) and entry.get("name")
+            }
+
+        body = params.get("body") or params.get("bodyParameters")
+        timeout_s = float(params.get("timeout", 30))
+
+        try:
+            timeout = aiohttp.ClientTimeout(total=timeout_s)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                request_kwargs: Dict[str, Any] = {"headers": headers}
+                if body is not None and method not in ("GET", "HEAD"):
+                    if isinstance(body, (dict, list)):
+                        request_kwargs["json"] = body
+                    else:
+                        request_kwargs["data"] = body
+
+                async with session.request(method, url, **request_kwargs) as response:
+                    content_type = response.headers.get("Content-Type", "")
+                    if "application/json" in content_type.lower():
+                        try:
+                            payload: Any = await response.json(content_type=None)
+                        except Exception:
+                            payload = await response.text()
+                    else:
+                        payload = await response.text()
+
+                    result["response"] = {
+                        "status": response.status,
+                        "headers": dict(response.headers),
+                        "data": payload,
+                        "url": str(response.url),
+                    }
+                    if response.status >= 400:
+                        result["status"] = "failed"
+                        result["error"] = f"HTTP {response.status} from {url}"
+        except asyncio.TimeoutError:
+            result["status"] = "failed"
+            result["error"] = f"HTTP request to {url} timed out after {timeout_s}s"
+        except Exception as exc:  # pragma: no cover - depends on network
+            result["status"] = "failed"
+            result["error"] = f"HTTP request to {url} failed: {exc}"
+
         return result
     
     async def _get_agent_workflow_analysis(
@@ -618,4 +726,4 @@ Please execute this node and return the output data.
         if session_id:
             self._agent_memory.pop(session_id, None)
         else:
-            self._agent_memory.clear()
+            self._agent_memory.clear()

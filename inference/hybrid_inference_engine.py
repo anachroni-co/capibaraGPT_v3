@@ -155,34 +155,106 @@ class TPUv6eInferenceEngine:
             raise
     
     def _load_model_params(self):
-        """Load model parameters from checkpoint."""
-        # In a real implementation, this would load from a JAX/Flax checkpoint
-        # For now, we simulate the structure
-        checkpoint_path = Path(self.model_path) / "checkpoint.pkl"
-        if checkpoint_path.exists():
-            logger.warning("Loading pickle checkpoint from %s — ensure trusted source", checkpoint_path)
-            with open(checkpoint_path, 'rb') as f:
-                self.model_params = pickle.load(f)  # nosec B301 — trusted checkpoint
-        else:
-            # Create mock parameters for demo
-            logger.warning("Using mock parameters for demo")
-            self.model_params = {"dummy": jnp.array([1.0])}
+        """Load model parameters from a real JAX/Flax checkpoint.
+
+        The previous behaviour silently fell back to
+        ``{"dummy": jnp.array([1.0])}`` when no checkpoint file was
+        present, which meant downstream generation ran on fabricated
+        parameters without any signal to the caller. We now:
+
+        - Try the documented pickle path (``checkpoint.pkl``).
+        - Try flax.serialization msgpack (``checkpoint.msgpack`` or
+          ``params.msgpack``) when flax is importable.
+        - Try orbax (``checkpoint/`` directory) when orbax is importable.
+        - Raise ``FileNotFoundError`` if none of those are usable. No
+          synthetic fallback is ever returned.
+        """
+        base = Path(self.model_path)
+        pickle_path = base / "checkpoint.pkl"
+        if pickle_path.exists():
+            logger.warning(
+                "Loading pickle checkpoint from %s - ensure trusted source",
+                pickle_path,
+            )
+            with open(pickle_path, "rb") as f:
+                self.model_params = pickle.load(f)  # nosec B301 - trusted checkpoint
+            return
+
+        # Flax msgpack (primary portable format)
+        try:
+            from flax import serialization  # type: ignore
+        except Exception:  # pragma: no cover - optional dep path
+            serialization = None  # type: ignore
+
+        if serialization is not None:
+            for name in ("checkpoint.msgpack", "params.msgpack"):
+                msgpack_path = base / name
+                if msgpack_path.exists():
+                    logger.info("Loading flax msgpack checkpoint from %s", msgpack_path)
+                    with open(msgpack_path, "rb") as f:
+                        self.model_params = serialization.msgpack_restore(f.read())
+                    return
+
+        # Orbax directory checkpoint (modern JAX format)
+        orbax_dir = base / "checkpoint"
+        if orbax_dir.is_dir():
+            try:
+                import orbax.checkpoint as ocp  # type: ignore
+                logger.info("Loading orbax checkpoint from %s", orbax_dir)
+                ckptr = ocp.StandardCheckpointer()
+                self.model_params = ckptr.restore(orbax_dir.resolve())
+                return
+            except Exception as exc:  # pragma: no cover - optional dep path
+                logger.warning("orbax restore failed for %s: %s", orbax_dir, exc)
+
+        # No real checkpoint available. Refuse to fabricate parameters.
+        raise FileNotFoundError(
+            f"No model checkpoint found under {self.model_path!r}. "
+            "Expected one of: checkpoint.pkl, checkpoint.msgpack, "
+              "params.msgpack, or an orbax checkpoint/ directory. "
+            "Aborting instead of returning mock parameters."
+        )
     
     def _compile_generation_function(self):
-        """Compile optimized generation function."""
+        """Compile a real JAX generation step when a Flax module is wired.
+
+        The engine exposes an optional ``self.model_module`` attribute
+        (a Flax ``nn.Module`` callable as ``module.apply(params, input_ids,
+        position)`` and returning logits). If it is present, we JIT-compile
+        the real forward pass. Otherwise we leave
+        ``self.compiled_generate = None`` so the ``generate`` path can
+        fail fast with a clear message instead of producing logits made of
+        ``jnp.ones(...)``.
+        """
+        module = getattr(self, "model_module", None)
+        if module is None or self.model_params is None:
+            self.compiled_generate = None
+            logger.warning(
+                "No Flax model_module attached to %s; generate() will fail "
+                "fast until a real module is provided.",
+                type(self).__name__,
+            )
+            return
+
         @jax.jit
         def generate_step(params, input_ids, position):
-            # Simulation of forward pass
-            # In a real implementation, this would be the complete JAX/Flax model
-            logits = jnp.ones((input_ids.shape[0], input_ids.shape[1], 32000))
-            return logits
-        
+            # Real forward pass: the attached module returns logits.
+            return module.apply(params, input_ids, position)
+
         self.compiled_generate = generate_step
     
     async def generate(self, prompt: str, **kwargs) -> InferenceResult:
         """Generate text using TPU v6e."""
         if not self.loaded:
             self.load_model()
+
+        if self.compiled_generate is None:
+            raise RuntimeError(
+                "TPU inference engine has no compiled generation "
+                "function. Attach a Flax ``model_module`` before "
+                "calling generate(); the previous mock fallback has "
+                "been removed (BACKLOG-004)."
+            )
 
         start_time = time.time()
 
@@ -578,4 +650,4 @@ async def benchmark_backends(prompt: str, model_path: str, rounds: int = 3) -> D
             logger.warning(f"Benchmark failed for {backend.value}: {e}")
             results[backend.value] = {'error': str(e)}
     
-    return results
+    return results

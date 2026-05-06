@@ -26,7 +26,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest fastapi uvicorn
+        # BACKLOG-006: pytest-cov is required by the coverage gate below.
+        pip install flake8 pytest pytest-cov fastapi uvicorn
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Validate syntax and imports
       run: |
@@ -49,6 +50,32 @@ jobs:
     - name: Test with pytest
       run: |
         pytest
+    - name: Coverage gate - unit (BACKLOG-006)
+      # Real execution-coverage gate for the two packages that have proper unit
+      # tests: core/routers (BtoRouterV2) and core/cot (EnhancedChainOfThoughtModule,
+      # CoTConfig, factory). Threshold starts at 35% - measured local baseline is
+      # ~39% - and the roadmap in BACKLOG.md tracks raising it as more modules get
+      # real tests. Intentionally avoids heavy ML deps (jax, flax, transformers).
+      run: |
+        pytest \
+          tests/unit/test_routers_bto.py \
+          tests/unit/test_cot_module.py \
+          --cov=core/routers \
+          --cov=core/cot \
+          --cov-report=term-missing \
+          --cov-fail-under=35
+    - name: Surface gate - consensus + data_lineage (BACKLOG-006)
+      # AST-level non-regression tests. No coverage threshold because these modules
+      # cannot be imported in CI without heavy ML deps; AST parse + structural
+      # assertions are the right tool (BACKLOG-002/004/005 regression guards).
+      run: |
+        pytest \
+          tests/integration/test_training_consensus_surface.py \
+          tests/integration/test_meta_consensus_no_mocks.py \
+          tests/integration/test_automation_no_simulation.py \
+          tests/integration/test_engines_no_mock_params.py \
+          tests/integration/test_data_lineage_demo_isolated.py \
+          -v
 
   docker-smoke:
     needs: build
