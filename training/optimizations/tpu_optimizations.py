@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 if jax:
     try:
         jax.config.update("jax_threefry_partitionable", True)  # type: ignore[attr-defined]
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Could not set jax_threefry_partitionable: %s", exc)
 
 @dataclass
 class TPUConfig:
@@ -118,21 +118,21 @@ class TPUOptimizer:
         if self.config.enable_xla:
             try:
                 jax.config.update("jax_xla_backend", "tpu")  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not set jax_xla_backend: %s", exc)
 
         # Auto sharding
         if self.config.enable_auto_sharding:
             try:
                 jax.config.update("jax_enable_auto_sharding", True)  # type: ignore[attr-defined]
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not set jax_enable_auto_sharding: %s", exc)
 
         # Optimization level
         try:
             jax.config.update("jax_optimization_level", self.config.optimization_level)  # type: ignore[attr-defined]
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Could not set jax_optimization_level: %s", exc)
 
     def create_mesh(self) -> Tuple[Any, Any]:  # type: ignore[name-defined]
         """Create the TPU device mesh."""
@@ -194,8 +194,8 @@ class TPUOptimizer:
             if jax and self.should_cleanup_memory():
                 jax.clear_caches()  # type: ignore[attr-defined]
                 logger.info("Forced TPU memory cleanup")
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("TPU memory cleanup failed: %s", exc)
 
 def setup_tpu_environment():
     """Configure complete TPU v4-32 environment."""

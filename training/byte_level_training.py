@@ -27,7 +27,9 @@ try:
     import jax.numpy as jnp
     import optax
     JAX_AVAILABLE = True
-except Exception:
+except Exception as exc:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("JAX/optax not available, falling back to NumPy: %s", exc)
     jax = None
     jnp = None
     optax = None

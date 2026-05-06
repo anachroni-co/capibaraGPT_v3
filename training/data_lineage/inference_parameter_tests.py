@@ -478,7 +478,8 @@ class InferenceParameterTester:
                 np.allclose(result1["logits"], result2["logits"], rtol=1e-5, atol=1e-8) and
                 np.array_equal(result1["predictions"], result2["predictions"])
             )
-        except:
+        except Exception as exc:
+            logger.warning("Result comparison failed: %s", exc)
             return False
     
     def _generate_test_summary(self, results: Dict[str, Any]) -> Dict[str, Any]:
