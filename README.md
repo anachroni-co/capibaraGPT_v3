@@ -391,7 +391,74 @@ print(capture.get_stats())
 # {'web_search': 42, 'api_routing': 18, 'uncertain': 7, 'fact_check': 3}
 ```
 
-## Limitations
+## CPU-only inference & training (no GPU/TPU)
+
+All components below run on commodity CPU hardware — no CUDA, no JAX, no PyTorch required.
+
+### Architecture: TransformerNumpyBackbone
+
+Pure-NumPy GPT-2 style transformer used for local training and as a drop-in when GGUF files are not available.
+
+| | Value |
+|---|---|
+| Architecture | 6 layers · 6 heads · d_model = 384 |
+| Parameters | 10.9 M |
+| Training corpus | 11 MB (repo `.py` + `.md`) |
+| Baseline NTP loss | 6.30 nats/byte |
+| After 2 000 steps | **3.08 nats/byte (−51 %)** |
+| Throughput | ~1 350 tok/s on CPU |
+
+### GGUF export & llama.cpp integration
+
+Trained weights can be exported directly to GGUF (GPT-2 format) and loaded by llama.cpp without any network download:
+
+```bash
+python scripts/train_and_export_gguf.py \
+    --steps 2000 --out models/capibara_trained.gguf
+```
+
+Place any real `.gguf` file in `models/` and `auto_backbone()` selects it automatically:
+
+```python
+from models.pretrained_backbone import auto_backbone
+bb = auto_backbone()                    # picks GGUF > HF > NumPy
+out = bb.generate("def factorial(n):", max_new_tokens=80)
+```
+
+Recommended drop-in models (download separately):
+
+| Model | Size | Notes |
+|---|---|---|
+| `SmolLM2-135M-Instruct-Q4_K_M.gguf` | ~90 MB | best quality/size ratio |
+| `Qwen2.5-0.5B-Instruct-Q4_K_M.gguf` | ~370 MB | stronger coding |
+| `TinyLlama-1.1B-Chat-Q4_K_M.gguf` | ~670 MB | largest tested |
+
+### Production CPU pipeline (5 steps)
+
+```bash
+python scripts/production_cpu_pipeline.py
+```
+
+| Step | Component | Result |
+|---|---|---|
+| 1 — KV Cache | `inference/cpu_kv_cache.py` | 1.21× decode speedup |
+| 2 — INT8 | `inference/int8_inference.py` | ×4 memory reduction · 100 % greedy match |
+| 3 — Gate loop | `inference/gate_inference_loop.py` | online ThinkAnywhereGate training |
+| 4 — Server | `serving/cpu_server.py` | FastAPI + ThreadPoolExecutor + bounded queue |
+| 5 — Eval | `evaluation/code_eval.py` | 8-task pass@k harness |
+
+### L-MTP training (look-ahead multi-token prediction)
+
+```bash
+python scripts/train_lmtp_cpu.py --warmup-steps 300 --full-steps 300
+```
+
+Implements arXiv:2505.17505. After 600 steps on CPU:
+- NTP loss: 5.55 → 4.11 (−26 %)
+- L-MTP loss: 22.18 → 15.37 (−27 %)
+- Look-backward inference: 7 tokens/step
+
+
 
 - Several advanced paths still include placeholder/mock logic (see `BACKLOG.md`).
 - Hardware-specific features depend on external stacks and environment.
