@@ -60,3 +60,9 @@ _version.py
 # Benchmark outputs
 benchmark_results/
 
+.coverage
+.coverage.*
+.write_test_5
+.coverage
+.coverage.*
+.write_test_5
