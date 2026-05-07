@@ -59,6 +59,13 @@ gpu = [
     "peft>=0.7.0",
 ]
 
+# RAG — EmbedAnything (Rust-native, no PyTorch) or sentence-transformers fallback
+rag = [
+    "embed-anything>=0.3.0",
+    "sentence-transformers>=2.7.0",
+    "httpx>=0.24.0",
+]
+
 # GGUF export + llama.cpp inference (CPU dev)
 gguf = [
     "gguf>=0.6.0",
@@ -87,7 +94,7 @@ dev = [
 
 # All extras
 all = [
-    "capibara-slim[tpu,gpu,gguf,api,dev]",
+    "capibara-slim[tpu,gpu,gguf,api,rag,dev]",
 ]
 
 [project.urls]
