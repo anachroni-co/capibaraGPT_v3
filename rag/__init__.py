@@ -8,6 +8,7 @@ Backends (in order of preference):
 from .store import VectorStore, Document
 from .ingestion import ingest_text, ingest_file, ingest_directory, ingest_webpage
 from .retriever import Retriever
+from .memory import MemoryExtractor, build_memory_extractor
 
 __all__ = [
     "VectorStore",
@@ -17,4 +18,6 @@ __all__ = [
     "ingest_directory",
     "ingest_webpage",
     "Retriever",
+    "MemoryExtractor",
+    "build_memory_extractor",
 ]

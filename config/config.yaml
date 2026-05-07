@@ -186,3 +186,34 @@ experimental:
     enabled: false
     codebook_size: 8192
     commitment_cost: 0.25
+
+# Feature Flags — opt-in capabilities
+# Override any flag via env var: CAPIBARA_FEATURES_<NAME>=true
+features:
+  # RAG — retrieval-augmented generation
+  rag:
+    enabled: false               # set true to augment prompts with retrieved context
+    store_path: null             # path to persist VectorStore (null = in-memory only)
+    top_k: 5
+    min_score: 0.3
+
+  # Quantization — INT8 weight compression at load time
+  quantization:
+    enabled: false               # set true to apply INT8 quantization on load
+    bits: 8
+
+  # Think-Anywhere — inline chain-of-thought / GRPO reasoning tokens
+  think_anywhere:
+    enabled: false               # set true to inject <think>…</think> tokens
+    strip_from_output: true      # strip reasoning tokens before returning response
+
+  # Memory extraction — auto-ingest high-confidence responses into RAG
+  memory_extraction:
+    enabled: false               # set true to learn from conversation turns
+    confidence_threshold: 0.8    # min model confidence to ingest a response
+
+  # Context compaction — summarise old turns to stay within token budget
+  context_compaction:
+    enabled: false
+    max_turns: 20                # summarise when conversation exceeds this many turns
+    summary_max_tokens: 256
