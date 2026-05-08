@@ -9,11 +9,11 @@ Presets (--preset):
   medium  ~125M params, seq=1024 — multi-day run
   full    ~202M params, seq=2048 — full 200M run (slow on CPU)
 
-Throughput estimates on c4a-standard-32:
-  smoke  → ~2 000 tok/s → 5k steps in ~1 min
-  small  → ~400  tok/s → 5k steps in ~45 min
-  medium → ~120  tok/s → 5k steps in ~6 h
-  full   → ~30   tok/s → 5k steps in ~24 h
+Measured throughput on c4a-standard-32 (float32 / bfloat16):
+  smoke  → ~25 000 / ~40 000 tok/s
+  small  →  ~5 000 / ~10 000 tok/s → 20k steps in ~28 h / ~14 h
+  medium →  ~1 500 /  ~3 000 tok/s → 10k steps in ~60 h / ~30 h
+  full   →    ~400 /    ~900 tok/s → 10k steps in ~10 d /  ~4 d
 
 Usage:
     # Smoke test — verify full loop in ~1 min
@@ -21,17 +21,20 @@ Usage:
         --data-dir data/tokenized/ \\
         --preset smoke --steps 200
 
-    # Small model — overnight run
-    python scripts/launch_axion_training.py \\
-        --data-dir gs://my-bucket/tokenized/ \\
-        --output   gs://my-bucket/checkpoints/axion/ \\
-        --preset small --steps 50000
-
-    # Custom config
+    # Small model — mixed corpus, bfloat16
     python scripts/launch_axion_training.py \\
         --data-dir data/tokenized/ \\
-        --hidden-size 512 --num-layers 8 --num-heads 8 \\
-        --seq-len 512 --batch-size 32 --steps 5000
+        --preset small --batch-size 128 --dtype bf16 --steps 20000
+
+    # Medium model — bfloat16, ~30 h
+    python scripts/launch_axion_training.py \\
+        --data-dir data/tokenized/ \\
+        --preset medium --batch-size 128 --grad-accum 1 --dtype bf16 --steps 10000
+
+    # Full 202M — bfloat16, ~4 days
+    python scripts/launch_axion_training.py \\
+        --data-dir data/tokenized/ \\
+        --preset full --batch-size 64 --grad-accum 1 --dtype bf16 --steps 10000
 """
 from __future__ import annotations
 
@@ -136,6 +139,10 @@ async def run(args: argparse.Namespace) -> None:
         "Set JAX_PLATFORMS=cpu"
     )
 
+    use_bf16 = args.dtype == "bf16"
+    logger.info("dtype    : %s (master weights float32, forward %s)",
+                args.dtype, "bfloat16" if use_bf16 else "float32")
+
     # 2. Model
     from models.slim_200m import Slim200M, ModelConfig, count_params
 
@@ -192,10 +199,19 @@ async def run(args: argparse.Namespace) -> None:
     data_iter = iter(loader)
 
     # 5. JIT-compiled train step
+    # Master weights stay float32; forward pass optionally runs in bfloat16
+    # (compute in bf16, accumulate gradients in f32 — standard mixed precision).
     @jax.jit
     def train_step(state, batch):
         def loss_fn(params):
-            logits = state.apply_fn(params, batch["input_ids"])  # (B,T,V)
+            fwd_params = params
+            if use_bf16:
+                fwd_params = jax.tree_util.tree_map(
+                    lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,
+                    params,
+                )
+            logits = state.apply_fn(fwd_params, batch["input_ids"])  # (B,T,V)
+            logits = logits.astype(jnp.float32)  # stable softmax cross-entropy
             loss = optax.softmax_cross_entropy_with_integer_labels(
                 logits, batch["labels"]
             ).mean()
@@ -310,6 +326,8 @@ def main() -> None:
     # Hardware
     parser.add_argument("--threads", type=int, default=32,
                         help="CPU threads (default: 32 for c4a-standard-32)")
+    parser.add_argument("--dtype", choices=["float32", "bf16"], default="float32",
+                        help="Training dtype: float32 (safe) or bf16 (faster, Neoverse V2)")
 
     args = parser.parse_args()
 
