@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import logging
 import os
 import sys
@@ -78,24 +79,27 @@ PRESETS = {
 
 # ── ARM / Axion thread configuration ─────────────────────────────────────────
 
-def _configure_arm_threads(n_threads: int) -> None:
+def _configure_arm_threads(n_threads: int, n_devices: int = 1) -> None:
     """Set environment variables that control CPU parallelism before JAX init."""
+    # Each virtual device gets an equal share of the physical cores
+    threads_per_device = max(1, n_threads // n_devices)
     for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS",
                 "MKL_NUM_THREADS", "VECLIB_MAXIMUM_THREADS",
                 "NUMEXPR_NUM_THREADS", "NUMBA_NUM_THREADS"):
-        os.environ[var] = str(n_threads)
+        os.environ[var] = str(threads_per_device)
 
     # XLA CPU flags for Neoverse V2 / SVE
     xla_flags = (
         "--xla_cpu_multi_thread_eigen=true "
-        f"intra_op_parallelism_threads={n_threads} "
+        f"intra_op_parallelism_threads={threads_per_device} "
         "--xla_cpu_enable_fast_math=true "
-        "--xla_force_host_platform_device_count=1"
+        f"--xla_force_host_platform_device_count={n_devices}"
     )
     os.environ["XLA_FLAGS"] = xla_flags
     os.environ["JAX_PLATFORMS"] = "cpu"
 
-    logger.info("ARM threads: %d | XLA_FLAGS set", n_threads)
+    logger.info("ARM threads: %d total | %d devices × %d threads/device",
+                n_threads, n_devices, threads_per_device)
 
 
 def _log_system_info() -> None:
@@ -131,7 +135,7 @@ def _log_system_info() -> None:
 
 async def run(args: argparse.Namespace) -> None:
     # 1. Configure threads BEFORE importing JAX
-    _configure_arm_threads(args.threads)
+    _configure_arm_threads(args.threads, args.n_devices)
 
     try:
         import jax
@@ -228,33 +232,58 @@ async def run(args: argparse.Namespace) -> None:
     ))
     data_iter = iter(loader)
 
-    # 5. JIT-compiled train step
-    # Master weights stay float32; forward pass optionally runs in bfloat16.
-    # Gradient checkpointing (--grad-checkpoint): instead of storing all
-    # intermediate activations for backprop, recomputes them on demand.
-    # Trades ~20% extra compute for ~60% less activation memory, allowing
-    # 2x larger batch on the same RAM → net throughput gain on large models.
-    @jax.jit
-    def train_step(state, batch):
-        def loss_fn(params):
-            fwd_params = params
-            if use_bf16:
-                fwd_params = jax.tree_util.tree_map(
-                    lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,
-                    params,
-                )
-            apply = (jax.checkpoint(state.apply_fn)
-                     if use_grad_ckpt else state.apply_fn)
-            logits = apply(fwd_params, batch["input_ids"])  # (B,T,V)
-            logits = logits.astype(jnp.float32)  # stable softmax cross-entropy
-            loss = optax.softmax_cross_entropy_with_integer_labels(
-                logits, batch["labels"]
-            ).mean()
-            return loss
+    # 5. Train step — single-device (jit) or multi-device (pmap)
+    # pmap splits the batch across N virtual JAX devices (each backed by
+    # n_threads/N physical cores). Gradients are averaged across devices
+    # via lax.pmean before the optimizer update — equivalent to data parallelism.
+    n_devices = args.n_devices
+    use_pmap  = n_devices > 1
 
-        loss, grads = jax.value_and_grad(loss_fn)(state.params)
-        state = state.apply_gradients(grads=grads)
-        return state, loss
+    if args.batch_size % n_devices != 0:
+        logger.error("--batch-size %d must be divisible by --n-devices %d",
+                     args.batch_size, n_devices)
+        sys.exit(1)
+
+    def _loss_fn(state, params, batch, use_pmap_axis: bool = False):
+        fwd_params = params
+        if use_bf16:
+            fwd_params = jax.tree_util.tree_map(
+                lambda x: x.astype(jnp.bfloat16) if x.dtype == jnp.float32 else x,
+                params,
+            )
+        apply = jax.checkpoint(state.apply_fn) if use_grad_ckpt else state.apply_fn
+        logits = apply(fwd_params, batch["input_ids"])
+        logits = logits.astype(jnp.float32)
+        loss = optax.softmax_cross_entropy_with_integer_labels(
+            logits, batch["labels"]
+        ).mean()
+        if use_pmap_axis:
+            loss = jax.lax.pmean(loss, axis_name="devices")
+        return loss
+
+    if use_pmap:
+        @functools.partial(jax.pmap, axis_name="devices")
+        def train_step(state, batch):
+            loss, grads = jax.value_and_grad(
+                lambda p: _loss_fn(state, p, batch, use_pmap_axis=True)
+            )(state.params)
+            grads = jax.lax.pmean(grads, axis_name="devices")
+            state = state.apply_gradients(grads=grads)
+            return state, loss
+
+        # Replicate state across all virtual devices
+        devices = jax.devices()
+        state = jax.device_put_replicated(state, devices)
+        logger.info("pmap     : %d devices | %d tokens/device/step",
+                    n_devices, args.batch_size // n_devices * args.seq_len)
+    else:
+        @jax.jit
+        def train_step(state, batch):
+            loss, grads = jax.value_and_grad(
+                lambda p: _loss_fn(state, p, batch)
+            )(state.params)
+            state = state.apply_gradients(grads=grads)
+            return state, loss
 
     # 6. Checkpoint helpers
     output_dir = Path(args.output)
@@ -262,12 +291,18 @@ async def run(args: argparse.Namespace) -> None:
 
     start_step = 0
 
+    def _get_params(st):
+        """Extract single-device params (handles both jit and pmap states)."""
+        p = st.params
+        if use_pmap:
+            p = jax.tree_util.tree_map(lambda x: x[0], p)
+        return p
+
     # Resume from checkpoint if requested
     if args.resume:
         import pickle
         resume_path = Path(args.resume)
         if not resume_path.exists():
-            # Try to auto-find the latest checkpoint in the directory
             candidates = sorted(output_dir.glob("ckpt_step_*.pkl"))
             if not candidates:
                 logger.error("No checkpoint found to resume from in %s", output_dir)
@@ -278,14 +313,21 @@ async def run(args: argparse.Namespace) -> None:
         logger.info("Resuming from %s …", resume_path)
         with open(resume_path, "rb") as f:
             ckpt = pickle.load(f)
-        # Restore params into train state (optimizer state is lost — warm restart)
-        state = state.replace(params=ckpt["params"])
+        loaded_params = ckpt["params"]
+        if use_pmap:
+            # state is already replicated — replace params on each device
+            state = jax.device_put_replicated(
+                state.replace(params=loaded_params), jax.devices()
+            )
+        else:
+            state = state.replace(params=loaded_params)
         start_step = ckpt.get("step", 0)
-        logger.info("Resumed at step %d (loss was %.4f)", start_step, ckpt.get("loss", float("nan")))
+        logger.info("Resumed at step %d (loss was %.4f)",
+                    start_step, ckpt.get("loss", float("nan")))
 
     def save_checkpoint(step: int, loss: float) -> None:
         import pickle
-        ckpt = {"step": step, "loss": loss, "params": state.params}
+        ckpt = {"step": step, "loss": loss, "params": _get_params(state)}
         path = output_dir / f"ckpt_step_{step:07d}.pkl"
         with open(path, "wb") as f:
             pickle.dump(ckpt, f)
@@ -319,8 +361,17 @@ async def run(args: argparse.Namespace) -> None:
             data_iter = iter(loader)
             batch = next(data_iter)
 
-        state, loss = train_step(state, batch)
-        loss_val = float(loss)
+        if use_pmap:
+            # Split batch: (B, T) → (n_devices, B//n_devices, T)
+            batch = jax.tree_util.tree_map(
+                lambda x: x.reshape(n_devices, args.batch_size // n_devices, *x.shape[1:]),
+                batch,
+            )
+            state, loss = train_step(state, batch)
+            loss_val = float(loss[0])  # same on all devices after pmean
+        else:
+            state, loss = train_step(state, batch)
+            loss_val = float(loss)
         recent_losses.append(loss_val)
 
         if step % args.log_steps == 0:
@@ -395,6 +446,12 @@ def main() -> None:
                         help="CPU threads (default: 32 for c4a-standard-32)")
     parser.add_argument("--dtype", choices=["float32", "bf16"], default="float32",
                         help="Training dtype: float32 (safe) or bf16 (faster, Neoverse V2)")
+    parser.add_argument("--n-devices", type=int, default=1,
+                        help="Virtual JAX devices for pmap data-parallelism. "
+                             "Splits batch across N devices, each using "
+                             "threads/N physical cores. Must divide batch-size. "
+                             "Recommended: 4 on c4a-standard-32 (8 cores/device). "
+                             "Default: 1 (single jit, no pmap).")
     parser.add_argument("--grad-checkpoint", action="store_true", default=False,
                         help="Gradient checkpointing: recompute activations during "
                              "backprop instead of storing them. Saves ~60%% activation "
