@@ -432,15 +432,24 @@ done
 
 ## 11 · Estado actual (2025-05-08)
 
-| Fase | Estado | Siguiente acción |
-|------|--------|-----------------|
-| Corpus legal descargado | ✅ Hecho | Tokenizar (§1b) |
-| Tokenización legal | ⏳ Pendiente | `tmux send-keys -t legal "python scripts/prepare_corpus.py ..."` |
-| Índice RAG | ⏳ Pendiente | Tras tokenización (§1c) |
-| Small fase 2 | 🔄 En curso (paso ~8040/15000) | Esperar, luego soup |
-| Medium 114M | 🔄 En curso (paso ~1010/10000) | Esperar, luego soup |
-| Large fase 1 | ⏳ Pendiente | Tras medium |
-| Large DAPT legal | ⏳ Pendiente | Tras Large fase 1 |
-| Destilación | ⏳ Pendiente | Tras Large DAPT |
-| LoRA adapters | ⏳ Pendiente | Tras destilación |
-| Datos fine-tuning | ⏳ Pendiente | `download_summarization_data.py`, `download_instruction_data.py` |
+| Fase | Estado | Detalle |
+|------|--------|---------|
+| Corpus legal — descarga | ✅ Hecho | `data/raw/legal/` |
+| Corpus legal — tokenización | ✅ Hecho | 24.511 ficheros · 1.684B tokens · 166 shards |
+| Índice RAG | 🔄 En curso | `rag_indexer.py` corriendo en sesión `legal` |
+| Datos fine-tuning (summ/instruct/tools) | ⏳ Pendiente | §2 cuando RAG termine |
+| Small 34M fase 2 | 🔄 En curso | ~8.040/15.000 pasos |
+| Medium 114M | 🔄 En curso | ~1.010/10.000 pasos |
+| Large 474M fase 1 | ⏳ Pendiente | Tras medium |
+| Large 474M DAPT legal | ⏳ Pendiente | Tras Large fase 1 |
+| Destilación (×3) | ⏳ Pendiente | Tras Large DAPT |
+| LoRA adapters (×15) | ⏳ Pendiente | Tras destilación |
+
+### Corpus legal — números clave
+```
+Ficheros procesados : 24.511
+Tokens totales      : 1.684.578.451  (1.684B)
+Shards              : 166
+Ejemplos (seq=1024) : ~1.644.120
+Cobertura DAPT      : ~1.56× el corpus con 10k pasos · batch efectivo 256
+```
