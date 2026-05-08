@@ -506,6 +506,35 @@ python scripts/prepare_corpus.py \
 
 Produces `.npy` shards (int16, byte-level vocab=512) ready for `ShardDataLoader`.
 
+### Web mirrors (wget)
+
+For sites not available on HuggingFace, mirror with `wget --mirror` and extract
+with `scripts/extract_trisquel.py` (handles pages saved without `.html` extension):
+
+```bash
+# Mirror the site
+wget --mirror --convert-links --no-parent \
+     --keep-session-cookies --wait=1 \
+     -P data/raw/trisquel_wget/ https://trisquel.info/
+
+# Inspect language distribution
+python scripts/extract_trisquel.py \
+    --input  data/raw/trisquel_wget/trisquel.info \
+    --inspect
+
+# Extract English + Spanish pages
+python scripts/extract_trisquel.py \
+    --input  data/raw/trisquel_wget/trisquel.info \
+    --output data/raw/trisquel \
+    --langs en es
+
+# Tokenize
+python scripts/prepare_corpus.py \
+    --input  data/raw/trisquel \
+    --output data/tokenized/trisquel/ \
+    --extensions .txt
+```
+
 ### Reference corpus
 
 Corpora validated on Google Axion c4a-standard-32:
@@ -517,7 +546,10 @@ Corpora validated on Google Axion c4a-standard-32:
 | Portuguese Wikipedia | 200M | 2 | High |
 | C4 English | 200M | 2 | High |
 | Python code (SmolLM) | 100M | 1 | High |
-| **Total** | **~1.06B** | 11 | |
+| Programming languages (Lua, Elixir, Zig, Lisp, Bash, …) | ~50M | 1–2 | Med–High |
+| Trisquel website (en/es) | ~5M | 1 | Medium |
+| capibaraGPT_v3 repo source | ~1M | 1 | High |
+| **Total** | **~1.1B** | ~14 | |
 
 ## Google Axion ARM64 training
 
