@@ -225,6 +225,29 @@ async def run(args: argparse.Namespace) -> None:
     output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    start_step = 0
+
+    # Resume from checkpoint if requested
+    if args.resume:
+        import pickle
+        resume_path = Path(args.resume)
+        if not resume_path.exists():
+            # Try to auto-find the latest checkpoint in the directory
+            candidates = sorted(output_dir.glob("ckpt_step_*.pkl"))
+            if not candidates:
+                logger.error("No checkpoint found to resume from in %s", output_dir)
+                sys.exit(1)
+            resume_path = candidates[-1]
+            logger.info("Auto-selected latest checkpoint: %s", resume_path.name)
+
+        logger.info("Resuming from %s …", resume_path)
+        with open(resume_path, "rb") as f:
+            ckpt = pickle.load(f)
+        # Restore params into train state (optimizer state is lost — warm restart)
+        state = state.replace(params=ckpt["params"])
+        start_step = ckpt.get("step", 0)
+        logger.info("Resumed at step %d (loss was %.4f)", start_step, ckpt.get("loss", float("nan")))
+
     def save_checkpoint(step: int, loss: float) -> None:
         import pickle
         ckpt = {"step": step, "loss": loss, "params": state.params}
@@ -242,6 +265,9 @@ async def run(args: argparse.Namespace) -> None:
     logger.info("=" * 60)
     logger.info("Starting Axion training | %d steps | batch=%d seq=%d accum=%d",
                 args.steps, args.batch_size, args.seq_len, args.grad_accum)
+    if start_step:
+        logger.info("Continuing from step %d → target step %d",
+                    start_step, start_step + args.steps)
     logger.info("Effective batch tokens: %d",
                 args.batch_size * args.seq_len * args.grad_accum)
     logger.info("Output: %s", output_dir)
@@ -251,7 +277,7 @@ async def run(args: argparse.Namespace) -> None:
     t_log = t0
     recent_losses: list[float] = []
 
-    for step in range(1, args.steps + 1):
+    for step in range(start_step + 1, start_step + args.steps + 1):
         try:
             batch = next(data_iter)
         except StopIteration:
@@ -264,25 +290,27 @@ async def run(args: argparse.Namespace) -> None:
 
         if step % args.log_steps == 0:
             now = time.perf_counter()
-            elapsed = now - t0
             step_time = (now - t_log) / args.log_steps
             tokens_per_sec = (args.batch_size * args.seq_len) / step_time
             avg_loss = sum(recent_losses[-args.log_steps:]) / min(len(recent_losses), args.log_steps)
             t_log = now
 
-            eta_s = step_time * (args.steps - step)
-            eta_h = eta_s / 3600
+            target_step = start_step + args.steps
+            remaining = target_step - step
+            eta_h = step_time * remaining / 3600
 
             logger.info(
                 "step %6d/%d | loss %.4f | %.0f tok/s | step %.2fs | ETA %.1fh",
-                step, args.steps, avg_loss, tokens_per_sec, step_time, eta_h,
+                step, target_step, avg_loss, tokens_per_sec, step_time, eta_h,
             )
 
-        if step % args.checkpoint_steps == 0 or step == args.steps:
+        target_step = start_step + args.steps
+        if step % args.checkpoint_steps == 0 or step == target_step:
             save_checkpoint(step, loss_val)
 
     total_time = time.perf_counter() - t0
     logger.info("Training complete in %.1f min", total_time / 60)
+    logger.info("Steps: %d → %d", start_step, start_step + args.steps)
     logger.info("Final loss: %.4f", recent_losses[-1])
 
 
@@ -303,6 +331,10 @@ def main() -> None:
                         help="Tokenized shard directory (local or gs://)")
     parser.add_argument("--output", default="checkpoints/axion",
                         help="Checkpoint directory")
+    parser.add_argument("--resume", default=None,
+                        help="Path to .pkl checkpoint to resume from "
+                             "(or omit path to auto-pick latest in --output dir). "
+                             "Restores params; optimizer resets (warm restart).")
 
     # Model (ignored if --preset is set)
     parser.add_argument("--hidden-size", type=int, default=512)
