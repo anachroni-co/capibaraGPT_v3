@@ -88,17 +88,32 @@ def _configure_arm_threads(n_threads: int, n_devices: int = 1) -> None:
                 "NUMEXPR_NUM_THREADS", "NUMBA_NUM_THREADS"):
         os.environ[var] = str(threads_per_device)
 
-    # XLA CPU flags for Neoverse V2 / SVE
+    # Thread affinity — pin OpenMP threads to physical cores so the OS
+    # scheduler doesn't migrate them between steps, preserving L1/L2 cache.
+    # OMP_PROC_BIND=spread distributes threads evenly across all NUMA domains
+    # for maximum memory bandwidth (best for large weight matrices).
+    # OMP_PLACES=cores prevents two threads sharing a physical core.
+    os.environ.setdefault("OMP_PROC_BIND",  "spread")
+    os.environ.setdefault("OMP_PLACES",     "cores")
+    # Avoid busy-waiting between steps — frees cores for other work.
+    os.environ.setdefault("GOMP_SPINCOUNT", "0")
+    # BLAS-level affinity (OpenBLAS / BLIS used by JAX on ARM)
+    os.environ.setdefault("OPENBLAS_CORETYPE", "NEOVERSEN2")  # explicit SVE2 path
+    os.environ.setdefault("BLIS_ARCH",          "thunderx2")  # closest ARM profile
+
+    # XLA CPU flags for Neoverse V2 / SVE2
     xla_flags = (
         "--xla_cpu_multi_thread_eigen=true "
         f"intra_op_parallelism_threads={threads_per_device} "
         "--xla_cpu_enable_fast_math=true "
+        "--xla_cpu_enable_vector_ops=true "        # SVE2 vectorisation
         f"--xla_force_host_platform_device_count={n_devices}"
     )
     os.environ["XLA_FLAGS"] = xla_flags
     os.environ["JAX_PLATFORMS"] = "cpu"
 
-    logger.info("ARM threads: %d total | %d devices × %d threads/device",
+    logger.info("ARM threads: %d total | %d devices × %d threads/device | "
+                "affinity=spread/cores SVE2=on",
                 n_threads, n_devices, threads_per_device)
 
 
