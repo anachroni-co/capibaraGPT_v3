@@ -40,6 +40,15 @@ Usage
         --lora-dir checkpoints/lora/ \\
         --serve --port 8080
 
+    # With RAG (legal corpus index) + live tools
+    python scripts/speculative_inference.py \\
+        --cerebro  checkpoints/distil_cerebro/soup_uniform.pkl \\
+        --medium   checkpoints/distil_medium_legal/soup_uniform.pkl \\
+        --large    checkpoints/axion_large_legal/soup_uniform.pkl \\
+        --lora-dir checkpoints/lora/ \\
+        --rag-index data/rag_index/ \\
+        --tools
+
     # Quick throughput benchmark
     python scripts/speculative_inference.py \\
         --cerebro  ... --medium ... --large ... \\
@@ -49,6 +58,10 @@ Usage
     curl -s -X POST http://localhost:8080/generate \\
         -H "Content-Type: application/json" \\
         -d '{"prompt": "¿Qué es el recurso de amparo?", "max_tokens": 200}'
+
+Tool call syntax (model output):
+    ÿTOOL:{"name":"search_boe","query":"artículo 248 CP"}ÿ  →  tool executed
+    ÿRESULT:{"status":"ok","data":"..."}ÿ                   →  result injected
 """
 from __future__ import annotations
 
@@ -81,6 +94,12 @@ PRESETS = {
 }
 
 VOCAB_SIZE = 512  # byte-level (0–255) + 256 reserved/extended tokens
+
+# ── Tool call byte markers ─────────────────────────────────────────────────────
+# Byte 0xFF (255) never appears in valid UTF-8 text → safe delimiter
+_TOOL_OPEN   = bytes([255]) + b"TOOL:"    # ÿTOOL:
+_TOOL_CLOSE  = bytes([255])               # ÿ  (closing)
+_RESULT_OPEN = bytes([255]) + b"RESULT:"  # ÿRESULT:
 
 # ── Legal specialty routing ────────────────────────────────────────────────────
 
@@ -156,6 +175,12 @@ SPECIALTY_KEYWORDS: dict[str, list[str]] = {
     "traduccion": [
         "traduce", "traducción", "en inglés", "en catalán", "en euskera",
         "translate", "versión en", "cómo se dice en",
+    ],
+    "herramientas": [
+        "busca en el boe", "consulta la ley", "busca jurisprudencia",
+        "cuál es el texto vigente", "artículo vigente",
+        "busca sentencias", "hay sentencias recientes",
+        "calcula el plazo", "fecha límite", "cuándo vence",
     ],
 }
 
@@ -294,20 +319,28 @@ class SpeculativeEngine:
         medium:  ModelHandle,
         large:   ModelHandle,
         large_base_params,
-        lora_dir: Optional[Path],
-        draft_len:   int   = 8,
-        temperature: float = 0.8,
-        top_p:       float = 0.95,
+        lora_dir:      Optional[Path],
+        draft_len:     int   = 8,
+        temperature:   float = 0.8,
+        top_p:         float = 0.95,
+        rag_retriever  = None,   # RAGRetriever instance or None
+        tool_registry  = None,   # ToolRegistry instance or None
+        rag_top_k:     int   = 3,
+        max_tool_calls: int  = 5,
     ):
-        self.cerebro          = cerebro
-        self.medium           = medium
-        self.large            = large
-        self._large_base      = large_base_params
-        self.lora_dir         = lora_dir
-        self.draft_len        = draft_len
-        self.temperature      = temperature
-        self.top_p            = top_p
-        self._lora_cache:     dict[str, dict] = {}
+        self.cerebro           = cerebro
+        self.medium            = medium
+        self.large             = large
+        self._large_base       = large_base_params
+        self.lora_dir          = lora_dir
+        self.draft_len         = draft_len
+        self.temperature       = temperature
+        self.top_p             = top_p
+        self.rag               = rag_retriever
+        self.tools             = tool_registry
+        self.rag_top_k         = rag_top_k
+        self.max_tool_calls    = max_tool_calls
+        self._lora_cache:      dict[str, dict] = {}
         self._active_specialty: str = "general"
 
     # ── LoRA management ────────────────────────────────────────────────────────
@@ -488,6 +521,65 @@ class SpeculativeEngine:
 
     # ── 3-level generation loop ────────────────────────────────────────────────
 
+    # ── RAG context injection ──────────────────────────────────────────────────
+
+    def _prepend_rag(self, prompt: str) -> str:
+        """Retrieve relevant legal chunks and prepend to prompt."""
+        if self.rag is None:
+            return prompt
+        try:
+            context_str = self.rag.retrieve(prompt)
+            return context_str + "\n\n" + prompt
+        except Exception as exc:
+            logger.warning("RAG retrieval failed: %s", exc)
+            return prompt
+
+    # ── Tool call detection + execution ────────────────────────────────────────
+
+    def _check_tool_call(
+        self, generated: list[int]
+    ) -> tuple[int, dict] | None:
+        """
+        Scan the tail of `generated` for a complete ÿTOOL:{...}ÿ sequence.
+        Returns (start_index, parsed_dict) or None.
+        """
+        buf = bytes(t for t in generated if 0 <= t <= 255)
+        open_pos = buf.rfind(_TOOL_OPEN)
+        if open_pos == -1:
+            return None
+        json_start = open_pos + len(_TOOL_OPEN)
+        close_pos  = buf.find(_TOOL_CLOSE, json_start)
+        if close_pos == -1:
+            return None  # incomplete — still generating
+        try:
+            call = json.loads(buf[json_start:close_pos])
+        except json.JSONDecodeError:
+            return None
+        # Map byte offset back to token index (approximate: 1 byte ≈ 1 token)
+        return open_pos, call
+
+    def _execute_tool(self, call: dict) -> list[int]:
+        """Execute a tool call and return the ÿRESULT:{...}ÿ as token ids."""
+        if self.tools is None:
+            result = {"status": "error", "data": "No tool registry configured"}
+        else:
+            try:
+                name   = call.get("name", "")
+                kwargs = {k: v for k, v in call.items() if k != "name"}
+                result = self.tools.execute(name, **kwargs)
+            except Exception as exc:
+                result = {"status": "error", "data": str(exc)}
+        # Truncate long results to stay within context window
+        data = result.get("data", "")
+        if isinstance(data, str) and len(data) > 400:
+            result = {**result, "data": data[:400] + "…"}
+        result_bytes = _RESULT_OPEN + json.dumps(result, ensure_ascii=False).encode() + bytes([255])
+        logger.info("Tool %s → %s (status=%s)",
+                    call.get("name"), str(result.get("data", ""))[:60], result.get("status"))
+        return list(result_bytes)
+
+    # ── 3-level generation loop ────────────────────────────────────────────────
+
     def generate(
         self,
         prompt:         str,
@@ -495,7 +587,7 @@ class SpeculativeEngine:
         seed:           int = 42,
     ) -> str:
         """
-        Full 3-level speculative decode.
+        Full 3-level speculative decode with optional RAG context and tool use.
         Returns the generated text (decoded from byte tokens).
         """
         import jax
@@ -503,15 +595,18 @@ class SpeculativeEngine:
         specialty = _route_specialty(prompt)
         self._activate_lora(specialty)
 
-        context   = encode(prompt)
+        # ── RAG: prepend retrieved legal context ───────────────────────────────
+        augmented_prompt = self._prepend_rag(prompt)
+        context   = encode(augmented_prompt)
         rng       = jax.random.PRNGKey(seed)
         generated: list[int] = []
 
         # Stats
-        n_drafted   = 0
-        n_med_acc   = 0
-        n_large_acc = 0
-        n_large_fwd = 0
+        n_drafted    = 0
+        n_med_acc    = 0
+        n_large_acc  = 0
+        n_large_fwd  = 0
+        n_tool_calls = 0
         t0 = time.perf_counter()
 
         while len(generated) < max_new_tokens:
@@ -538,9 +633,6 @@ class SpeculativeEngine:
                 continue  # full rejection (rare) — re-draft
 
             # ── Level 3: Large verifies medium-accepted tokens ─────────────────
-            # med_probs is p_medium(tok | ctx), which is exactly the "draft prob"
-            # from Medium's perspective — this makes the acceptance/rejection
-            # sampling theoretically correct: output ≡ Large distribution.
             n_large_fwd += 1
             large_tokens, _ = self._verify(
                 self.large, ctx, med_tokens, med_probs, r3
@@ -549,20 +641,32 @@ class SpeculativeEngine:
 
             generated.extend(large_tokens)
 
-        elapsed  = time.perf_counter() - t0
-        total    = len(generated)
-        tok_s    = total / elapsed if elapsed > 0 else 0.0
-        med_pct  = 100.0 * n_med_acc   / max(1, n_drafted)
-        large_pct= 100.0 * n_large_acc / max(1, n_med_acc)
+            # ── Tool call detection ────────────────────────────────────────────
+            if self.tools is not None and n_tool_calls < self.max_tool_calls:
+                hit = self._check_tool_call(generated)
+                if hit is not None:
+                    _, call = hit
+                    result_tokens = self._execute_tool(call)
+                    generated.extend(result_tokens)
+                    n_tool_calls += 1
+
+        elapsed   = time.perf_counter() - t0
+        total     = len(generated)
+        tok_s     = total / elapsed if elapsed > 0 else 0.0
+        med_pct   = 100.0 * n_med_acc   / max(1, n_drafted)
+        large_pct = 100.0 * n_large_acc / max(1, n_med_acc)
 
         logger.info(
             "Generated %d tok in %.2fs (%.0f tok/s) | "
-            "drafted=%d med_acc=%.0f%% large_acc=%.0f%% large_fwd=%d (specialty=%s)",
+            "drafted=%d med_acc=%.0f%% large_acc=%.0f%% large_fwd=%d "
+            "tool_calls=%d rag=%s (specialty=%s)",
             total, elapsed, tok_s,
-            n_drafted, med_pct, large_pct, n_large_fwd, specialty,
+            n_drafted, med_pct, large_pct, n_large_fwd,
+            n_tool_calls, self.rag is not None, specialty,
         )
 
-        return decode(generated)
+        # Strip raw ÿRESULT:...ÿ markers from final output (keep tool answer text only)
+        return _strip_markers(decode(generated))
 
 
 # ── Engine factory ─────────────────────────────────────────────────────────────
@@ -622,6 +726,42 @@ def build_engine(args) -> SpeculativeEngine:
 
     lora_dir = Path(args.lora_dir) if args.lora_dir else None
 
+    # ── Optional: RAG retriever ────────────────────────────────────────────────
+    rag = None
+    if getattr(args, "rag_index", None):
+        try:
+            from scripts.rag_retriever import RAGRetriever
+        except ImportError:
+            try:
+                sys.path.insert(0, str(Path(__file__).parent))
+                from rag_retriever import RAGRetriever
+            except ImportError:
+                RAGRetriever = None
+
+        if RAGRetriever is not None:
+            rag_path = Path(args.rag_index)
+            if rag_path.exists():
+                rag = RAGRetriever(
+                    str(rag_path),
+                    top_k=getattr(args, "rag_top_k", 3),
+                    max_context_bytes=500,
+                )
+                logger.info("RAG index loaded: %s", rag_path)
+            else:
+                logger.warning("--rag-index path not found: %s — RAG disabled", rag_path)
+        else:
+            logger.warning("rag_retriever.py not found — RAG disabled")
+
+    # ── Optional: tool registry ────────────────────────────────────────────────
+    tools = None
+    if getattr(args, "tools", False):
+        try:
+            from tool_executor import build_registry
+            tools = build_registry()
+            logger.info("Tool registry loaded (%d tools)", len(tools._tools))
+        except ImportError:
+            logger.warning("tool_executor.py not found — tools disabled")
+
     return SpeculativeEngine(
         cerebro=cerebro,
         medium=medium,
@@ -631,12 +771,23 @@ def build_engine(args) -> SpeculativeEngine:
         draft_len=args.draft_len,
         temperature=args.temperature,
         top_p=args.top_p,
+        rag_retriever=rag,
+        tool_registry=tools,
+        rag_top_k=getattr(args, "rag_top_k", 3),
+        max_tool_calls=getattr(args, "max_tool_calls", 5),
     )
 
 
 def _count_params(params) -> int:
     import jax
     return sum(x.size for x in jax.tree_util.tree_leaves(params))
+
+
+def _strip_markers(text: str) -> str:
+    """Remove raw ÿTOOL:...ÿ and ÿRESULT:...ÿ markers from decoded output."""
+    import re
+    # The markers decode as \xff in the string
+    return re.sub(r'\xff(?:TOOL|RESULT):[^\xff]*\xff', '', text).strip()
 
 
 # ── HTTP server (stdlib only) ──────────────────────────────────────────────────
@@ -782,6 +933,18 @@ def main() -> None:
     p.add_argument("--temperature",    type=float, default=0.8)
     p.add_argument("--top-p",          type=float, default=0.95)
     p.add_argument("--seed",           type=int,   default=42)
+
+    # RAG
+    p.add_argument("--rag-index",  default=None,
+                   help="Path to RAG index dir built by rag_indexer.py")
+    p.add_argument("--rag-top-k",  type=int, default=3,
+                   help="Number of RAG chunks to retrieve (default: 3)")
+
+    # Tools
+    p.add_argument("--tools", action="store_true",
+                   help="Enable live tool use (search_boe, search_cendoj, etc.)")
+    p.add_argument("--max-tool-calls", type=int, default=5,
+                   help="Max tool calls per generation (default: 5)")
 
     # Hardware
     p.add_argument("--dtype",         choices=["float32", "bf16"], default="bf16")

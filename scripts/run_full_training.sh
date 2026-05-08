@@ -47,7 +47,9 @@ THREADS=32
 OPT_FLAGS="--dtype bf16 --grad-checkpoint --compile-cache cache/jax_compile --n-devices 4"
 
 START_PHASE=${1:-0}
-END_PHASE=${2:-5}
+END_PHASE=${2:-7}
+
+RAG_INDEX="data/rag_index"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -90,6 +92,26 @@ if run_phase 0; then
             --extensions .md .txt .adoc
     fi
     ok "Phase 0 done"
+fi
+
+# ── Phase 0b: Build RAG index ─────────────────────────────────────────────────
+
+if run_phase 0; then
+    log "═══ Phase 0b: Build RAG index ═══"
+
+    if [[ -f "${RAG_INDEX}/meta.json" ]]; then
+        skip "RAG index already built at $RAG_INDEX"
+    elif [[ ! -d "$LEGAL_RAW" ]]; then
+        log "Legal raw corpus not found ($LEGAL_RAW) — run phase 0 first"
+    else
+        log "Building RAG index → $RAG_INDEX"
+        "$PYTHON" scripts/rag_indexer.py \
+            --input-dir "$LEGAL_RAW" \
+            --output    "$RAG_INDEX" \
+            --chunk-size 300 \
+            --chunk-overlap 50
+    fi
+    ok "Phase 0b done"
 fi
 
 # ── Phase 1: Small 34M phase 2 ────────────────────────────────────────────────
@@ -405,6 +427,30 @@ if run_phase 7; then
             --finetune-dir "$FINETUNE_BASE"
     fi
 
+    # Herramientas LoRA adapter (tool use training)
+    TOOL_DATA="${FINETUNE_BASE}/herramientas.jsonl"
+    LORA_TOOLS="${LORA_DIR}/large_herramientas"
+    if [[ -f "${LORA_TOOLS}/lora_final.pkl" ]]; then
+        skip "LoRA herramientas already done"
+    else
+        if [[ ! -f "$TOOL_DATA" ]]; then
+            log "Generating tool use training data → $TOOL_DATA"
+            "$PYTHON" scripts/download_tool_data.py \
+                --output "$TOOL_DATA" \
+                --count 1000
+        fi
+        log "LoRA fine-tuning: herramientas (~2h)"
+        "$PYTHON" scripts/lora_finetune.py \
+            --base-ckpt  "$BASE" \
+            --preset     large \
+            --data       "$TOOL_DATA" \
+            --specialty  herramientas \
+            --output     "$LORA_TOOLS" \
+            --steps 2000 --batch-size 4 \
+            --rank 16 --lora-alpha 32 \
+            --dtype bf16 --threads $THREADS
+    fi
+
     # Fine-tune one adapter per skill
     for ADAPTER in instruccion qa extraccion redaccion dialogo razonamiento traduccion; do
         DATA_FILE="${FINETUNE_BASE}/${ADAPTER}.jsonl"
@@ -458,7 +504,9 @@ if run_phase 5 || run_phase 6 || run_phase 7; then
         "LoRA-large-redaccion|${LORA_DIR}/large_redaccion/lora_final.pkl" \
         "LoRA-large-dialogo|${LORA_DIR}/large_dialogo/lora_final.pkl" \
         "LoRA-large-razonamiento|${LORA_DIR}/large_razonamiento/lora_final.pkl" \
-        "LoRA-large-traduccion|${LORA_DIR}/large_traduccion/lora_final.pkl"
+        "LoRA-large-traduccion|${LORA_DIR}/large_traduccion/lora_final.pkl" \
+        "LoRA-large-herramientas|${LORA_DIR}/large_herramientas/lora_final.pkl" \
+        "RAG-index|${RAG_INDEX}/meta.json"
     do
         name=$(echo "$entry" | cut -d'|' -f1)
         path=$(echo "$entry" | cut -d'|' -f2)
