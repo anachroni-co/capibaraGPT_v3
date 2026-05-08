@@ -143,6 +143,22 @@ async def run(args: argparse.Namespace) -> None:
         logger.error("Install: pip install jax flax optax")
         sys.exit(1)
 
+    # XLA compilation cache — first run compiles and caches; restarts skip
+    # compilation entirely (saves 2–5 min for large models on every restart).
+    if args.compile_cache:
+        cache_dir = Path(args.compile_cache)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            jax.config.update("jax_compilation_cache_dir", str(cache_dir))
+            logger.info("XLA cache  : %s", cache_dir)
+        except Exception:
+            try:
+                from jax.experimental.compilation_cache import compilation_cache as cc
+                cc.initialize_cache(str(cache_dir))
+                logger.info("XLA cache  : %s (legacy API)", cache_dir)
+            except Exception as e:
+                logger.warning("XLA cache not available: %s", e)
+
     _log_system_info()
 
     assert jax.default_backend() == "cpu", (
@@ -384,6 +400,10 @@ def main() -> None:
                              "backprop instead of storing them. Saves ~60%% activation "
                              "memory at ~20%% compute cost. Recommended for large/full "
                              "presets or when batch size is memory-limited.")
+    parser.add_argument("--compile-cache", default="cache/jax_compile",
+                        help="Directory for XLA compilation cache. First run compiles "
+                             "and saves; subsequent runs load instantly. "
+                             "Set to '' to disable. (default: cache/jax_compile)")
 
     args = parser.parse_args()
 
