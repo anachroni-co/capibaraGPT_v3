@@ -15,7 +15,8 @@
 #   3  Large  474M phase 1  (general corpus, 35k steps, ~6 d)
 #   4  Large  474M phase 2  (legal DAPT, 10k steps, ~2 d)
 #   5  Soup all models
-#   6  Distillation: large→medium, large→small  (~10h each)
+#   6  Distillation: large→medium (~10h), large→small chain (~6h),
+#                    large→small direct / Cerebro (~8h, best alignment)
 #   7  LoRA fine-tuning per specialty (penal/civil/laboral/constitucional)
 # ============================================================
 
@@ -227,6 +228,7 @@ fi
 
 CKPT_DISTIL_MEDIUM="checkpoints/distil_medium_legal"
 CKPT_DISTIL_SMALL="checkpoints/distil_small_legal"
+CKPT_CEREBRO="checkpoints/distil_cerebro"   # Large→Small direct (best alignment for speculative decoding)
 LORA_DIR="checkpoints/lora"
 FINETUNE_DATA="${FINETUNE_DATA:-data/finetune/legal_qa.jsonl}"
 
@@ -286,7 +288,7 @@ if run_phase 6; then
         "$PYTHON" scripts/soup_checkpoints.py "$CKPT_DISTIL_MEDIUM" --n 3
     fi
 
-    # distilled medium (114M) → small (34M)
+    # distilled medium (114M) → small (34M)  [chain distillation path]
     TEACHER_M="${CKPT_DISTIL_MEDIUM}/soup_uniform.pkl"
     if [[ -f "${CKPT_DISTIL_SMALL}/ckpt_step_0010000.pkl" ]]; then
         skip "Distil medium→small already done"
@@ -307,6 +309,30 @@ if run_phase 6; then
             --dtype bf16 --threads $THREADS
         "$PYTHON" scripts/soup_checkpoints.py "$CKPT_DISTIL_SMALL" --n 3
     fi
+
+    # large (474M) → small (34M) DIRECT  → Cerebro
+    # Direct distillation gives p_cerebro ≈ p_large which maximises acceptance
+    # rate in speculative decoding (~87%) versus the chain path (~65%).
+    if [[ -f "${CKPT_CEREBRO}/soup_uniform.pkl" ]]; then
+        skip "Cerebro (large→small direct) already done"
+    else
+        LAST=$(latest_ckpt "$CKPT_CEREBRO")
+        RESUME_ARG="--student-resume ${CKPT_SMALL2}/soup_uniform.pkl"
+        [[ -n "$LAST" ]] && RESUME_ARG="--student-resume $LAST"
+        log "Distilling large→small direct / Cerebro (~8h)"
+        "$PYTHON" scripts/distil.py \
+            --teacher         "$TEACHER" \
+            --teacher-preset  large \
+            --student-preset  small \
+            $RESUME_ARG \
+            --data-dir        "$LEGAL_TOK" \
+            --output          "$CKPT_CEREBRO" \
+            --steps 10000 --batch-size 32 --grad-accum 8 \
+            --temperature 4.0 --alpha 0.7 \
+            --dtype bf16 --threads $THREADS
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_CEREBRO" --n 3
+    fi
+
     ok "Phase 6 done"
 fi
 
@@ -356,11 +382,14 @@ if run_phase 5 || run_phase 6 || run_phase 7; then
         "Large-474M-general|${CKPT_LARGE1}/soup_uniform.pkl" \
         "Large-474M-legal|${CKPT_LARGE2}/soup_uniform.pkl" \
         "Distil-Medium-legal|${CKPT_DISTIL_MEDIUM}/soup_uniform.pkl" \
-        "Distil-Small-legal|${CKPT_DISTIL_SMALL}/soup_uniform.pkl" \
+        "Distil-Small-legal (chain)|${CKPT_DISTIL_SMALL}/soup_uniform.pkl" \
+        "Cerebro (large→small direct)|${CKPT_CEREBRO}/soup_uniform.pkl" \
         "LoRA-large-penal|${LORA_DIR}/large_penal/lora_final.pkl" \
         "LoRA-large-civil|${LORA_DIR}/large_civil/lora_final.pkl" \
         "LoRA-large-laboral|${LORA_DIR}/large_laboral/lora_final.pkl" \
-        "LoRA-large-constitucional|${LORA_DIR}/large_constitucional/lora_final.pkl"
+        "LoRA-large-constitucional|${LORA_DIR}/large_constitucional/lora_final.pkl" \
+        "LoRA-large-administrativo|${LORA_DIR}/large_administrativo/lora_final.pkl" \
+        "LoRA-large-mercantil|${LORA_DIR}/large_mercantil/lora_final.pkl"
     do
         name=$(echo "$entry" | cut -d'|' -f1)
         path=$(echo "$entry" | cut -d'|' -f2)
