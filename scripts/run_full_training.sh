@@ -17,7 +17,7 @@
 #   5  Soup all models
 #   6  Distillation: large→medium (~10h), large→small chain (~6h),
 #                    large→small direct / Cerebro (~8h, best alignment)
-#   7  LoRA fine-tuning per specialty (penal/civil/laboral/constitucional)
+#   7  LoRA fine-tuning per specialty (penal/civil/laboral/constitucional/resumen)
 # ============================================================
 
 set -euo pipefail
@@ -348,7 +348,7 @@ if run_phase 7; then
     if [[ ! -f "$FINETUNE_DATA" ]]; then
         log "Fine-tuning data not found: $FINETUNE_DATA"
         log "Create data/finetune/legal_qa.jsonl with {prompt, response} lines"
-        log "Skipping LoRA phase — set FINETUNE_DATA env var to override path"
+        log "Skipping legal LoRA fine-tuning — set FINETUNE_DATA env var to override path"
     else
         for SPECIALTY in penal civil laboral constitucional administrativo; do
             LORA_OUT="${LORA_DIR}/large_${SPECIALTY}"
@@ -367,6 +367,27 @@ if run_phase 7; then
                 --rank 16 --lora-alpha 32 \
                 --dtype bf16 --threads $THREADS
         done
+    fi
+
+    # Summarization LoRA adapter (DACSA + MLSUM + arXiv + PQAI)
+    SUMM_DATA="data/finetune/summarization.jsonl"
+    LORA_SUMM="${LORA_DIR}/large_resumen"
+    if [[ -f "${LORA_SUMM}/lora_final.pkl" ]]; then
+        skip "LoRA resumen already done"
+    elif [[ ! -f "$SUMM_DATA" ]]; then
+        log "Summarization data not found: $SUMM_DATA"
+        log "Run: python scripts/download_summarization_data.py --source all --merge"
+    else
+        log "LoRA fine-tuning: resumen (~2h)"
+        "$PYTHON" scripts/lora_finetune.py \
+            --base-ckpt  "$BASE" \
+            --preset     large \
+            --data       "$SUMM_DATA" \
+            --specialty  resumen \
+            --output     "$LORA_SUMM" \
+            --steps 2000 --batch-size 4 \
+            --rank 16 --lora-alpha 32 \
+            --dtype bf16 --threads $THREADS
     fi
     ok "Phase 7 done"
 fi
@@ -389,7 +410,8 @@ if run_phase 5 || run_phase 6 || run_phase 7; then
         "LoRA-large-laboral|${LORA_DIR}/large_laboral/lora_final.pkl" \
         "LoRA-large-constitucional|${LORA_DIR}/large_constitucional/lora_final.pkl" \
         "LoRA-large-administrativo|${LORA_DIR}/large_administrativo/lora_final.pkl" \
-        "LoRA-large-mercantil|${LORA_DIR}/large_mercantil/lora_final.pkl"
+        "LoRA-large-mercantil|${LORA_DIR}/large_mercantil/lora_final.pkl" \
+        "LoRA-large-resumen|${LORA_DIR}/large_resumen/lora_final.pkl"
     do
         name=$(echo "$entry" | cut -d'|' -f1)
         path=$(echo "$entry" | cut -d'|' -f2)

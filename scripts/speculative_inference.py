@@ -121,6 +121,11 @@ SPECIALTY_KEYWORDS: dict[str, list[str]] = {
         "quiebra", "fusión", "derecho mercantil", "letra de cambio",
         "auditoría", "registro mercantil",
     ],
+    "resumen": [
+        "resume", "resumen", "resumir", "síntesis", "sintetiza",
+        "puntos principales", "ideas clave", "en pocas palabras",
+        "abstract", "summarize", "summary",
+    ],
 }
 
 
