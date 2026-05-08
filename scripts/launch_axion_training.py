@@ -4,16 +4,20 @@
 Optimised for:  32 vCPU · 128 GB RAM · Neoverse V2 · JAX CPU backend
 
 Presets (--preset):
-  smoke   ~3M  params, seq=256  — full loop in seconds, CI/sanity
-  small   ~50M params, seq=512  — smoke test overnight
-  medium  ~125M params, seq=1024 — multi-day run
-  full    ~202M params, seq=2048 — full 200M run (slow on CPU)
+  smoke   ~4M   params, seq=256  — full loop in seconds, CI/sanity
+  small   ~34M  params, seq=512  — overnight smoke test
+  medium  ~114M params, seq=1024 — multi-day run (~29 h bf16)
+  full    ~202M params, seq=2048 — full 200M run (~4 d bf16)
+  large   ~474M params, seq=1024 — legal specialization (~10 d bf16)
 
-Measured throughput on c4a-standard-32 (float32 / bfloat16):
-  smoke  → ~25 000 / ~40 000 tok/s
-  small  →  ~5 000 / ~10 000 tok/s → 20k steps in ~28 h / ~14 h
-  medium →  ~1 500 /  ~3 000 tok/s → 10k steps in ~60 h / ~30 h
-  full   →    ~400 /    ~900 tok/s → 10k steps in ~10 d /  ~4 d
+Measured throughput on c4a-standard-32 (bfloat16, single process):
+  small  → ~3 400 tok/s  →  5k steps ~6 h
+  medium → ~1 500 tok/s  → 10k steps ~29 h
+  large  →   ~350 tok/s  → 35k steps ~10 d
+
+Large model — 2-phase training plan:
+  Phase 1 (general):  35k steps on mixed corpus (gl+es+pt+c4+code)
+  Phase 2 (legal DAPT): 10k steps on legal corpus, lr=5e-5, --resume phase1/
 
 Usage:
     # Smoke test — verify full loop in ~1 min
@@ -21,20 +25,23 @@ Usage:
         --data-dir data/tokenized/ \\
         --preset smoke --steps 200
 
-    # Small model — mixed corpus, bfloat16
+    # Medium model — bfloat16, ~29 h
     python scripts/launch_axion_training.py \\
         --data-dir data/tokenized/ \\
-        --preset small --batch-size 128 --dtype bf16 --steps 20000
+        --preset medium --batch-size 16 --grad-accum 8 --dtype bf16 --steps 10000
 
-    # Medium model — bfloat16, ~30 h
+    # Large 474M — Phase 1, bfloat16, ~10 days
     python scripts/launch_axion_training.py \\
         --data-dir data/tokenized/ \\
-        --preset medium --batch-size 128 --grad-accum 1 --dtype bf16 --steps 10000
+        --preset large --batch-size 8 --grad-accum 16 --dtype bf16 --steps 35000 \\
+        --output checkpoints/axion_large_phase1/
 
-    # Full 202M — bfloat16, ~4 days
+    # Large 474M — Phase 2 (legal DAPT), resume from phase 1 soup
     python scripts/launch_axion_training.py \\
-        --data-dir data/tokenized/ \\
-        --preset full --batch-size 64 --grad-accum 1 --dtype bf16 --steps 10000
+        --data-dir data/tokenized/legal/ \\
+        --preset large --batch-size 8 --grad-accum 16 --dtype bf16 --steps 10000 \\
+        --lr 5e-5 --output checkpoints/axion_large_legal/ \\
+        --resume checkpoints/axion_large_phase1/soup_uniform.pkl
 """
 from __future__ import annotations
 
@@ -58,10 +65,14 @@ logger = logging.getLogger("axion")
 
 # ── Model presets ─────────────────────────────────────────────────────────────
 PRESETS = {
-    "smoke":  dict(hidden_size=256, num_layers=4,  num_heads=4,  seq_len=256),
-    "small":  dict(hidden_size=512, num_layers=8,  num_heads=8,  seq_len=512),
-    "medium": dict(hidden_size=768, num_layers=12, num_heads=12, seq_len=1024),
+    "smoke":  dict(hidden_size=256,  num_layers=4,  num_heads=4,  seq_len=256),
+    "small":  dict(hidden_size=512,  num_layers=8,  num_heads=8,  seq_len=512),
+    "medium": dict(hidden_size=768,  num_layers=12, num_heads=12, seq_len=1024),
     "full":   dict(hidden_size=1024, num_layers=12, num_heads=16, seq_len=2048),
+    # ~474M params — d=1280, L=24, H=20, seq=1024
+    # Recommended: --batch-size 8 --grad-accum 16 --dtype bf16
+    # Memory: ~30 GB peak | Axion throughput: ~350 tok/s → 10 days @ 35k steps
+    "large":  dict(hidden_size=1280, num_layers=24, num_heads=20, seq_len=1024),
 }
 
 
