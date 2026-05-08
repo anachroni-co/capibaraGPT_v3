@@ -64,9 +64,9 @@ def _list_shards(data_dir: str) -> List[str]:
             )
     else:
         p = Path(data_dir)
-        paths = sorted(str(s) for s in p.glob("*.npy"))
+        paths = sorted(str(s) for s in p.rglob("*.npy"))
         if not paths:
-            raise FileNotFoundError(f"No .npy shards found in {data_dir}")
+            raise FileNotFoundError(f"No .npy shards found in {data_dir} (searched recursively)")
         return paths
 
 
