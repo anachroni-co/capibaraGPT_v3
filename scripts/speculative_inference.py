@@ -126,6 +126,37 @@ SPECIALTY_KEYWORDS: dict[str, list[str]] = {
         "puntos principales", "ideas clave", "en pocas palabras",
         "abstract", "summarize", "summary",
     ],
+    "instruccion": [
+        "haz", "crea", "genera", "escribe", "explica", "describe",
+        "lista", "enumera", "define", "calcula",
+    ],
+    "qa": [
+        "según el texto", "basándote en", "de acuerdo con el pasaje",
+        "el texto dice", "¿qué dice el texto", "lee el siguiente",
+    ],
+    "extraccion": [
+        "extrae", "identifica las entidades", "personas mencionadas",
+        "organizaciones en el texto", "lugares que aparecen",
+        "entidades nombradas", "nombra las partes",
+    ],
+    "redaccion": [
+        "redacta", "redacción", "escribe un contrato", "escribe una demanda",
+        "escribe un recurso", "carta de requerimiento", "escrito de",
+        "modelo de", "plantilla de",
+    ],
+    "dialogo": [
+        "conversación", "me puedes ayudar", "tengo una consulta",
+        "necesito consejo", "qué harías", "cómo me recomiendas",
+    ],
+    "razonamiento": [
+        "paso a paso", "razona", "explica tu razonamiento",
+        "¿por qué", "¿cómo llegaste", "demuestra", "calcula",
+        "resuelve el problema",
+    ],
+    "traduccion": [
+        "traduce", "traducción", "en inglés", "en catalán", "en euskera",
+        "translate", "versión en", "cómo se dice en",
+    ],
 }
 
 
@@ -784,7 +815,8 @@ def main() -> None:
     print()
     print("Capibara Legal — 3-level speculative inference")
     print(f"  draft_len={args.draft_len}  temperature={args.temperature}  top_p={args.top_p}")
-    print("  Specialties auto-detected: penal · civil · laboral · constitucional · administrativo · mercantil")
+    print("  Legal: penal · civil · laboral · constitucional · administrativo · mercantil")
+    print("  Skills: resumen · instruccion · qa · extraccion · redaccion · dialogo · razonamiento · traduccion")
     print("  Empty input to quit.\n")
 
     seed = args.seed

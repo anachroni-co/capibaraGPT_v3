@@ -17,7 +17,8 @@
 #   5  Soup all models
 #   6  Distillation: large→medium (~10h), large→small chain (~6h),
 #                    large→small direct / Cerebro (~8h, best alignment)
-#   7  LoRA fine-tuning per specialty (penal/civil/laboral/constitucional/resumen)
+#   7  LoRA fine-tuning: legal specialties + resumen + instruccion/qa/extraccion/
+#                        redaccion/dialogo/razonamiento/traduccion
 # ============================================================
 
 set -euo pipefail
@@ -231,6 +232,7 @@ CKPT_DISTIL_SMALL="checkpoints/distil_small_legal"
 CKPT_CEREBRO="checkpoints/distil_cerebro"   # Large→Small direct (best alignment for speculative decoding)
 LORA_DIR="checkpoints/lora"
 FINETUNE_DATA="${FINETUNE_DATA:-data/finetune/legal_qa.jsonl}"
+FINETUNE_BASE="data/finetune"
 
 # ── Phase 5: Soup inventory ───────────────────────────────────────────────────
 
@@ -389,6 +391,44 @@ if run_phase 7; then
             --rank 16 --lora-alpha 32 \
             --dtype bf16 --threads $THREADS
     fi
+
+    # ── Habilidades básicas (Tier 1 + Tier 2) ─────────────────────────────────
+    # Download all instruction datasets if not already present
+    NEEDS_DOWNLOAD=false
+    for ADAPTER in instruccion qa extraccion redaccion dialogo razonamiento traduccion; do
+        [[ ! -f "${FINETUNE_BASE}/${ADAPTER}.jsonl" ]] && NEEDS_DOWNLOAD=true && break
+    done
+    if $NEEDS_DOWNLOAD; then
+        log "Downloading instruction datasets → $FINETUNE_BASE"
+        "$PYTHON" scripts/download_instruction_data.py \
+            --source all \
+            --finetune-dir "$FINETUNE_BASE"
+    fi
+
+    # Fine-tune one adapter per skill
+    for ADAPTER in instruccion qa extraccion redaccion dialogo razonamiento traduccion; do
+        DATA_FILE="${FINETUNE_BASE}/${ADAPTER}.jsonl"
+        LORA_OUT="${LORA_DIR}/large_${ADAPTER}"
+        if [[ -f "${LORA_OUT}/lora_final.pkl" ]]; then
+            skip "LoRA $ADAPTER already done"
+            continue
+        fi
+        if [[ ! -f "$DATA_FILE" ]]; then
+            log "Data missing for $ADAPTER ($DATA_FILE) — skipping"
+            continue
+        fi
+        log "LoRA fine-tuning: $ADAPTER (~2h)"
+        "$PYTHON" scripts/lora_finetune.py \
+            --base-ckpt  "$BASE" \
+            --preset     large \
+            --data       "$DATA_FILE" \
+            --specialty  "$ADAPTER" \
+            --output     "$LORA_OUT" \
+            --steps 2000 --batch-size 4 \
+            --rank 16 --lora-alpha 32 \
+            --dtype bf16 --threads $THREADS
+    done
+
     ok "Phase 7 done"
 fi
 
@@ -411,7 +451,14 @@ if run_phase 5 || run_phase 6 || run_phase 7; then
         "LoRA-large-constitucional|${LORA_DIR}/large_constitucional/lora_final.pkl" \
         "LoRA-large-administrativo|${LORA_DIR}/large_administrativo/lora_final.pkl" \
         "LoRA-large-mercantil|${LORA_DIR}/large_mercantil/lora_final.pkl" \
-        "LoRA-large-resumen|${LORA_DIR}/large_resumen/lora_final.pkl"
+        "LoRA-large-resumen|${LORA_DIR}/large_resumen/lora_final.pkl" \
+        "LoRA-large-instruccion|${LORA_DIR}/large_instruccion/lora_final.pkl" \
+        "LoRA-large-qa|${LORA_DIR}/large_qa/lora_final.pkl" \
+        "LoRA-large-extraccion|${LORA_DIR}/large_extraccion/lora_final.pkl" \
+        "LoRA-large-redaccion|${LORA_DIR}/large_redaccion/lora_final.pkl" \
+        "LoRA-large-dialogo|${LORA_DIR}/large_dialogo/lora_final.pkl" \
+        "LoRA-large-razonamiento|${LORA_DIR}/large_razonamiento/lora_final.pkl" \
+        "LoRA-large-traduccion|${LORA_DIR}/large_traduccion/lora_final.pkl"
     do
         name=$(echo "$entry" | cut -d'|' -f1)
         path=$(echo "$entry" | cut -d'|' -f2)
