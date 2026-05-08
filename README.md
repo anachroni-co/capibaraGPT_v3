@@ -458,7 +458,120 @@ Implements arXiv:2505.17505. After 600 steps on CPU:
 - L-MTP loss: 22.18 → 15.37 (−27 %)
 - Look-backward inference: 7 tokens/step
 
+## Corpus download & preparation
 
+`scripts/download_corpus.py` streams pre-training data from HuggingFace without downloading entire datasets — all sources use Parquet format (no legacy scripts).
+
+### Available sources
+
+| Source | HF dataset | Languages | Notes |
+|---|---|---|---|
+| `wikipedia` | `wikimedia/wikipedia` | gl, es, pt, en, … | Clean encyclopedia text, ideal starting corpus |
+| `culturax` | `uonlp/CulturaX` | gl, es, pt, en, … | Cleaned mC4 + OSCAR blend — best multilingual web source |
+| `oscar` | `oscar-corpus/OSCAR-2301` | gl, es, pt, en, … | Deduplicated web crawl |
+| `c4` | `allenai/c4` | en | High-quality filtered English web text |
+| `books` | `storytelling-nlp/books_corpus` | en | Book-quality prose for language modelling |
+| `code` | `HuggingFaceTB/smollm-corpus` | Python | Educational Python code (SmolLM training set) |
+
+### Download
+
+```bash
+# Galician Wikipedia
+python scripts/download_corpus.py --source wikipedia --lang gl \
+    --output data/raw/gl/ --max-tokens 50_000_000
+
+# Portuguese Wikipedia
+python scripts/download_corpus.py --source wikipedia --lang pt \
+    --output data/raw/pt/ --max-tokens 200_000_000
+
+# English books
+python scripts/download_corpus.py --source books --lang en \
+    --output data/raw/books/ --max-tokens 200_000_000
+
+# Python code
+python scripts/download_corpus.py --source code --lang Python \
+    --output data/raw/code/python/ --max-tokens 100_000_000
+
+# List all sources
+python scripts/download_corpus.py --list
+```
+
+### Tokenize to shards
+
+```bash
+python scripts/prepare_corpus.py \
+    --input  data/raw/gl/ \
+    --output data/tokenized/gl/
+```
+
+Produces `.npy` shards (int16, byte-level vocab=512) ready for `ShardDataLoader`.
+
+### Reference corpus
+
+Corpora validated on Google Axion c4a-standard-32:
+
+| Corpus | Tokens | Shards | Quality |
+|---|---|---|---|
+| Galician Wikipedia | 51M | 1 | High |
+| Spanish Wikipedia | 510M | 5 | High |
+| Portuguese Wikipedia | 200M | 2 | High |
+| C4 English | 200M | 2 | High |
+| Python code (SmolLM) | 100M | 1 | High |
+| **Total** | **~1.06B** | 11 | |
+
+## Google Axion ARM64 training
+
+`scripts/launch_axion_training.py` runs the Slim 200M model on Google Cloud
+**c4a-standard-32** (32 vCPU, 128 GB RAM, Neoverse V2) using JAX CPU backend.
+No GPU or TPU required.
+
+### Model presets
+
+| Preset | Params | d | L | H | seq | Axion tok/s | 5k steps |
+|---|---|---|---|---|---|---|---|
+| `smoke` | ~4M | 256 | 4 | 4 | 256 | ~25 000 | ~1 min |
+| `small` | ~34M | 512 | 8 | 8 | 512 | ~3 400 | ~6 h |
+| `medium` | ~114M | 768 | 12 | 12 | 1024 | ~800 | ~27 h |
+| `full` | ~202M | 1024 | 12 | 16 | 2048 | ~200 | ~4 d |
+
+Throughput measured on a live c4a-standard-32 VM — 8–12× better than initial estimates.
+
+### Quick start
+
+```bash
+# Install (Axion / Neoverse V2)
+pip install jax[cpu] flax optax psutil
+
+# Smoke test — full training loop in ~1 min
+python scripts/launch_axion_training.py \
+    --data-dir data/tokenized/ \
+    --preset smoke --steps 200
+
+# Small model overnight
+python scripts/launch_axion_training.py \
+    --data-dir data/tokenized/ \
+    --preset small --steps 5000 \
+    --output checkpoints/axion/
+
+# Custom config
+python scripts/launch_axion_training.py \
+    --data-dir data/tokenized/ \
+    --hidden-size 512 --num-layers 8 --num-heads 8 \
+    --seq-len 512 --batch-size 32 --steps 5000
+```
+
+### Thread configuration
+
+The launcher automatically sets all CPU parallelism variables before JAX
+initialises (`OMP_NUM_THREADS`, `XLA_FLAGS`, `MKL_NUM_THREADS`, etc.). On
+a c4a-standard-32 the default `--threads 32` saturates all 32 vCPUs.
+
+Config reference: `config/configs_toml/arm_axion/training.toml`
+
+### TPU training
+
+For TPU v5e/v6e, use `scripts/launch_tpu_training.py` with `--mesh-rows`
+and `--mesh-cols` matching your topology (2×2 for v5e-4, 8×8 for v6e-64).
 
 - Several advanced paths still include placeholder/mock logic (see `BACKLOG.md`).
 - Hardware-specific features depend on external stacks and environment.
