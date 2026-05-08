@@ -15,6 +15,8 @@
 #   3  Large  474M phase 1  (general corpus, 35k steps, ~6 d)
 #   4  Large  474M phase 2  (legal DAPT, 10k steps, ~2 d)
 #   5  Soup all models
+#   6  Distillation: large→medium, large→small  (~10h each)
+#   7  LoRA fine-tuning per specialty (penal/civil/laboral/constitucional)
 # ============================================================
 
 set -euo pipefail
@@ -223,13 +225,16 @@ if run_phase 4; then
     ok "Phase 4 done"
 fi
 
-# ── Phase 5: Summary ──────────────────────────────────────────────────────────
+CKPT_DISTIL_MEDIUM="checkpoints/distil_medium_legal"
+CKPT_DISTIL_SMALL="checkpoints/distil_small_legal"
+LORA_DIR="checkpoints/lora"
+FINETUNE_DATA="${FINETUNE_DATA:-data/finetune/legal_qa.jsonl}"
+
+# ── Phase 5: Soup inventory ───────────────────────────────────────────────────
 
 if run_phase 5; then
-    log "═══ Phase 5: Final model inventory ═══"
+    log "═══ Phase 5: Final base model inventory ═══"
     echo ""
-    echo "  Model                    Params  Checkpoint"
-    echo "  ─────────────────────────────────────────────────────────"
     for entry in \
         "Small-34M-phase1-soup|34M|${CKPT_SMALL1}/soup_uniform.pkl" \
         "Small-34M-phase2-soup|34M|${CKPT_SMALL2}/soup_uniform.pkl" \
@@ -238,20 +243,134 @@ if run_phase 5; then
         "Large-474M-legal-soup|474M|${CKPT_LARGE2}/soup_uniform.pkl"
     do
         name=$(echo "$entry" | cut -d'|' -f1)
-        params=$(echo "$entry" | cut -d'|' -f2)
         path=$(echo "$entry" | cut -d'|' -f3)
         if [[ -f "$path" ]]; then
             size=$(du -sh "$path" 2>/dev/null | cut -f1)
-            ok "  %-28s %-6s %s (%s)" "$name" "$params" "$path" "$size"
+            ok "  %-30s %s (%s)" "$name" "$path" "$size"
         else
             echo -e "  ${YELLOW}MISSING${NC}  $name → $path"
         fi
     done
-    echo ""
-    log "Next steps:"
-    echo "  • Distillation large→medium→small: scripts/distil.py (pending)"
-    echo "  • LoRA fine-tuning per legal specialty (penal/civil/laboral/…)"
     echo "  • Instruction SFT + DPO alignment"
+    ok "Phase 5 done"
+fi
+
+# ── Phase 6: Distillation large→medium→small ──────────────────────────────────
+
+if run_phase 6; then
+    log "═══ Phase 6: Distillation ═══"
+
+    TEACHER="${CKPT_LARGE2}/soup_uniform.pkl"
+    if [[ ! -f "$TEACHER" ]]; then
+        log "Teacher not ready ($TEACHER) — run phases 4+5 first"; exit 1
+    fi
+
+    # large (474M) → medium (114M)
+    if [[ -f "${CKPT_DISTIL_MEDIUM}/ckpt_step_0010000.pkl" ]]; then
+        skip "Distil large→medium already done"
+    else
+        LAST=$(latest_ckpt "$CKPT_DISTIL_MEDIUM")
+        RESUME_ARG="--student-resume ${CKPT_MEDIUM}/soup_uniform.pkl"
+        [[ -n "$LAST" ]] && RESUME_ARG="--student-resume $LAST"
+        log "Distilling large→medium (~10h)"
+        "$PYTHON" scripts/distil.py \
+            --teacher         "$TEACHER" \
+            --teacher-preset  large \
+            --student-preset  medium \
+            $RESUME_ARG \
+            --data-dir        "$LEGAL_TOK" \
+            --output          "$CKPT_DISTIL_MEDIUM" \
+            --steps 10000 --batch-size 16 --grad-accum 8 \
+            --temperature 4.0 --alpha 0.7 \
+            --dtype bf16 --threads $THREADS
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_DISTIL_MEDIUM" --n 3
+    fi
+
+    # distilled medium (114M) → small (34M)
+    TEACHER_M="${CKPT_DISTIL_MEDIUM}/soup_uniform.pkl"
+    if [[ -f "${CKPT_DISTIL_SMALL}/ckpt_step_0010000.pkl" ]]; then
+        skip "Distil medium→small already done"
+    else
+        LAST=$(latest_ckpt "$CKPT_DISTIL_SMALL")
+        RESUME_ARG="--student-resume ${CKPT_SMALL2}/soup_uniform.pkl"
+        [[ -n "$LAST" ]] && RESUME_ARG="--student-resume $LAST"
+        log "Distilling medium→small (~6h)"
+        "$PYTHON" scripts/distil.py \
+            --teacher         "$TEACHER_M" \
+            --teacher-preset  medium \
+            --student-preset  small \
+            $RESUME_ARG \
+            --data-dir        "$LEGAL_TOK" \
+            --output          "$CKPT_DISTIL_SMALL" \
+            --steps 10000 --batch-size 32 --grad-accum 8 \
+            --temperature 4.0 --alpha 0.7 \
+            --dtype bf16 --threads $THREADS
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_DISTIL_SMALL" --n 3
+    fi
+    ok "Phase 6 done"
+fi
+
+# ── Phase 7: LoRA fine-tuning per specialty ────────────────────────────────────
+
+if run_phase 7; then
+    log "═══ Phase 7: LoRA specialty fine-tuning ═══"
+
+    BASE="${CKPT_LARGE2}/soup_uniform.pkl"
+    if [[ ! -f "$BASE" ]]; then
+        log "Base model not ready ($BASE) — run phases 4+5 first"; exit 1
+    fi
+    if [[ ! -f "$FINETUNE_DATA" ]]; then
+        log "Fine-tuning data not found: $FINETUNE_DATA"
+        log "Create data/finetune/legal_qa.jsonl with {prompt, response} lines"
+        log "Skipping LoRA phase — set FINETUNE_DATA env var to override path"
+    else
+        for SPECIALTY in penal civil laboral constitucional administrativo; do
+            LORA_OUT="${LORA_DIR}/large_${SPECIALTY}"
+            if [[ -f "${LORA_OUT}/lora_final.pkl" ]]; then
+                skip "LoRA $SPECIALTY already done"
+                continue
+            fi
+            log "LoRA fine-tuning: $SPECIALTY (~2h)"
+            "$PYTHON" scripts/lora_finetune.py \
+                --base-ckpt  "$BASE" \
+                --preset     large \
+                --data       "$FINETUNE_DATA" \
+                --specialty  "$SPECIALTY" \
+                --output     "$LORA_OUT" \
+                --steps 2000 --batch-size 4 \
+                --rank 16 --lora-alpha 32 \
+                --dtype bf16 --threads $THREADS
+        done
+    fi
+    ok "Phase 7 done"
+fi
+
+# ── Final inventory ───────────────────────────────────────────────────────────
+
+if run_phase 5 || run_phase 6 || run_phase 7; then
+    log "═══ Full model inventory ═══"
+    echo ""
+    for entry in \
+        "Small-34M-phase2-soup|${CKPT_SMALL2}/soup_uniform.pkl" \
+        "Medium-114M-soup|${CKPT_MEDIUM}/soup_uniform.pkl" \
+        "Large-474M-general|${CKPT_LARGE1}/soup_uniform.pkl" \
+        "Large-474M-legal|${CKPT_LARGE2}/soup_uniform.pkl" \
+        "Distil-Medium-legal|${CKPT_DISTIL_MEDIUM}/soup_uniform.pkl" \
+        "Distil-Small-legal|${CKPT_DISTIL_SMALL}/soup_uniform.pkl" \
+        "LoRA-large-penal|${LORA_DIR}/large_penal/lora_final.pkl" \
+        "LoRA-large-civil|${LORA_DIR}/large_civil/lora_final.pkl" \
+        "LoRA-large-laboral|${LORA_DIR}/large_laboral/lora_final.pkl" \
+        "LoRA-large-constitucional|${LORA_DIR}/large_constitucional/lora_final.pkl"
+    do
+        name=$(echo "$entry" | cut -d'|' -f1)
+        path=$(echo "$entry" | cut -d'|' -f2)
+        if [[ -f "$path" ]]; then
+            size=$(du -sh "$path" 2>/dev/null | cut -f1)
+            ok "  %-35s %s (%s)" "$name" "$path" "$size"
+        else
+            echo -e "  ${YELLOW}pending${NC}  $name"
+        fi
+    done
 fi
 
 log "Pipeline complete."
