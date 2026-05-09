@@ -1318,6 +1318,51 @@ crece. Para el corpus legal y la memoria persistente V4, considerar TurboQuant:
 Aplica especialmente a la memoria persistente V4 (índice crece por usuario,
 imposible reentrenar PQ cada vez) y al RAG index principal si supera los 10M chunks.
 
+**Nota arquitectural V4+ — BiGS como backbone alternativo para capibara-embed** (arXiv:2212.10544, Cornell + DeepMind, 2023):
+
+El modelo actual (capibara-embed-m) parte de BERT-base (atención cuadrática, máx 512 tokens).
+Para V4/V5, cuando el corpus legal justifique entrenar el encoder desde cero, BiGS
+(Bidirectional Gated SSM) es el candidato natural:
+
+| Propiedad | BERT-base (actual) | BiGS equivalente |
+|-----------|-------------------|-----------------|
+| Mecanismo de routing | Multi-head attention O(n²) | SSM bidireccional O(n) |
+| Tokens máximos (sin aproximación) | 512 | 4096+ |
+| FLOPs a 4096 tokens | 4.1E+12 | 2.6E+12 (−37%) |
+| GLUE AVG | 85.8 (Large) | 85.8 — iguala sin atención |
+| SQuAD F1 (512 tokens) | 90.9 | 89.5 |
+| Longformer SCROLLS 4096 | — | supera LED y BART |
+| Sintaxis (CoLA 13 cat.) | línea base | supera en 9/13 categorías |
+
+Arquitectura del bloque BiGS (implementación JAX):
+```python
+# BiGS layer — bidirectional gated SSM (S4D / Mamba variant)
+def bigs_layer(X, W_v, W_f, W_b, W_u1, W_u2, W_u, W_o, ssm_forward, ssm_backward):
+    X = layer_norm(X)                           # (B, L, d)
+    V = gelu(W_v @ X)                           # gate directo
+    F = gelu(W_f @ X)                           # input SSM forward
+    B = gelu(W_b @ jnp.flip(X, axis=1))        # input SSM backward
+    U1 = W_u1 @ ssm_forward(F)                 # forward SSM
+    U2 = W_u2 @ jnp.flip(ssm_backward(B), axis=1)  # backward SSM (re-flip)
+    U  = gelu(W_u @ (U1 * U2))                 # fusión multiplicativa
+    O  = W_o @ (U * V)                          # puerta final
+    return O                                    # (B, L, d)
+```
+
+**Razón por la que NO aplica a V2 todavía**:
+- BiGS requiere pretraining desde cero — no puede cargar pesos de multilingual-e5-base
+- V2 prioriza velocidad: finetunear e5-base con contrastive loss tarda ~1 día en Axion
+- Pretraining BiGS legal (97B tokens para igualar BERT) requeriría semanas en el mismo hardware
+
+**Condición de upgrade en V4**: si `max_seq_len=512` del BERT actual trunca el 20%+ de los
+documentos legales del corpus (sentencias, contratos), reemplazar backbone por BiGS/Mamba
+bidireccional permite indexar documentos completos sin chunking agresivo y mejora recall.
+
+**Nota**: BiGS usa S4D (2022), previo a Mamba (2023). En V4, usar Mamba bidireccional
+(forward Mamba + backward Mamba + gate) en lugar de S4D daría mejores resultados con
+el mismo esquema arquitectural. Los principios de diseño (bidirectional + multiplicative gate)
+son los que importan, no la variante específica de SSM.
+
 ### Nuevos scripts
 
 ```
