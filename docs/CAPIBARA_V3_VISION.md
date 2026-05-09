@@ -983,6 +983,71 @@ Guía para calibrar `d_state` en función del objetivo de perplejidad:
 
 ---
 
+## Paisaje competitivo: xLSTM y la convergencia a memoria matricial
+
+*Referencia: Beck et al. 2024 "xLSTM: Extended Long Short-Term Memory" (JKU Linz / NXAI, arXiv:2405.04517).*
+
+Este paper, publicado tras la definición de V3, es relevante como validación externa y contexto competitivo.
+
+### xLSTM en una línea
+
+xLSTM extiende LSTM con gating exponencial y dos nuevas celdas de memoria:
+- **sLSTM**: memoria escalar + *memory mixing* (conexiones hidden-hidden). Resuelve state tracking formal (parity, gramáticas regulares). No paralelizable.
+- **mLSTM**: memoria matricial C_t ∈ ℝ^{d×d} actualizada por producto exterior. Completamente paralelizable (análogo a FlashAttention).
+
+```
+mLSTM: C_t = f_t · C_{t-1} + i_t · v_t · k_t^T    (eq. 19)
+              ↑ forget gate   ↑ input gate  ↑ outer product
+Recuperación: h_t = o_t · (C_t · q_t) / max(|n_t^T · q_t|, 1)
+```
+
+### Resultados clave frente a Mamba (300B tokens, 1.3B params)
+
+| Modelo | PPL @2048 | PPL @16k (extrapolación desde 2048) |
+|--------|-----------|--------------------------------------|
+| Llama | ~9.4 | **337.83** — colapso total |
+| Mamba | ~9.1 | 14.00 |
+| xLSTM[1:0] | **~9.0** | **8.92** — el único que mejora |
+
+xLSTM supera a Mamba en 568 de 571 dominios PALOMA (99.5%). Las scaling laws muestran pendiente consistentemente mejor que Mamba y Transformer a todos los tamaños (125M–1.3B).
+
+### La conexión crítica: mLSTM ≈ Infini-attention
+
+Comparando las reglas de actualización de memoria:
+
+```
+mLSTM (Beck et al.):       C_t = f_t · C_{t-1} + i_t · v_t · k_t^T
+Infini-attention (Munkhdalai et al.): M_s = M_{s-1} + ELU(Q)^T · (V − σ(Q)·M_{s-1})
+```
+
+Ambas mantienen una **memoria matricial d×d** actualizada token a token. Ambas recuperan por multiplicación matriz-vector. Ambas tienen gating para controlar retención/olvido. Son dos convergencias independientes hacia la misma arquitectura: memoria asociativa diferenciable con actualizaciones por regla delta.
+
+**Consecuencia directa**: las capas Infini-attention de V3 hacen funcionalmente lo que mLSTM hace. La arquitectura V3 —Mamba (contexto local) + Infini-attention (memoria matricial global)— ocupa el mismo espacio de diseño que xLSTM, aunque con un SSM diferente como componente local.
+
+### Lo que V3 tiene y xLSTM no tiene
+
+V3 combina dos mecanismos que xLSTM no junta:
+- **Infini-attention** (≈ mLSTM): atención completa sobre el contexto inmediato + memoria comprimida acumulada
+- **Mamba**: estado SSM para procesamiento secuencial eficiente con contexto implícito
+
+xLSTM usa sLSTM como el componente "de estado" en lugar de Mamba/SSM. La principal ventaja de sLSTM sobre Mamba es el *memory mixing* (conexiones hidden→hidden) que permite resolver tareas de state tracking que los SSMs no pueden. En contrapartida, sLSTM no es paralelizable en entrenamiento.
+
+### Lo que xLSTM tiene que V3 podría mejorar
+
+El *memory mixing* de sLSTM habilita state tracking formal (parity, gramáticas regulares en la Jerarquía de Chomsky). V3 no tiene memory mixing explícito — las capas Infini-attention proveen memoria matricial pero sin recurrencia oculta. Este es un **gap teórico** para tareas de razonamiento secuencial muy estricto; en práctica el 25% de atención compensa en la mayoría de casos.
+
+### Implicaciones para V4 y V5
+
+xLSTM extrapolación resultado (Figura 7, paper): entrenado con seq=2048, prueba limpiamente hasta 16k tokens. La memoria matricial C_t tiene tamaño **independiente de la secuencia** (siempre d×d), de ahí la extrapolación natural. Esto apoya el diseño de V4 con seq=8192 — si nuestras capas Infini-attention tienen la misma propiedad, la extrapolación debería ser análoga.
+
+**Para V5** (o si el go/no-go de V3 falla en recall >2048 tokens): sustituir bloques Mamba por mLSTM es una alternativa directa — mLSTM es paralelizable, escala mejor en entrenamiento, y tiene mejor extrapolación empírica que Mamba. La transición sería arquitectónicamente limpia dado que mLSTM ≈ Infini-attention en su modo de memoria.
+
+### xLSTM como objetivo de rendimiento para V3
+
+Los benchmarks de xLSTM sobre 300B tokens SlimPajama son el estado del arte no-Transformer. V3 debe superar a Mamba en las tareas legales específicas; si además iguala o supera a xLSTM[1:0] en las métricas de recall y razonamiento, confirma que el diseño híbrido con Infini-attention es competitivo con la mejor alternativa conocida.
+
+---
+
 ## Archivos a diseñar para V3
 
 ```
