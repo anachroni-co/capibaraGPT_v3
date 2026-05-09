@@ -192,6 +192,7 @@ def train_tokenizer(
     vocab_size: int = 32000,
     max_lines: int = 5_000_000,
     character_coverage: float = 0.9999,
+    num_threads: int = 0,
 ) -> Path:
     try:
         import sentencepiece as spm
@@ -236,7 +237,7 @@ def train_tokenizer(
         # Training efficiency
         input_sentence_size=max_lines,
         shuffle_input_sentence=True,
-        num_threads=max(1, os.cpu_count() or 4),
+        num_threads=num_threads if num_threads > 0 else max(1, os.cpu_count() or 4),
     )
 
     logger.info("Starting SentencePiece BPE training (vocab=%d)…", vocab_size)
@@ -308,6 +309,8 @@ def main() -> None:
     tr.add_argument("--max-lines",      type=int,   default=5_000_000,
                     help="Lines to sample from corpus (default 5M, ~1-2 h)")
     tr.add_argument("--character-coverage", type=float, default=0.9999)
+    tr.add_argument("--num-threads",    type=int,   default=4,
+                    help="CPU threads for spm_train (default 4 — safe while training runs)")
 
     # test subcommand
     ts = sub.add_parser("test", help="Smoke-test a trained tokenizer")
@@ -325,6 +328,7 @@ def main() -> None:
             vocab_size=args.vocab_size,
             max_lines=args.max_lines,
             character_coverage=args.character_coverage,
+            num_threads=args.num_threads,
         )
     elif args.cmd == "test" or args.test:
         model_path = (args.model if args.cmd == "test" else args.test)
