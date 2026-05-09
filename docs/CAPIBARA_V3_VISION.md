@@ -271,15 +271,69 @@ MoE reemplaza el routing implícito en el backbone.
 
 ### Configuración MoE para Capibara V3
 
+*Basado en: "M6-T: Exploring Sparse Expert Models and Beyond" — Yang et al. 2021, Alibaba.*
+
 ```python
 # 4 experts, top-2 activos — conservador, menor riesgo de expert collapse
 MOE_CONFIG_V3 = dict(
     num_experts=4,
     top_k=2,
-    moe_every=2,          # MoE en capas pares, densa en impares
-    expert_capacity=1.25, # buffer para balance de carga
-    aux_loss_weight=0.01, # penalización por desequilibrio de experts
+    moe_every=2,           # MoE en capas pares, densa en impares
+    expert_capacity=1.25,  # buffer para balance de carga
+    aux_loss_weight=0.001, # MUY BAJO — ver nota abajo
+    use_prototyping=True,  # expert prototyping: 2 grupos de 2 experts, top-1 por grupo
 )
+```
+
+**Nota sobre `aux_loss_weight`**: Yang et al. 2021 demuestran que el aux loss de balanceo
+forzado *empeora* la calidad del modelo (PPL 2.694 con aux_loss vs 2.645 sin él) en modelos
+con ≥32 experts. Para V3 con solo 4 experts el riesgo de colapso total es mayor (un router
+inmaduro puede enviar todo al expert 0), por lo que se mantiene pero en `0.001` en lugar de
+`0.01`. Evaluar en Small V3: si el coeficiente de variación `cv` converge sin colapso,
+reducirlo a `0.0001` o eliminarlo.
+
+**Expert Prototyping** — alternativa eficiente al top-2 estándar:
+
+El top-2 convencional requiere dos pasadas secuenciales de argmax, lo que penaliza
+la velocidad de entrenamiento. Expert prototyping divide los N experts en k grupos
+(prototipos) y aplica top-1 *en paralelo* dentro de cada grupo:
+
+```
+top-2 estándar:     argmax(W_g·x) → argmax(W_g·x)   # secuencial, lento
+2×top-1 prototipo:  [argmax(W_g1·x) | argmax(W_g2·x)] # paralelo, mismo FLOP
+
+Para V3 (4 experts, k=2):
+  Prototipo 1: {Expert 0, Expert 1} → top-1
+  Prototipo 2: {Expert 2, Expert 3} → top-1
+  Salida: p₁·E_selected1(x) + p₂·E_selected2(x)   # igual que top-2
+```
+
+Resultados del paper: igual calidad o mejor que top-2, con velocidad de entrenamiento
+similar a top-1. Para V3 (4 experts) el beneficio es modesto; para V4 (8 experts) es
+más significativo (ver V4 vision doc).
+
+```python
+class ExpertPrototypingLayer(nn.Module):
+    """2 grupos de 2 experts cada uno, top-1 por grupo."""
+    num_experts: int = 4
+    num_prototypes: int = 2     # k grupos
+    d_model: int = 512
+
+    @nn.compact
+    def __call__(self, x):
+        experts_per_proto = self.num_experts // self.num_prototypes
+        outputs = []
+        for proto_idx in range(self.num_prototypes):
+            expert_slice = slice(proto_idx * experts_per_proto,
+                                 (proto_idx + 1) * experts_per_proto)
+            # top-1 dentro de este prototipo
+            gate_logits = nn.Dense(experts_per_proto)(x)
+            weights = jax.nn.softmax(gate_logits, axis=-1)
+            top1_idx = jnp.argmax(gate_logits, axis=-1)
+            # seleccionar y aplicar el expert ganador
+            proto_out = self._apply_expert(x, top1_idx, expert_slice)
+            outputs.append(weights[..., :1] * proto_out)
+        return sum(outputs)
 ```
 
 4 experts es el mínimo para routing útil y el más estable de entrenar.
@@ -302,8 +356,12 @@ con análisis de activación para entender qué aprendió cada expert.
 ### MoE + Mamba
 
 En capas Mamba: la FFN interna puede ser MoE.
-En capas de atención: la FFN posterior puede ser MoE.
-Las matrices de proyección QKV/SSM permanecen densas.
+En capas de atención: la FFN posterior **(solo la FFN)** puede ser MoE.
+Las matrices de proyección QKV/SSM permanecen **siempre densas**.
+
+**Advertencia confirmada (Yang et al. 2021)**: aplicar MoE a las proyecciones Q, K, V
+de la atención causa inestabilidad de entrenamiento y peor calidad que MoE solo en FFN.
+V3 aplica MoE únicamente a las FFNs — diseño correcto ✅.
 
 Arquitectura final V3:
 

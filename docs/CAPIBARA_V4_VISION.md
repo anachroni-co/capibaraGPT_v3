@@ -69,12 +69,25 @@ Con ~30B tokens de corpus, el dataset es suficientemente diverso para entrenar
 ```python
 MOE_CONFIG_V4 = dict(
     num_experts=8,
-    top_k=2,              # mismo top-k que V3
+    top_k=2,               # mismo top-k que V3
     moe_every=2,
     expert_capacity=1.25,
-    aux_loss_weight=0.01,
-    z_loss_weight=0.001,  # z-loss adicional para estabilizar router con E=8
+    aux_loss_weight=0.001, # reducido: Yang et al. 2021 muestran que >0.01 empeora PPL
+    z_loss_weight=0.001,   # z-loss para estabilizar router con E=8
+    use_prototyping=True,  # expert prototyping: 2 grupos de 4 experts, top-1 por grupo
 )
+```
+
+**Expert Prototyping en V4** (Yang et al. 2021 — M6-T): con 8 experts y top-2, el
+prototyping agrupa en 2 prototipos de 4 experts cada uno. El beneficio es mayor que
+en V3 (4 experts) porque hay más experts para organizar y el coste del argmax secuencial
+es más relevante. La calidad mejora frente a top-2 convencional con los mismos FLOPs.
+
+```
+V4 expert prototyping:
+  Prototipo 1: {E0, E1, E2, E3} → top-1 del grupo (selecciona 1 de 4)
+  Prototipo 2: {E4, E5, E6, E7} → top-1 del grupo (selecciona 1 de 4)
+  Resultado: 2 experts activados, mismo coste que top-2, routing más estable
 ```
 
 Especialización emergente esperada con 8 experts sobre corpus iberoamericano ampliado:
