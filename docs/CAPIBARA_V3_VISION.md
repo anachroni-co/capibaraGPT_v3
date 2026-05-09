@@ -1046,6 +1046,25 @@ xLSTM extrapolación resultado (Figura 7, paper): entrenado con seq=2048, prueba
 
 Los benchmarks de xLSTM sobre 300B tokens SlimPajama son el estado del arte no-Transformer. V3 debe superar a Mamba en las tareas legales específicas; si además iguala o supera a xLSTM[1:0] en las métricas de recall y razonamiento, confirma que el diseño híbrido con Infini-attention es competitivo con la mejor alternativa conocida.
 
+### Validación de producción externa: NVIDIA Hymba-1.5B
+
+*Referencia: Belcak et al. 2025 "Small Language Models are the Future of Agentic AI" (NVIDIA Research + Georgia Tech, arXiv:2506.02153v2, sep. 2025).*
+
+Hymba-1.5B es un SLM con arquitectura híbrida Mamba+atención desarrollado por NVIDIA Research y desplegado en producción. Sus benchmarks son la referencia externa más directa para la viabilidad del patrón arquitectural de V3:
+
+| Métrica | Hymba-1.5B | Transformer comparable |
+|---------|-----------|----------------------|
+| Throughput | **3× mayor** | baseline |
+| Instruction following | Supera modelos de 13B | — |
+| Arquitectura | Mamba + attention hybrid | solo attention |
+| Tamaño | 1.5B parámetros | — |
+
+**Relevancia para V3**: Hymba-1.5B confirma empíricamente en producción lo que xLSTM confirma en benchmarks de investigación — el patrón híbrido (SSM local + atención global) es la arquitectura de referencia para SLMs de alta eficiencia. V3 sigue el mismo patrón (Mamba + Infini-attention) pero orientado a dominio legal en español.
+
+La diferencia clave entre V3 e Hymba: Hymba usa atención estándar O(n²) para la componente global; V3 usa Infini-attention (memoria matricial M de tamaño fijo), lo que da extrapolación de secuencia análoga a xLSTM sin el coste cuadrático. Esto hace que V3 sea más eficiente que Hymba para secuencias largas (documentos legales de 4K–8K tokens).
+
+**Objetivo de throughput V3**: Hymba-1.5B @ 3× Transformer-1.5B es el umbral de referencia del sector. V3-Small (42M parámetros) en Axion debería superar ese ratio dado el menor tamaño del modelo y la complejidad O(1) de Infini-attention en inferencia.
+
 ---
 
 ## Archivos a diseñar para V3

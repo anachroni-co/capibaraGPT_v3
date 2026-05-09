@@ -597,6 +597,31 @@ Antes de producción, evaluar los adapters merged contra los individuales
 en un conjunto de test por especialidad. El merging puede degradar ligeramente
 la especialización — es un tradeoff calidad vs versatilidad.
 
+### Nota: alineamiento de formato para el adapter `herramientas`
+
+*Referencia: Belcak et al. 2025 "Small Language Models are the Future of Agentic AI", §3.5 — Behavioral Alignment (arXiv:2506.02153v2).*
+
+En pipelines agénticos, los SLMs entrenados con un formato de salida único y consistente son significativamente más fiables que los entrenados con formatos mixtos. Para el adapter `herramientas`:
+
+- **Todos los ejemplos de fine-tuning deben producir JSON puro** — sin texto libre envolvente, sin explicaciones fuera del JSON.
+- El formato de destino es exactamente lo que `speculative_inference.py` parsea como tool call.
+- Cualquier ejemplo donde la respuesta mezcle JSON con texto libre debe descartarse en la etapa de curación.
+
+```python
+# En curate_instruction_data.py — filtro para datos del adapter herramientas
+def is_valid_tool_call(example: dict) -> bool:
+    if example.get("adapter") != "herramientas":
+        return True  # otros adapters no aplica
+    response = example.get("response", "")
+    try:
+        json.loads(response)
+        return True
+    except json.JSONDecodeError:
+        return False  # descarta respuestas con texto libre mezclado
+```
+
+Esto contrasta con los adapters conversacionales (`dialogo`, `instruccion`) donde la variedad de formatos de respuesta es deseable para la naturalidad.
+
 ---
 
 ## Mejora 6 — Multi-seed soup en destilación
@@ -1477,3 +1502,54 @@ son los que importan, no la variante específica de SSM.
 - Los adapters LoRA V1 son **incompatibles** con el modelo V2.
 - La API HTTP (`/generate`, `/health`) mantiene el mismo contrato — clientes
   externos no necesitan cambios.
+
+---
+
+## Bucle de mejora continua: algoritmo S1-S6
+
+*Referencia: Belcak et al. 2025 "Small Language Models are the Future of Agentic AI", §3.7 — Agentic Data Collection (NVIDIA Research + Georgia Tech, arXiv:2506.02153v2).*
+
+El algoritmo S1-S6 formaliza cómo convertir interacciones de producción en datos de SFT para mejorar continuamente los adapters especializados. Capibara ya tiene todos los componentes necesarios:
+
+| Paso | Descripción | Implementación Capibara |
+|------|-------------|------------------------|
+| S1 | Log cada llamada al LLM | Servidor HTTP `/generate` — extender log estructurado |
+| S2 | Curar interacciones registradas | `scripts/curate_instruction_data.py` |
+| S3 | Clasificar por tipo de tarea | `_route_specialty()` en `speculative_inference.py` |
+| S4 | Seleccionar SLM apropiado | Slim200M + LoRA adapter por especialidad |
+| S5 | Fine-tuning con LoRA | `scripts/lora_finetune.py` |
+| S6 | Iterar | Vuelve a S1 — loop continuo |
+
+### Extensión del log del servidor HTTP
+
+```python
+# Añadir al servidor HTTP — log estructurado por inferencia
+import json, datetime, pathlib
+
+LOG_DIR = pathlib.Path("logs/production")
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+def log_inference(request: dict, response: str, specialty: str, latency_ms: float):
+    entry = {
+        "ts": datetime.datetime.utcnow().isoformat(),
+        "specialty": specialty,
+        "prompt": request["prompt"],
+        "response": response,
+        "latency_ms": latency_ms,
+        "tokens_generated": len(response.split()),
+    }
+    log_file = LOG_DIR / f"{datetime.date.today()}.jsonl"
+    with log_file.open("a") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+```
+
+### Criterio de re-entrenamiento por adapter
+
+```
+Para cada adapter LoRA:
+  - Umbral mínimo:   200 nuevos ejemplos curados (post-filtro de calidad)
+  - Frecuencia máx:  1 re-entrenamiento / 2 semanas (evitar sobreajuste a distribución reciente)
+  - Control calidad: spot-check humano del 5% de los logs antes de añadir al SFT
+```
+
+Este bucle convierte el servidor HTTP de Capibara en una fuente continua de datos de SFT, mejorando progresivamente cada adapter con interacciones reales del dominio legal español. Los logs del día `YYYY-MM-DD.jsonl` se procesan con `curate_instruction_data.py --source production --date YYYY-MM-DD` y se añaden al pool de entrenamiento del adapter correspondiente.
