@@ -2,13 +2,13 @@
 
 **Estado**: Documento de planificación. Ejecutar cuando V1 haya terminado.  
 **Prerequisito**: V1 en producción con benchmarks de referencia documentados.  
-**Estimación total V2**: ~14–16 días de entrenamiento + ~2 días de integración.
+**Estimación total V2**: ~16–18 días de entrenamiento + ~2 días de integración.
 
 ---
 
 ## Resumen ejecutivo
 
-V2 introduce cinco mejoras ortogonales que, combinadas, producen un salto cualitativo
+V2 introduce seis mejoras que, combinadas, producen un salto cualitativo
 significativo respecto a V1:
 
 | Mejora | Impacto principal | Coste |
@@ -18,9 +18,10 @@ significativo respecto a V1:
 | seq\_len 2048 | Documentos legales completos en contexto | ~2× memoria por step |
 | CrewAI multi-agent | Flujos de trabajo legales complejos | Wrapper + config |
 | LoRA merging | Adapters combinados sin reentrenar | Script nuevo |
+| Multi-seed soup en destilación | Student más robusto y generalizable | 3× tiempo destilación |
 
 Las mejoras 1 y 3 están acopladas (BPE habilita seq\_len largo con sentido).
-Las mejoras 2 y 5 son independientes y pueden hacerse en paralelo.
+Las mejoras 2, 5 y 6 son independientes y pueden hacerse en paralelo.
 La mejora 4 requiere que 1 y 3 estén terminadas.
 
 ---
@@ -395,6 +396,101 @@ la especialización — es un tradeoff calidad vs versatilidad.
 
 ---
 
+## Mejora 6 — Multi-seed soup en destilación
+
+### Por qué funciona especialmente bien en destilación
+
+V1 ya aplica `soup_checkpoints.py` al final de cada destilación (promedia los
+últimos 3 checkpoints del mismo run). Eso es **intra-run soup**. La mejora de V2
+añade **inter-run soup**: lanzar la destilación 3 veces con seeds distintos y
+promediar los students finales.
+
+La loss de destilación es KL-divergence con temperatura T=4.0 — una función
+significativamente más suave que la cross-entropy de preentrenamiento. Esto produce
+un paisaje de loss más plano donde runs distintos convergen a mínimos locales
+cercanos pero no idénticos. El promedio de esos tres mínimos cae en una región
+de mayor generalización que cualquiera individual.
+
+```
+Run seed=42  → student_42  (mínimo local A)
+Run seed=123 → student_123 (mínimo local B)  ←  todos en la misma cuenca
+Run seed=777 → student_777 (mínimo local C)
+              ↓
+         soup_multiseed    (centro del triángulo A-B-C)
+              ↓
+    mejor generalización que A, B o C por separado
+```
+
+Resultado esperado: mejora de ~2–4% en perplexity sobre el test set legal
+respecto al soup intra-run solo. El gain es mayor que en preentrenamiento
+precisamente porque T=4.0 suaviza el paisaje.
+
+### Comandos V2
+
+Se aplica a las tres destilaciones (Large→Medium, Medium→Small, Large→Small/Cerebro):
+
+```bash
+# Ejemplo: destilación Large → Medium con 3 seeds
+for SEED in 42 123 777; do
+    tmux send-keys -t distil "python scripts/distil.py \
+        --teacher         checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+        --teacher-preset  large \
+        --student-preset  medium \
+        --student-resume  checkpoints/v2/axion_medium/soup_uniform.pkl \
+        --data-dir        data/tokenized_bpe/legal/ \
+        --tokenizer       tokenizer/capibara_legal.model \
+        --output          checkpoints/v2/distil_medium_s${SEED} \
+        --seed            ${SEED} \
+        --steps 10000 --batch-size 8 --grad-accum 8 \
+        --temperature 4.0 --alpha 0.7 \
+        --dtype bf16" Enter
+    # Esperar a que termine antes del siguiente seed
+done
+
+# Intra-run soup de cada seed (los 3 últimos checkpoints de cada run)
+for SEED in 42 123 777; do
+    python scripts/soup_checkpoints.py checkpoints/v2/distil_medium_s${SEED} --n 3
+done
+
+# Inter-run soup: promediar los tres students finales
+python scripts/soup_checkpoints.py \
+    checkpoints/v2/distil_medium_s42/soup_uniform.pkl \
+    checkpoints/v2/distil_medium_s123/soup_uniform.pkl \
+    checkpoints/v2/distil_medium_s777/soup_uniform.pkl \
+    --output checkpoints/v2/distil_medium_legal/soup_uniform.pkl
+```
+
+### Coste vs beneficio
+
+| Variante | Tiempo | Gain esperado |
+|----------|--------|---------------|
+| V1: intra-run soup (3 ckpts) | 1× destilación | baseline |
+| V2: intra-run × 3 seeds | 3× destilación | +2–4% perplexity |
+| V2 opcional: 5 seeds | 5× destilación | +3–5% (rendimientos decrecientes) |
+
+Con 3 seeds el ratio coste/beneficio es óptimo. Con 5 seeds el gain adicional
+sobre 3 seeds es pequeño (~1%) y el coste es 67% mayor.
+
+### Nota sobre `soup_checkpoints.py`
+
+El script actual toma un directorio y promedia los últimos N checkpoints del mismo run.
+Para el inter-run soup necesita aceptar paths explícitos. Añadir el flag `--files`:
+
+```bash
+# Forma actual (intra-run):
+python scripts/soup_checkpoints.py checkpoints/distil_medium_s42 --n 3
+
+# Forma nueva (inter-run, --files):
+python scripts/soup_checkpoints.py \
+    --files \
+        checkpoints/v2/distil_medium_s42/soup_uniform.pkl \
+        checkpoints/v2/distil_medium_s123/soup_uniform.pkl \
+        checkpoints/v2/distil_medium_s777/soup_uniform.pkl \
+    --output checkpoints/v2/distil_medium_legal/soup_uniform.pkl
+```
+
+---
+
 ## Plan de ejecución V2
 
 ### Fase 0 — Preparación (durante V1, paralelo)
@@ -405,6 +501,7 @@ la especialización — es un tradeoff calidad vs versatilidad.
 [ ] Implementar scripts/openai_wrapper.py
 [ ] Implementar scripts/merge_loras.py
 [ ] Añadir --tokenizer a distil.py y lora_finetune.py
+[ ] Añadir flag --files a soup_checkpoints.py para inter-run soup
 ```
 
 ### Fase 1 — Corpus (Día 0–1 tras V1)
@@ -467,10 +564,15 @@ tmux send-keys -t large "python scripts/launch_axion_training.py \
 # ... (tras soup de fase 1)
 ```
 
-### Fase 4 — Destilación V2 (Día 17–20)
+### Fase 4 — Destilación V2 con multi-seed soup (Día 17–26)
 
-Igual que V1 pero con --tokenizer en todos los comandos y
---seq-len 2048 en Medium/Small.
+3 runs por cada destilación (seeds 42, 123, 777) + intra-run soup + inter-run soup.
+Ver sección Mejora 6 para los comandos completos.
+
+Orden de ejecución (secuencial por dependencias de teacher/student):
+1. Large → Medium ×3 seeds → inter-run soup (~9 días)
+2. Medium destilado → Small ×3 seeds → inter-run soup (~6 días, paralelo con Large→Small)
+3. Large → Small/Cerebro ×3 seeds → inter-run soup (~6 días, paralelo con Medium→Small)
 
 ### Fase 5 — LoRA V2 con think traces (Día 20–21)
 
@@ -550,12 +652,13 @@ en el momento de iniciar V2.
 
 Modificaciones a scripts existentes:
 ```
-[ ] scripts/distil.py          — añadir --tokenizer
-[ ] scripts/lora_finetune.py   — añadir --tokenizer, --data-extra
+[ ] scripts/distil.py              — añadir --tokenizer, --seed
+[ ] scripts/lora_finetune.py       — añadir --tokenizer, --data-extra
+[ ] scripts/soup_checkpoints.py    — añadir --files para inter-run soup
 [ ] scripts/speculative_inference.py — BPETokenizer en lugar de byte-level,
                                        _strip_think_blocks(), tool tokens por ID
-[ ] scripts/run_full_training.sh       — pipeline V2 completo
-[ ] RUNBOOK.md                         — sección V2
+[ ] scripts/run_full_training.sh   — pipeline V2 completo con 3 seeds por destilación
+[ ] RUNBOOK.md                     — sección V2
 ```
 
 ---
