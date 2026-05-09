@@ -1301,6 +1301,23 @@ class PersistentMemory:
         self.index = faiss.IndexFlatIP(768)  # inner product = cosine con L2-norm
 ```
 
+**Nota de producción — TurboQuant para el índice FAISS** (arXiv:2504.19874, Google Research 2025):
+
+FAISS IVF-PQ (el cuantizador estándar para RAG a escala) requiere entrenar el codebook
+sobre los datos del corpus — proceso que bloquea el indexado y debe repetirse si el corpus
+crece. Para el corpus legal y la memoria persistente V4, considerar TurboQuant:
+
+| Aspecto | FAISS IVF-PQ | TurboQuant |
+|---------|-------------|------------|
+| Entrenamiento de codebook | Sí (minutos–horas) | No — data-oblivious |
+| Tiempo de cuantización d=768 | ~200s | <0.001s |
+| Recall@1 (2 bits) | menor | mayor (Figura 5, paper) |
+| Sesgado en producto interno | Sí | No (variante TurboQuant_prod) |
+| Compresión a 2.5 bits | — | 12.5× respecto a float32 |
+
+Aplica especialmente a la memoria persistente V4 (índice crece por usuario,
+imposible reentrenar PQ cada vez) y al RAG index principal si supera los 10M chunks.
+
 ### Nuevos scripts
 
 ```

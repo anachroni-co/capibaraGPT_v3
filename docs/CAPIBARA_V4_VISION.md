@@ -142,6 +142,43 @@ Sesión 2 (días después): "¿cómo va el tema del divorcio?"
 Implementación: embedding del resumen (sentence-transformers) → FAISS por usuario
 → recuperación por similitud en cada nueva sesión.
 
+**Cuantización de embeddings con TurboQuant** (Zandieh et al., Google Research, arXiv:2504.19874, 2025):
+
+El índice FAISS por usuario crece incrementalmente — cada nueva sesión añade un vector.
+FAISS IVF-PQ requiere reentrenar el codebook cuando crece el índice (caro, bloqueante).
+TurboQuant es data-oblivious: cuantiza cada vector nuevo en ~0.002s sin datos de calibración.
+
+```
+Sin TurboQuant: 768d × float32 × N sesiones = 3 KB/sesión
+Con TurboQuant 2.5 bits: 768d × 2.5/8 bytes = 240 bytes/sesión  →  12.5× compresión
+Recall@1 con TurboQuant 2.5 bits ≈ recall@1 con Product Quantization 4 bits  (Figure 5, paper)
+Tiempo de cuantización: 0.002s  vs  494s PQ  vs  3957s RabitQ  (Table 2, d=3072)
+```
+
+Algoritmo (sin librería externa, implementable en JAX/NumPy):
+```python
+# TurboQuant_mse — cuantizador MSE-óptimo para embeddings
+import jax.numpy as jnp
+
+def turboquant_encode(x: jnp.ndarray, Pi: jnp.ndarray, centroids: jnp.ndarray) -> jnp.ndarray:
+    """x: (d,) float32 → idx: (d,) uint8 (b bits por coord)"""
+    y = Pi @ x                                     # rotación aleatoria fija
+    y = y / jnp.linalg.norm(y)                     # normalizar a esfera unitaria
+    idx = jnp.argmin(jnp.abs(y[:, None] - centroids), axis=1)  # cuantización escalar
+    return idx.astype(jnp.uint8)
+
+def turboquant_decode(idx: jnp.ndarray, Pi: jnp.ndarray, centroids: jnp.ndarray) -> jnp.ndarray:
+    y_hat = centroids[idx]                         # recuperar centroides
+    return Pi.T @ y_hat                            # rotar de vuelta
+
+# centroids: precomputados una vez para la distribución Beta(d/2-1, d/2-1)
+# Pi: matriz de rotación aleatoria fija por despliegue (generar una vez, guardar)
+```
+
+Para producto interno sin sesgo (retrieval por coseno en FAISS):
+usar TurboQuant_prod (dos etapas: TurboQuant_mse con b-1 bits + QJL 1-bit sobre el residuo).
+Garantía: estimador no sesgado con distorsión ≤ (√3π²·‖y‖²/d) · (1/4^b).
+
 ---
 
 ## Decisiones pendientes de V3
