@@ -236,6 +236,53 @@ output = self._strip_think_blocks(self._strip_markers(raw_output))
 El speculative decoding no necesita cambios — los tokens `<think>`/`</think>` se
 tratan exactamente igual que cualquier otro token durante el draft/verify loop.
 
+### Estrategia de sampling — nucleus (top-p) por especialidad
+
+**Referencia**: Holtzman et al. 2020 "The Curious Case of Neural Text Degeneration".
+
+**Problema**: búsqueda greedy y beam search generan texto degenerado y repetitivo porque
+maximizan la probabilidad acumulada — el modelo queda atrapado en bucles de alta
+certeza. El top-k fijo tampoco funciona bien: k=50 es demasiado restrictivo cuando la
+distribución es plana (muchas continuaciones válidas) y demasiado permisivo cuando es
+muy picuda (solo 2–3 continuaciones razonables).
+
+**Solución — nucleus sampling**: muestrear del conjunto mínimo de tokens cuya
+probabilidad acumulada ≥ p. El tamaño del núcleo se adapta dinámicamente a la forma
+de la distribución:
+
+```
+Distribución plana  →  núcleo grande (muchos tokens plausibles) → diversidad
+Distribución picuda →  núcleo pequeño (pocos tokens plausibles) → precisión
+```
+
+**Por qué importa especialmente en uso legal**:
+- Respuestas factuales (¿qué dice el artículo X?) → distribución picuda → p bajo correcto
+- Redacción de documentos → distribución más plana → p alto correcto
+- Razonamiento paso a paso → temperatura baja para seguir la cadena lógica
+
+**Corrección en speculative decoding**: la probabilidad que almacena Cerebro para cada
+token borrador debe ser la probabilidad bajo la distribución del núcleo (renormalizada),
+no la softmax completa. El test de aceptación/rechazo de Leviathan et al. 2023 requiere
+`p_d = P_núcleo(tok)` para garantizar que la distribución de salida es exactamente la
+del verificador Large.
+
+**Perfiles por especialidad** (implementados en `SAMPLING_PROFILES`):
+
+| Especialidad | Temperatura | top-p | Justificación |
+|--------------|-------------|-------|---------------|
+| extraccion, herramientas | 0.40 | 0.80 | Salida estructurada, muy determinista |
+| razonamiento, qa | 0.60 | 0.85 | Factual, sigue el texto fuente |
+| resumen | 0.65 | 0.85 | Fiel al texto original |
+| legal (penal/civil/…) | 0.65 | 0.85 | Respuestas con base en norma |
+| instruccion | 0.75 | 0.90 | Instrucciones generales |
+| general | 0.80 | 0.95 | Default V1 |
+| dialogo | 0.85 | 0.95 | Conversación natural |
+| redaccion | 0.90 | 0.95 | Redacción creativa de documentos |
+
+Los perfiles se activan automáticamente al hacer routing de especialidad. Se pueden
+desactivar con `--no-adapt-sampling` o sobreescribir por petición HTTP con
+`{"temperature": 0.7, "top_p": 0.9}`.
+
 ---
 
 ## Mejora 3 — seq\_len 2048

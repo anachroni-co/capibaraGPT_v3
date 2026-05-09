@@ -196,6 +196,35 @@ def _route_specialty(text: str) -> str:
     return best if scores[best] > 0 else "general"
 
 
+# ── Per-specialty sampling profiles (Holtzman et al. 2020) ────────────────────
+# Nucleus (top-p) sampling: draw from the smallest token set whose cumulative
+# probability >= p. Lower p → more factual/deterministic; higher p → more
+# diverse/creative. Temperature scales the logit sharpness before truncation.
+#
+# Legal domains: factual answers need lower top_p (fewer plausible continuations
+# in a well-constrained legal space). Drafting/dialogue permits more diversity.
+
+SAMPLING_PROFILES: dict[str, tuple[float, float]] = {
+    # (temperature, top_p)
+    "razonamiento":   (0.60, 0.85),  # step-by-step reasoning — deterministic
+    "qa":             (0.60, 0.85),  # text-grounded QA — factual
+    "extraccion":     (0.40, 0.80),  # structured extraction — very deterministic
+    "herramientas":   (0.40, 0.80),  # tool calls need exact names/formats
+    "redaccion":      (0.90, 0.95),  # document drafting — creative variety
+    "dialogo":        (0.85, 0.95),  # conversational — natural variance
+    "instruccion":    (0.75, 0.90),  # general instructions
+    "resumen":        (0.65, 0.85),  # summary — faithful to source text
+    "traduccion":     (0.50, 0.80),  # translation — faithful to original
+    "penal":          (0.65, 0.85),  # legal domains: factual
+    "civil":          (0.65, 0.85),
+    "laboral":        (0.65, 0.85),
+    "constitucional": (0.65, 0.85),
+    "administrativo": (0.65, 0.85),
+    "mercantil":      (0.65, 0.85),
+    "general":        (0.80, 0.95),  # default
+}
+
+
 # ── Byte-level tokenizer (matches training vocab) ──────────────────────────────
 
 def encode(text: str) -> list[int]:
@@ -319,28 +348,32 @@ class SpeculativeEngine:
         medium:  ModelHandle,
         large:   ModelHandle,
         large_base_params,
-        lora_dir:      Optional[Path],
-        draft_len:     int   = 8,
-        temperature:   float = 0.8,
-        top_p:         float = 0.95,
-        rag_retriever  = None,   # RAGRetriever instance or None
-        tool_registry  = None,   # ToolRegistry instance or None
-        rag_top_k:     int   = 3,
-        max_tool_calls: int  = 5,
+        lora_dir:       Optional[Path],
+        draft_len:      int   = 8,
+        temperature:    float = 0.8,
+        top_p:          float = 0.95,
+        adapt_sampling: bool  = True,
+        rag_retriever   = None,   # RAGRetriever instance or None
+        tool_registry   = None,   # ToolRegistry instance or None
+        rag_top_k:      int   = 3,
+        max_tool_calls: int   = 5,
     ):
-        self.cerebro           = cerebro
-        self.medium            = medium
-        self.large             = large
-        self._large_base       = large_base_params
-        self.lora_dir          = lora_dir
-        self.draft_len         = draft_len
-        self.temperature       = temperature
-        self.top_p             = top_p
-        self.rag               = rag_retriever
-        self.tools             = tool_registry
-        self.rag_top_k         = rag_top_k
-        self.max_tool_calls    = max_tool_calls
-        self._lora_cache:      dict[str, dict] = {}
+        self.cerebro            = cerebro
+        self.medium             = medium
+        self.large              = large
+        self._large_base        = large_base_params
+        self.lora_dir           = lora_dir
+        self.draft_len          = draft_len
+        self._base_temperature  = temperature
+        self._base_top_p        = top_p
+        self.temperature        = temperature
+        self.top_p              = top_p
+        self.adapt_sampling     = adapt_sampling
+        self.rag                = rag_retriever
+        self.tools              = tool_registry
+        self.rag_top_k          = rag_top_k
+        self.max_tool_calls     = max_tool_calls
+        self._lora_cache:       dict[str, dict] = {}
         self._active_specialty: str = "general"
 
     # ── LoRA management ────────────────────────────────────────────────────────
@@ -350,37 +383,49 @@ class SpeculativeEngine:
             return
         if specialty == "general" or self.lora_dir is None:
             self.large.params = self._large_base
-            self._active_specialty = "general"
-            return
+        else:
+            if specialty not in self._lora_cache:
+                candidates = [
+                    self.lora_dir / f"lora_{specialty}_final.pkl",
+                    self.lora_dir / f"large_{specialty}" / "lora_final.pkl",
+                    self.lora_dir / specialty / "lora_final.pkl",
+                ]
+                found = next((p for p in candidates if p.exists()), None)
+                if found is None:
+                    logger.warning("No LoRA adapter for '%s' — using base Large", specialty)
+                    self.large.params = self._large_base
+                    self._active_specialty = specialty
+                    self._apply_sampling_profile(specialty)
+                    return
+                self._lora_cache[specialty] = _load_lora(str(found))
+                logger.info("Cached LoRA adapter: %s (%s)", specialty, found.name)
+            self.large.params = _apply_lora(self._large_base, self._lora_cache[specialty])
 
-        if specialty not in self._lora_cache:
-            candidates = [
-                self.lora_dir / f"lora_{specialty}_final.pkl",
-                self.lora_dir / f"large_{specialty}" / "lora_final.pkl",
-                self.lora_dir / specialty / "lora_final.pkl",
-            ]
-            found = next((p for p in candidates if p.exists()), None)
-            if found is None:
-                logger.warning("No LoRA adapter for '%s' — using base Large", specialty)
-                self.large.params = self._large_base
-                self._active_specialty = specialty
-                return
-            self._lora_cache[specialty] = _load_lora(str(found))
-            logger.info("Cached LoRA adapter: %s (%s)", specialty, found.name)
-
-        self.large.params = _apply_lora(self._large_base, self._lora_cache[specialty])
         self._active_specialty = specialty
-        logger.info("Active LoRA: %s", specialty)
+        self._apply_sampling_profile(specialty)
+        logger.info("Active LoRA: %s  temp=%.2f top_p=%.2f", specialty, self.temperature, self.top_p)
+
+    def _apply_sampling_profile(self, specialty: str) -> None:
+        if not self.adapt_sampling:
+            return
+        temp, top_p = SAMPLING_PROFILES.get(specialty, (self._base_temperature, self._base_top_p))
+        self.temperature = temp
+        self.top_p       = top_p
 
     # ── Sampling primitives ────────────────────────────────────────────────────
 
-    def _sample_from_logits(self, logits_1d, rng_key) -> int:
-        """Tempered + top-p sample from a single (vocab,) logit vector."""
+    def _sample_from_logits(self, logits_1d, rng_key) -> tuple[int, float]:
+        """Tempered + top-p sample. Returns (token_id, p_nucleus) where p_nucleus
+        is the token's probability under the sampling distribution (nucleus-renormalized
+        if top_p < 1). The verifier's acceptance ratio p_v/p_d must use this
+        nucleus-adjusted probability for the output distribution to exactly match
+        the verifier (Leviathan et al. 2023, Algorithm 1)."""
         import jax
         import jax.numpy as jnp
 
         if self.temperature == 0.0:
-            return int(jnp.argmax(logits_1d))
+            tok = int(jnp.argmax(logits_1d))
+            return tok, 1.0
 
         probs = jax.nn.softmax(logits_1d / self.temperature)
 
@@ -395,7 +440,8 @@ class SpeculativeEngine:
             sorted_p    = jnp.where(total > 0, sorted_p / total, sorted_p)
             probs       = jnp.zeros(VOCAB_SIZE).at[sorted_idx].set(sorted_p)
 
-        return int(jax.random.categorical(rng_key, jnp.log(probs + 1e-12)))
+        tok = int(jax.random.categorical(rng_key, jnp.log(probs + 1e-12)))
+        return tok, float(probs[tok])
 
     # ── Level 1: Cerebro draft ─────────────────────────────────────────────────
 
@@ -420,9 +466,8 @@ class SpeculativeEngine:
             last   = logits[-1]                       # (vocab,)
 
             rng_key, sub = jax.random.split(rng_key)
-            tok = self._sample_from_logits(last, sub)
+            tok, p = self._sample_from_logits(last, sub)  # p = nucleus-adjusted prob
 
-            p = float(jax.nn.softmax(last / max(self.temperature, 1e-6))[tok])
             tokens.append(tok)
             probs.append(p)
             ctx.append(tok)
@@ -512,8 +557,7 @@ class SpeculativeEngine:
         bonus_pos = trunc_ctx + k - 1
         if bonus_pos < len(logits):
             rng_key, bsub = jax.random.split(rng_key)
-            bonus = self._sample_from_logits(logits[bonus_pos], bsub)
-            p_bonus = float(jax.nn.softmax(logits[bonus_pos] / T)[bonus])
+            bonus, p_bonus = self._sample_from_logits(logits[bonus_pos], bsub)
             accepted_tokens.append(bonus)
             accepted_vprobs.append(p_bonus)
 
@@ -583,17 +627,30 @@ class SpeculativeEngine:
     def generate(
         self,
         prompt:         str,
-        max_new_tokens: int = 256,
-        seed:           int = 42,
+        max_new_tokens: int            = 256,
+        seed:           int            = 42,
+        temperature:    Optional[float] = None,
+        top_p:          Optional[float] = None,
     ) -> str:
         """
         Full 3-level speculative decode with optional RAG context and tool use.
         Returns the generated text (decoded from byte tokens).
+
+        temperature / top_p: override per-request, ignoring adapt_sampling.
         """
         import jax
 
+        saved_temp = self.temperature
+        saved_top_p = self.top_p
+
         specialty = _route_specialty(prompt)
-        self._activate_lora(specialty)
+        self._activate_lora(specialty)  # sets temperature/top_p from profile
+
+        # Per-request overrides win over the profile
+        if temperature is not None:
+            self.temperature = temperature
+        if top_p is not None:
+            self.top_p = top_p
 
         # ── RAG: prepend retrieved legal context ───────────────────────────────
         augmented_prompt = self._prepend_rag(prompt)
@@ -659,11 +716,16 @@ class SpeculativeEngine:
         logger.info(
             "Generated %d tok in %.2fs (%.0f tok/s) | "
             "drafted=%d med_acc=%.0f%% large_acc=%.0f%% large_fwd=%d "
-            "tool_calls=%d rag=%s (specialty=%s)",
+            "tool_calls=%d rag=%s (specialty=%s temp=%.2f top_p=%.2f)",
             total, elapsed, tok_s,
             n_drafted, med_pct, large_pct, n_large_fwd,
             n_tool_calls, self.rag is not None, specialty,
+            self.temperature, self.top_p,
         )
+
+        # Restore sampling params (profile overrides are per-request)
+        self.temperature = saved_temp
+        self.top_p       = saved_top_p
 
         # Strip raw ÿRESULT:...ÿ markers from final output (keep tool answer text only)
         return _strip_markers(decode(generated))
@@ -771,6 +833,7 @@ def build_engine(args) -> SpeculativeEngine:
         draft_len=args.draft_len,
         temperature=args.temperature,
         top_p=args.top_p,
+        adapt_sampling=getattr(args, "adapt_sampling", True),
         rag_retriever=rag,
         tool_registry=tools,
         rag_top_k=getattr(args, "rag_top_k", 3),
@@ -828,9 +891,11 @@ def serve(engine: SpeculativeEngine, host: str, port: int) -> None:
                 self._send({"error": "invalid JSON"}, 400)
                 return
 
-            prompt     = req.get("prompt", "")
-            max_tokens = int(req.get("max_tokens", req.get("max_new_tokens", 256)))
-            seed       = int(req.get("seed", 42))
+            prompt      = req.get("prompt", "")
+            max_tokens  = int(req.get("max_tokens", req.get("max_new_tokens", 256)))
+            seed        = int(req.get("seed", 42))
+            temperature = float(req["temperature"]) if "temperature" in req else None
+            top_p       = float(req["top_p"])       if "top_p"       in req else None
 
             if not prompt:
                 self._send({"error": "'prompt' is required"}, 400)
@@ -839,7 +904,13 @@ def serve(engine: SpeculativeEngine, host: str, port: int) -> None:
             specialty = _route_specialty(prompt)
             t0 = time.perf_counter()
             try:
-                text = engine.generate(prompt, max_new_tokens=max_tokens, seed=seed)
+                text = engine.generate(
+                    prompt,
+                    max_new_tokens=max_tokens,
+                    seed=seed,
+                    temperature=temperature,
+                    top_p=top_p,
+                )
             except Exception as exc:
                 logger.exception("Generation failed")
                 self._send({"error": str(exc)}, 500)
@@ -930,8 +1001,12 @@ def main() -> None:
     p.add_argument("--draft-len",      type=int,   default=8,
                    help="Tokens Cerebro drafts per step (default: 8)")
     p.add_argument("--max-new-tokens", type=int,   default=256)
-    p.add_argument("--temperature",    type=float, default=0.8)
-    p.add_argument("--top-p",          type=float, default=0.95)
+    p.add_argument("--temperature",    type=float, default=0.8,
+                   help="Base temperature (overridden per-specialty when --adapt-sampling)")
+    p.add_argument("--top-p",          type=float, default=0.95,
+                   help="Base nucleus top-p (overridden per-specialty when --adapt-sampling)")
+    p.add_argument("--adapt-sampling", action=argparse.BooleanOptionalAction, default=True,
+                   help="Apply per-specialty (temperature, top_p) profiles (default: on)")
     p.add_argument("--seed",           type=int,   default=42)
 
     # RAG
@@ -977,7 +1052,8 @@ def main() -> None:
     # Interactive CLI
     print()
     print("Capibara Legal — 3-level speculative inference")
-    print(f"  draft_len={args.draft_len}  temperature={args.temperature}  top_p={args.top_p}")
+    adapt_str = "on (per-specialty profiles)" if args.adapt_sampling else "off"
+    print(f"  draft_len={args.draft_len}  temperature={args.temperature}  top_p={args.top_p}  adapt_sampling={adapt_str}")
     print("  Legal: penal · civil · laboral · constitucional · administrativo · mercantil")
     print("  Skills: resumen · instruccion · qa · extraccion · redaccion · dialogo · razonamiento · traduccion")
     print("  Empty input to quit.\n")

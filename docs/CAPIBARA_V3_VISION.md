@@ -651,6 +651,26 @@ Artefacto a añadir al checklist de V3:
 
 ---
 
+## Sampling por especialidad en inferencia V3
+
+V3 hereda la estrategia de nucleus sampling (top-p) documentada en `CAPIBARA_V2_DESIGN.md §
+"Estrategia de sampling"`. Los `SAMPLING_PROFILES` y el mecanismo `adapt_sampling` se
+aplican sin cambios en V3.
+
+Ajuste específico para V3: el MoE de V3 tiene routing aprendido que especializa los
+experts por dominio (derecho penal, civil, etc.). El routing por especialidad del
+LoRA ya selecciona el adapter correcto; el routing del MoE es ortogonal (se aprende
+durante entrenamiento). Los perfiles de sampling se aplican sobre el output del conjunto
+modelo+LoRA, no necesitan coordinación con el MoE.
+
+**Nota**: en la verificación especulativa del `_verify()`, el verificador (Medium/Large) usa
+la distribución softmax completa (sin núcleo), que es la distribución objetivo. El núcleo
+se aplica solo en el draft (Cerebro) para controlar la diversidad de los tokens propuestos.
+Esto es correcto por diseño — el núcleo del draft reduce el espacio de búsqueda, y la
+aceptación/rechazo garantiza que la distribución final coincide con la del verificador.
+
+---
+
 ## Timeline estimado V3
 
 La duración depende fuertemente de cuánto corpus se use:
