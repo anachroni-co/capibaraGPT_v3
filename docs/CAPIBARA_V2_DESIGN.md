@@ -221,6 +221,98 @@ def diversity_sample(examples, subdomains, target_per_domain=200):
 - Filtra por perplexity: descarta ejemplos donde el modelo duda demasiado
 - Verificación factual básica: artículos citados existen en corpus BOE
 
+#### Fuente complementaria: UltraLink — español general (arXiv:2402.04588, Tsinghua 2024)
+
+UltraLink es un dataset SFT multilingüe open-source (~1M muestras totales, 5 idiomas)
+con componente en **español de 93K diálogos**, distribuido en cuatro tipos:
+
+| Tipo | Volumen Es | Contenido |
+|------|-----------|-----------|
+| Lang-specific chat | 34K | Diálogos Wikipedia-grounded, conocimiento cultural ES |
+| Lang-agnostic chat | 11K | ShareGPT traducido (filtrado de contenido anglocéntrico) |
+| Math (MGSM) | 32K | MetaMath traducido + pruned |
+| Code | 16K | Magicoder traducido + pruned |
+
+Repositorio: https://github.com/OpenBMB/UltraLink (Apache-2 / licencia abierta).
+
+**Resultados en español** (backbone Llama-2-13b):
+- OMGEval chat Es: 23.5 (vs Guanaco-13b 16.9, Phoenix 11.8)
+- MGSM math Es: 70.4 (vs Guanaco-13b 6.4, Chimera 10.0)
+- HumanEval code Es: 40.9 (vs mejor baseline 14.6)
+
+**Tres hallazgos directamente aplicables a Capibara**:
+
+**1. Transferencia cross-lingual para razonamiento**:
+El paper demuestra que un modelo SFT-entrenado en inglés (math/code) llega a 45.6 en
+MGSM-Zh con solo 2K ejemplos chinos adicionales, frente a 22.0 partiendo del base model
+con los mismos 2K. La transferencia es 2× más efectiva si se construye sobre SFT inglés previo.
+→ Para Capibara: no es necesario traducir miles de ejemplos de razonamiento al español.
+El orden óptimo de SFT es: **English reasoning SFT → Spanish legal SFT** (no al revés).
+
+**2. Data pruning — límite útil para no-inglés**:
+Con 32K math + 16K code en español se alcanza el rendimiento máximo; más datos no mejora.
+→ Para `scripts/curate_instruction_data.py`: cap de 32K math y 16K code en español.
+El budget restante va a ejemplos legales curados (más valiosos para el dominio).
+
+**3. Pipeline de generación grounded en documentos**:
+UltraLink usa Wikipedia como base de conocimiento → GPT-3.5 genera preguntas y respuestas
+ancladas en fragmentos de texto reales. El mismo pipeline, sustituyendo Wikipedia por:
+- Artículos del BOE (legislación)
+- Fragmentos de sentencias del CENDOJ
+
+...genera datos SFT con conocimiento legal específico, sin alucinaciones sobre contenido
+factual porque la respuesta está anclada al documento. Adaptar para Capibara:
+
+```python
+# scripts/curate_instruction_data.py — extensión pipeline UltraLink
+def generate_legal_dialogues(
+    doc_segment: str,           # fragmento BOE / sentencia (1K–2K tokens)
+    num_turns: int = 3,
+    llm_client = None,          # cliente API para generación
+) -> list[dict]:
+    """Genera diálogo multi-turno anclado en el fragmento legal."""
+    system = (
+        "Eres un asistente legal. Genera preguntas sobre el siguiente texto "
+        "y respóndelas con precisión jurídica. No inventes información que no "
+        "esté en el documento."
+    )
+    history = []
+    for turn in range(num_turns):
+        question_type = "inicial" if turn == 0 else ("profundidad" if turn % 2 == 0 else "expansión")
+        q = llm_client.complete(
+            system=system,
+            context=doc_segment,
+            history=history,
+            instruction=QUESTION_PRINCIPLES[question_type],
+        )
+        a = llm_client.complete(
+            system=system,
+            context=doc_segment,
+            history=history + [{"role": "user", "content": q}],
+        )
+        history += [{"role": "user", "content": q}, {"role": "assistant", "content": a}]
+    return history
+
+QUESTION_PRINCIPLES = {
+    "inicial":    "Formula una pregunta analítica sobre el artículo o fallo. Evita preguntas de sí/no.",
+    "profundidad": "Pregunta sobre las implicaciones o excepciones del punto anterior.",
+    "expansión":  "Conecta con otro área del derecho o con jurisprudencia relacionada.",
+}
+```
+
+**Integración con el plan LIMA existente**:
+Los 1 350 ejemplos curados (enfoque LIMA) siguen siendo el núcleo del SFT legal.
+UltraLink complementa con capacidades generales en español que los ejemplos legales
+no cubren (razonamiento matemático para cálculos de indemnización, herencias, plazos;
+instrucciones de código para herramientas; diálogo general). La combinación es:
+
+```
+Fase SFT V2:
+  1. UltraLink-Es (93K samples, general Spanish) — 1 época
+  2. Legal curado LIMA-style (1 350 samples) — 3 épocas (sobre-muestrea dominio)
+→ El modelo adquiere primero español sólido, luego se especializa en derecho.
+```
+
 ### Cambios en `speculative_inference.py`
 
 ```python
