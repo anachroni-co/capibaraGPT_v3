@@ -180,6 +180,32 @@ diseño, el estado del arte demuestra que Mamba puro con d_state suficientemente
 grande iguala a híbrido en estas tareas — en ese caso V5 podría explorarlo.
 La arquitectura híbrida de V4 deja esa puerta abierta sin arriesgar la calidad.
 
+**Alternativa considerada: YOCO (arXiv:2405.05254v2)**
+
+YOCO (Microsoft Research, 2024) propone un decoder-decoder donde las capas inferiores
+usan gated retention (O(1) memoria) y las superiores cross-attention sobre un único
+KV cache compartido. Ventajas:
+
+- Prefilling **30× más rápido** que Transformer en 512K tokens (O(N) vs O(N²))
+- KV cache **~L× menor** (solo 1 capa en vez de L)
+- Calidad competitiva con Transformer en scaling de 160M a 13B
+
+**Por qué no usamos YOCO en V4**: el KV cache de YOCO sigue creciendo O(N) con
+la secuencia. Para contextos verdaderamente ilimitados (historial de conversación
+acumulado, múltiples documentos), Infini-attention (O(1) memoria constante) es
+superior. YOCO es excelente para sesiones largas pero finitas en GPU; no para
+memoria persistente entre sesiones (V4 Mejora 5).
+
+**Qué sí tomamos de YOCO para V4**:
+1. **gRet como alternativa a Mamba** si la implementación JAX de Mamba es problemática
+   (ver CAPIBARA_V3_VISION.md § "Decisiones de diseño pendientes" punto 6)
+2. **Early-exit prefilling**: la estrategia de procesar capas eficientes primero
+   (Mamba/gRet) y luego aplicar Infini-attention sobre el estado resultante reduce
+   la latencia de prefill en V4 igual que en V3
+3. **YOCO como arquitectura V5**: si V4 demuestra que el contexto útil efectivo
+   siempre queda por debajo de 256K tokens, YOCO con gRet sería una opción para V5
+   priorizando throughput de producción sobre contexto ilimitado teórico
+
 ---
 
 ## Timeline estimado V4

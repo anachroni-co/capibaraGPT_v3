@@ -603,6 +603,106 @@ Las siguientes decisiones requieren resultados de V1 y V2 antes de poder tomarse
    Las capas Mamba son nuevas. Un init parcial (atención de V2 + Mamba aleatorio)
    podría reducir el tiempo de Large V3 en ~30%.
 
+6. **¿Mamba o Gated Retention (gRet) para las capas eficientes?**
+
+   *Extraído de: YOCO — arXiv:2405.05254v2, Microsoft Research 2024.*
+
+   YOCO introduce **gated retention (gRet)** como alternativa a Mamba para las
+   capas de atención eficiente. gRet es un SSM con decay data-dependiente:
+
+   ```
+   Sₙ = γₙ · Sₙ₋₁ + Kₙᵀ Vₙ      (inferencia recurrente, O(1) memoria)
+   gRet(Xₙ) = Qₙ · Sₙ            (salida del estado)
+   γₙ = sigmoid(X Wᵧ)^{1/τ}       (decay aprendido por cabeza)
+   ```
+
+   Tres representaciones equivalentes (paralela / recurrente / chunk-wise)
+   permiten entrenar en paralelo y hacer inferencia recurrente — igual que Mamba.
+
+   En los experimentos de scaling de YOCO (160M–13B parámetros, Figura 4 del paper):
+   - YOCO_gRet supera a Transformer y a YOCO_SWA (sliding window)
+   - La ganancia viene del sesgo inductivo complementario entre retención y atención
+   - El patrón 1:3 (1 Infini-attn por cada 3 gRet) da resultados similares al 1:1
+
+   **Relevancia práctica para V3**: Si la implementación de Mamba en JAX resulta
+   problemática (el selective scan de Mamba-2 requiere kernels CUDA especiales),
+   gRet es un sustituto funcional con propiedades similares y posiblemente más
+   sencillo de implementar en JAX puro con `jax.lax.scan`.
+
+   Comparación:
+
+   | Propiedad | Mamba (SSM selectivo) | gRet (YOCO) |
+   |-----------|----------------------|-------------|
+   | Memoria inferencia | O(d_state) constante | O(d_state) constante |
+   | Entrenamiento | Parallel scan (CUDA) | Chunk-wise (JAX-friendly) |
+   | Decay | Input-dependent (A,B,C) | Head-wise data-dependent |
+   | Calidad scaling | Estado del arte | Competitivo con Transformer |
+   | Kernels especiales | Sí (mamba-ssm) | No (ops estándar) |
+
+   Recomendación: **intentar Mamba primero** en Small V3. Si hay problemas de
+   implementación JAX o inestabilidad numérica, cambiar a gRet sin rediseñar la
+   arquitectura híbrida.
+
+---
+
+## Optimización de prefill: early-exit inspirado en YOCO
+
+*Extraído de: YOCO — arXiv:2405.05254v2, Microsoft Research 2024.*
+
+YOCO demuestra que el prefilling es el cuello de botella principal en inferencia
+de contexto largo (180 s para un transformer en 512K tokens). La arquitectura
+YOCO lo resuelve con un "early exit": solo las capas inferiores (self-decoder)
+necesitan ejecutarse durante el prefill; las capas superiores (cross-decoder)
+usan el KV cache generado y pueden ometirse hasta la generación.
+
+V3 tiene una separación natural análoga:
+
+```
+Capas 1–24:  Mamba (75% del modelo)  → O(n) prefilling, paralelo en chunks
+Capas 25–32: Infini-attention (25%)  → O(1) memoria, computa estado (M,z)
+```
+
+**Estrategia de early-exit en inferencia V3 (documentos largos)**:
+
+```python
+class V3InferenceEngine:
+    def prefill(self, prompt_tokens: list[int]):
+        """
+        Fase 1 (rápida): pasar por capas Mamba solamente.
+        Cuesta O(n) — lineal con el documento.
+        """
+        x = self.embedding(prompt_tokens)
+        mamba_states = []
+        for layer in self.mamba_layers:         # 24 capas
+            x, state = layer.prefill(x)
+            mamba_states.append(state)
+
+        """
+        Fase 2 (única vez): computar estado compresivo Infini-attention.
+        Las capas Infini-attention procesan x en un solo paso sobre el
+        contexto completo para inicializar (M, z).
+        """
+        for layer in self.infini_layers:        # 8 capas
+            x, (M, z) = layer.init_memory(x)
+
+        return mamba_states, [(M, z) for layer in self.infini_layers]
+
+    def generate_token(self, token, mamba_states, infini_memories):
+        """Generación: O(1) por token."""
+        x = self.embedding([token])
+        for i, layer in enumerate(self.mamba_layers):
+            x, mamba_states[i] = layer.step(x, mamba_states[i])
+        for i, layer in enumerate(self.infini_layers):
+            x, infini_memories[i] = layer.step(x, infini_memories[i])
+        return self.lm_head(x), mamba_states, infini_memories
+```
+
+Beneficio: para un expediente judicial de 50 páginas (~32K tokens), el prefill
+completo cuesta O(n) en las capas Mamba. La fase Infini-attention es O(1) en
+memoria y comprime todo el documento en (M,z) de tamaño fijo. La generación
+posterior es O(1) por token. Esto da latencia similar a YOCO sin sacrificar la
+memoria verdaderamente ilimitada de Infini-attention.
+
 ---
 
 ## Archivos a diseñar para V3
