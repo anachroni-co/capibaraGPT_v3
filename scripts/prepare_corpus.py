@@ -2,22 +2,30 @@
 """Corpus preparation — tokenize raw text files into .npy shards.
 
 Reads all .txt / .md / .py / .jsonl files from an input directory,
-tokenizes them with the byte-level tokenizer (vocab=512), and writes
-fixed-size .npy shards ready for ShardDataLoader.
+tokenizes them, and writes fixed-size .npy shards ready for ShardDataLoader.
+
+Tokenizer options:
+  --tokenizer <path>   Path to a trained SentencePiece .model file or the
+                       tokenizer/ directory.  Recommended — vocab=32000 BPE.
+  (default)            Falls back to byte-level tokenizer (vocab=512) when
+                       no --tokenizer is given.
 
 Usage:
-    # Local corpus → local shards
+    # BPE tokenizer (recommended — train first with train_tokenizer.py)
+    python scripts/prepare_corpus.py \\
+        --input      data/raw/legal/ \\
+        --output     data/tokenized/legal_bpe/ \\
+        --tokenizer  tokenizer/capibara_legal.model
+
+    # Legacy byte-level (vocab=512)
     python scripts/prepare_corpus.py \\
         --input  data/raw/ \\
-        --output data/tokenized/ \\
-        --shard-tokens 10_000_000
-
-    # Then optionally upload shards to GCS:
-    gsutil -m cp data/tokenized/*.npy gs://my-bucket/tokenized/
+        --output data/tokenized/
 
 Arguments:
     --input         Directory with raw text files (recursive)
     --output        Directory for output .npy shards
+    --tokenizer     Path to SentencePiece .model or tokenizer/ dir (optional)
     --shard-tokens  Approximate tokens per shard (default: 10M)
     --seq-len       Sequence length used during training (for stats only)
     --extensions    File extensions to include (default: .txt .md .py .jsonl)
@@ -46,16 +54,44 @@ logger = logging.getLogger(__name__)
 # Tokenizer
 # ---------------------------------------------------------------------------
 
-def _get_tokenizer():
-    """Return a ByteLevelTokenizer instance."""
+def _get_tokenizer(tokenizer_path: str | None = None):
+    """Return a tokenizer instance.
+
+    If tokenizer_path is given (SentencePiece .model file or directory),
+    returns a BPETokenizer (vocab=32000).  Otherwise falls back to the
+    legacy ByteLevelTokenizer (vocab=512).
+    """
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from training.byte_level_training import ByteLevelTokenizer, ByteLevelConfig
-    config = ByteLevelConfig()
-    return ByteLevelTokenizer(config)
+
+    if tokenizer_path:
+        from scripts.train_tokenizer import BPETokenizer  # type: ignore[import]
+        path = Path(tokenizer_path)
+        if path.is_dir():
+            path = path / "capibara_legal.model"
+        return BPETokenizer(path)
+
+    # Legacy byte-level fallback
+    try:
+        from training.byte_level_training import ByteLevelTokenizer, ByteLevelConfig
+        config = ByteLevelConfig()
+        return ByteLevelTokenizer(config)
+    except ImportError:
+        logger.error(
+            "Byte-level tokenizer not found and no --tokenizer provided.\n"
+            "Train a BPE tokenizer first:\n"
+            "  python scripts/train_tokenizer.py train "
+            "--input-dir data/raw/legal/ --output tokenizer/"
+        )
+        sys.exit(1)
 
 
 def _tokenize_text(tokenizer, text: str) -> np.ndarray:
     """Tokenize a single text string → int32 array."""
+    # BPETokenizer and ByteLevelTokenizer both expose encode(text, add_bos, add_eos)
+    if hasattr(tokenizer, "encode"):
+        ids = tokenizer.encode(text, add_bos=True, add_eos=True)
+        return np.array(ids, dtype=np.int32)
+    # Legacy path
     return tokenizer.encode_with_special_tokens(
         text.encode("utf-8", errors="replace"),
         add_bos=True,
@@ -87,6 +123,7 @@ def prepare_corpus(
     max_files: int = 0,
     validate: bool = False,
     seq_len: int = 2048,
+    tokenizer_path: str | None = None,
 ) -> None:
     input_path = Path(input_dir)
     output_path = Path(output_dir)
@@ -108,7 +145,7 @@ def prepare_corpus(
 
     logger.info("Found %d files in %s", len(files), input_dir)
 
-    tokenizer = _get_tokenizer()
+    tokenizer = _get_tokenizer(tokenizer_path)
     logger.info("Tokenizer ready (vocab_size=%d)", tokenizer.vocab_size)
 
     # Shard state
@@ -213,6 +250,9 @@ def main() -> None:
                         help="File extensions to include")
     parser.add_argument("--max-files", type=int, default=0,
                         help="Limit number of files (0=all)")
+    parser.add_argument("--tokenizer", default=None,
+                        help="Path to SentencePiece .model or tokenizer/ dir (BPE vocab=32000). "
+                             "Omit to use legacy byte-level tokenizer (vocab=512).")
     parser.add_argument("--validate", action="store_true",
                         help="Validate shards after writing")
     args = parser.parse_args()
@@ -225,6 +265,7 @@ def main() -> None:
         max_files=args.max_files,
         validate=args.validate,
         seq_len=args.seq_len,
+        tokenizer_path=args.tokenizer,
     )
 
 

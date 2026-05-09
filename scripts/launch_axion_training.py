@@ -192,11 +192,34 @@ async def run(args: argparse.Namespace) -> None:
     logger.info("grad_ckpt: %s%s", use_grad_ckpt,
                 " (saves ~60% activation memory, ~20% slower compute)" if use_grad_ckpt else "")
 
-    # 2. Model
+    # 2. Tokenizer → vocab_size
+    vocab_size = 512  # legacy byte-level default
+    if args.tokenizer:
+        try:
+            sys.path.insert(0, str(Path(__file__).parent))
+            from train_tokenizer import BPETokenizer  # type: ignore[import]
+            from pathlib import Path as _Path
+            tok_path = _Path(args.tokenizer)
+            if tok_path.is_dir():
+                tok_path = tok_path / "capibara_legal.model"
+            _tok = BPETokenizer(tok_path)
+            vocab_size = _tok.vocab_size
+            logger.info("BPE tokenizer: %s (vocab=%d)", tok_path, vocab_size)
+        except Exception as e:
+            logger.error("Failed to load tokenizer %s: %s", args.tokenizer, e)
+            sys.exit(1)
+    else:
+        logger.warning(
+            "No --tokenizer provided — using byte-level vocab=512. "
+            "Train a BPE tokenizer for much better context utilisation: "
+            "python scripts/train_tokenizer.py train --input-dir data/raw/legal/ --output tokenizer/"
+        )
+
+    # 3. Model
     from models.slim_200m import Slim200M, ModelConfig, count_params
 
     model_cfg = ModelConfig(
-        vocab_size=512,
+        vocab_size=vocab_size,
         hidden_size=args.hidden_size,
         num_layers=args.num_layers,
         num_heads=args.num_heads,
@@ -476,6 +499,10 @@ def main() -> None:
                         help="Directory for XLA compilation cache. First run compiles "
                              "and saves; subsequent runs load instantly. "
                              "Set to '' to disable. (default: cache/jax_compile)")
+    parser.add_argument("--tokenizer", default=None,
+                        help="Path to SentencePiece .model file or tokenizer/ directory. "
+                             "Sets vocab_size automatically (BPE=32000). "
+                             "Omit for legacy byte-level vocab=512.")
 
     args = parser.parse_args()
 
