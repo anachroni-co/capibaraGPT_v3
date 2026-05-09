@@ -493,6 +493,43 @@ python scripts/soup_checkpoints.py \
 
 ## Plan de ejecución V2
 
+### Grafo de dependencias y paralelismo
+
+```
+Corpus BPE (Día 0–1)
+    │
+    ├──► Small (21h, 32T)   ──► soup ──► [libre]
+    │                                       │
+    ├──► Medium (40h, 32T)  ──► soup ──► [libre]
+    │                                       │
+    └──► Large ph1 (14d, 32T) ──► soup ──► Large DAPT (4d) ──► soup ──┐
+                                                                        │
+         ┌──────────────────────────────────────────────────────────────┘
+         │
+         ├──► Destil Large→Medium  ×3 seeds (9d, 32T cada seed) ──► inter-soup
+         │         │
+         │         └──► Destil Medium→Small ×3 seeds (6d, 24T) ──► inter-soup
+         │                                                               │
+         └──► Destil Large→Small/Cerebro ×3 seeds (6d, 8T, paralelo) ──┘
+                   │
+                   ▼
+              LoRA ×15 adapters (24h total, 8T, paralelo con destilación)
+                   │
+                   ▼
+         LoRA merging + CrewAI (Día ~37) ──► Benchmarks
+```
+
+**Regla de threads en servidor de 32 cores:**
+
+| Job activo | Threads | Restantes | Uso paralelo recomendado |
+|------------|---------|-----------|--------------------------|
+| Large phase 1 solo | 32 | 0 | Nada más — prioridad máxima |
+| Destil Large→Medium (seed N) | 24 | 8 | Destil Large→Small al mismo tiempo a 8T |
+| LoRA adapter | 8 | 24 | Compatible con cualquier destilación a 24T |
+| Soup / merge | 4 | 28 | Siempre en paralelo con cualquier job |
+
+---
+
 ### Fase 0 — Preparación (durante V1, paralelo)
 
 ```
@@ -504,111 +541,159 @@ python scripts/soup_checkpoints.py \
 [ ] Añadir flag --files a soup_checkpoints.py para inter-run soup
 ```
 
-### Fase 1 — Corpus (Día 0–1 tras V1)
+### Fase 1 — Corpus (Día 0–1)
 
 ```bash
-# Verificar tokenizador
-python scripts/train_tokenizer.py test tokenizer/
-
-# Re-tokenizar corpus general
-python scripts/prepare_corpus.py \
+# En paralelo: re-tokenizar general + legal + generar think traces
+tmux send-keys -t legal "python scripts/prepare_corpus.py \
     --input data/raw/ --output data/tokenized_bpe/ \
-    --tokenizer tokenizer/capibara_legal.model
+    --tokenizer tokenizer/capibara_legal.model" Enter
 
-# Re-tokenizar corpus legal (DAPT)
-python scripts/prepare_corpus.py \
+# Cuando termine general, lanzar legal (mismo proceso o paralelo a 16T cada uno)
+tmux send-keys -t legal "python scripts/prepare_corpus.py \
     --input data/raw/legal/ --output data/tokenized_bpe/legal/ \
-    --tokenizer tokenizer/capibara_legal.model
+    --tokenizer tokenizer/capibara_legal.model" Enter
 
-# Generar datos de fine-tuning con think traces
+# Think traces se generan en paralelo (CPU-light, no compite)
 python scripts/download_think_data.py \
     --output data/finetune/think/ \
     --specialties penal civil laboral razonamiento
 ```
 
-### Fase 2 — Entrenamiento base (Día 1–3)
+### Fase 2 — Small + Medium en paralelo (Día 1–3)
+
+Small y Medium no dependen entre sí. Con 32 cores: lanzar Small a 16T y
+Medium a 16T simultáneamente. Small termina en ~42h, Medium en ~80h.
 
 ```bash
-# Small V2 (~21 h)
+# Small V2 — 16 threads (termina ~Día 3)
 tmux send-keys -t small "python scripts/launch_axion_training.py \
-    --data-dir data/tokenized_bpe/ \
+    --data-dir  data/tokenized_bpe/ \
     --tokenizer tokenizer/capibara_legal.model \
     --preset small --seq-len 1024 \
     --batch-size 16 --grad-accum 8 --steps 15000 \
-    --dtype bf16 --grad-checkpoint \
+    --threads 16 --dtype bf16 --grad-checkpoint \
     --output checkpoints/v2/axion_small" Enter
 
-# Medium V2 (~40 h)
+# Medium V2 — 16 threads (termina ~Día 4.5)
 tmux send-keys -t medium "python scripts/launch_axion_training.py \
-    --data-dir data/tokenized_bpe/ \
+    --data-dir  data/tokenized_bpe/ \
     --tokenizer tokenizer/capibara_legal.model \
     --preset medium --seq-len 2048 \
     --batch-size 8 --grad-accum 16 --steps 10000 \
-    --dtype bf16 --grad-checkpoint \
+    --threads 16 --dtype bf16 --grad-checkpoint \
     --output checkpoints/v2/axion_medium" Enter
 ```
 
-### Fase 3 — Large V2 (Día 3–17)
+### Fase 3 — Large V2 (Día 4.5–20.5)
+
+Large arranca en cuanto Medium libera los 16 threads (Día ~4.5).
+Usa los 32 cores completos — no lanzar nada más en paralelo durante Large phase 1.
 
 ```bash
-# Large fase 1 general (~14 d con seq=2048 — evaluar si reducir a seq=1024 por tiempo)
+# Large fase 1 general (~14 d seq=2048 / ~7 d seq=1024)
 tmux send-keys -t large "python scripts/launch_axion_training.py \
-    --data-dir data/tokenized_bpe/ \
+    --data-dir  data/tokenized_bpe/ \
     --tokenizer tokenizer/capibara_legal.model \
     --preset large --seq-len 2048 \
     --batch-size 4 --grad-accum 32 --steps 35000 \
-    --dtype bf16 --grad-checkpoint \
+    --threads 32 --dtype bf16 --grad-checkpoint \
+    --compile-cache cache/jax_compile \
     --output checkpoints/v2/axion_large_phase1" Enter
 
-# Large DAPT legal (~4 d)
-# ... (tras soup de fase 1)
+# Soup (automático al terminar) y DAPT legal (~4 d)
+# tmux send-keys -t large "python scripts/soup_checkpoints.py \
+#     checkpoints/v2/axion_large_phase1 --n 3" Enter
+# tmux send-keys -t large "python scripts/launch_axion_training.py \
+#     ... --resume checkpoints/v2/axion_large_phase1/soup_uniform.pkl \
+#     --output checkpoints/v2/axion_large_legal" Enter
 ```
 
-### Fase 4 — Destilación V2 con multi-seed soup (Día 17–26)
+### Fase 4 — Destilación con multi-seed soup + LoRA en paralelo (Día 20.5–36)
 
-3 runs por cada destilación (seeds 42, 123, 777) + intra-run soup + inter-run soup.
-Ver sección Mejora 6 para los comandos completos.
+**Clave**: Large→Small/Cerebro y LoRA no dependen de la destilación Medium.
+Se pueden ejecutar en paralelo aprovechando los threads libres.
 
-Orden de ejecución (secuencial por dependencias de teacher/student):
-1. Large → Medium ×3 seeds → inter-run soup (~9 días)
-2. Medium destilado → Small ×3 seeds → inter-run soup (~6 días, paralelo con Large→Small)
-3. Large → Small/Cerebro ×3 seeds → inter-run soup (~6 días, paralelo con Medium→Small)
+```
+Día 20.5  ┌─ Destil Large→Medium seed=42  (3d, 24T) ─────────────────────┐
+           │                                                                ▼
+           └─ Destil Large→Small  seed=42  (2d,  8T) ──► seed=123 ──► seed=777 ──► inter-soup (Cerebro listo)
+           │
+           └─ LoRA penal, civil, laboral...  (2h c/u,  8T)  ◄── paralelo con cualquier destil
 
-### Fase 5 — LoRA V2 con think traces (Día 20–21)
+Día 23.5  Destil Large→Medium seed=123  (3d, 24T) + LoRA continúa
+Día 26.5  Destil Large→Medium seed=777  (3d, 24T) + LoRA continúa
+Día 29.5  inter-soup Large→Medium  →  Destil Medium→Small  ×3 seeds  (6d, 32T)
+Día 35.5  inter-soup Medium→Small  →  todos los soups listos
+```
 
 ```bash
-# Adapters legales con datos augmentados (pares normales + think traces)
-for SPECIALTY in penal civil laboral constitucional administrativo mercantil; do
+# Lanzar en sesiones tmux separadas
+# [distil] — Large→Medium seed=42 a 24 threads
+tmux send-keys -t distil "python scripts/distil.py \
+    --teacher checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+    --teacher-preset large --student-preset medium \
+    --student-resume checkpoints/v2/axion_medium/soup_uniform.pkl \
+    --tokenizer tokenizer/capibara_legal.model \
+    --data-dir data/tokenized_bpe/legal/ \
+    --output checkpoints/v2/distil_medium_s42 \
+    --seed 42 --steps 10000 --batch-size 8 --grad-accum 8 \
+    --temperature 4.0 --alpha 0.7 --threads 24 --dtype bf16" Enter
+
+# [lora] — en paralelo a 8 threads, sin interferir con destil
+tmux send-keys -t lora "
+for SPECIALTY in penal civil laboral constitucional administrativo mercantil \
+                 resumen instruccion qa extraccion redaccion dialogo razonamiento traduccion herramientas; do
     python scripts/lora_finetune.py \
-        --base-ckpt checkpoints/v2/axion_large_legal/soup_uniform.pkl \
-        --tokenizer tokenizer/capibara_legal.model \
+        --base-ckpt  checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+        --tokenizer  tokenizer/capibara_legal.model \
         --preset large \
-        --data data/finetune/legal_qa.jsonl \
-        --data-extra data/finetune/think/${SPECIALTY}.jsonl \
-        --specialty $SPECIALTY \
-        --output checkpoints/v2/lora/large_${SPECIALTY} \
+        --data       data/finetune/legal_qa.jsonl \
+        --data-extra data/finetune/think/\${SPECIALTY}.jsonl \
+        --specialty  \$SPECIALTY \
+        --output     checkpoints/v2/lora/large_\${SPECIALTY} \
         --steps 2000 --batch-size 4 --rank 16 --lora-alpha 32 \
-        --dtype bf16
+        --threads 8 --dtype bf16
+done" Enter
+
+# [cerebro] — Large→Small a 8 threads, en paralelo con distil+lora
+for SEED in 42 123 777; do
+    tmux send-keys -t cerebro "python scripts/distil.py \
+        --teacher checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+        --teacher-preset large --student-preset small \
+        --student-resume checkpoints/v2/axion_small/soup_uniform.pkl \
+        --tokenizer tokenizer/capibara_legal.model \
+        --data-dir data/tokenized_bpe/legal/ \
+        --output checkpoints/v2/distil_cerebro_s${SEED} \
+        --seed ${SEED} --steps 10000 --batch-size 16 --grad-accum 8 \
+        --temperature 4.0 --alpha 0.7 --threads 8 --dtype bf16" Enter
 done
 ```
 
-### Fase 6 — LoRA Merging y CrewAI (Día 21)
+### Fase 5 — LoRA Merging y CrewAI (Día 36–37)
 
 ```bash
-# Generar adapters merged
-python scripts/merge_loras.py ...  # ver sección Mejora 5
+# Generar adapters merged (ver Mejora 5)
+python scripts/merge_loras.py \
+    --adapters checkpoints/v2/lora/large_penal/lora_final.pkl:1 \
+               checkpoints/v2/lora/large_civil/lora_final.pkl:1 \
+               ... \
+    --output checkpoints/v2/lora/large_legal_completo/lora_final.pkl
 
 # Arrancar wrapper OpenAI + servidor Capibara
-python scripts/speculative_inference.py --serve --port 8080 ... &
+python scripts/speculative_inference.py --serve --port 8080 \
+    --cerebro  checkpoints/v2/distil_cerebro_legal/soup_uniform.pkl \
+    --medium   checkpoints/v2/distil_medium_legal/soup_uniform.pkl \
+    --large    checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+    --lora-dir checkpoints/v2/lora/ --rag-index data/rag_index/ --tools &
+
 python scripts/openai_wrapper.py --backend http://localhost:8080 --port 8081 &
 
 # Test CrewAI
 python examples/crew_analisis_caso.py
 ```
 
-### Fase 7 — Benchmark V1 vs V2
-
-Métricas a comparar:
+### Fase 6 — Benchmark V1 vs V2
 
 | Métrica | V1 baseline | V2 objetivo |
 |---------|-------------|-------------|
@@ -619,6 +704,7 @@ Métricas a comparar:
 | BLEU summarization | — | > V1 |
 | Exact match QA legal | — | > V1 |
 | Palabras en contexto (seq=2048) | ~220 | ~1500 |
+| Perplexity destilación (multi-seed vs single) | — | -2–4% |
 
 ---
 
