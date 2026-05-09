@@ -2,7 +2,27 @@
 
 **Estado**: Documento de planificación a largo plazo.  
 **Prerequisito**: V2 en producción con benchmarks documentados.  
-**Horizonte**: Iniciar diseño durante V2, ejecutar cuando V2 termine.
+**Horizonte**: Iniciar diseño durante V2, ejecutar cuando V2 termine.  
+**Siguiente**: Ver `CAPIBARA_V4_VISION.md` para la evolución conservadora posterior.
+
+---
+
+## Roadmap de versiones
+
+| Versión | Backbone | Atención | Experts | seq | Corpus | Cambio principal |
+|---------|----------|----------|---------|-----|--------|------------------|
+| V1 | Transformer denso | 100% | — | 1024 | 1.7B ES | MVP funcional |
+| V2 | Transformer denso | 100% | — | 2048 | 1.7B ES | BPE, think tags, CrewAI |
+| **V3** | **Mamba-Attn híbrido** | **25% (1/4)** | **4 top-2** | **4096** | **~16B ES+LATAM** | **Arquitectura nueva, contexto largo** |
+| V4 | Mamba-Attn híbrido | 12.5% (1/8) | 8 top-2 | 8192 | ~30B | Escala máxima, casi-lineal |
+
+V3 es el paso conservador que valida la arquitectura Mamba+MoE con parámetros
+manejables. V4 escala sobre los aprendizajes de V3 sin saltar a Mamba puro,
+que según el estado del arte (Jamba, Zamba 2024) aún regresa en calidad de
+razonamiento complejo respecto a híbrido.
+
+Mamba y MoE son incompatibles con los checkpoints V1/V2 — V3 entrena desde cero
+con un corpus más grande. Por eso es una versión mayor.
 
 ---
 
@@ -15,7 +35,8 @@ mejor tokenizador, ventana más grande, más habilidades. V3 cambia el backbone.
 |---------|-------------------|------------------|
 | V1 | Transformer (Slim200M) + byte-level | MVP funcional |
 | V2 | Transformer (Slim200M) + BPE 32k | Contexto, razonamiento, agentes |
-| **V3** | **Hybrid Mamba-Attention + MoE** | **Eficiencia cuadrática → lineal, especialización nativa** |
+| **V3** | **Mamba-Attn híbrido (1/4) + MoE 4 experts** | **Primer paso a eficiencia lineal** |
+| V4 | Mamba-Attn híbrido (1/8) + MoE 8 experts | Escala completa |
 
 Mamba y MoE son incompatibles con los checkpoints V1/V2 — V3 entrena desde cero
 con un corpus más grande. Por eso es una versión mayor.
@@ -67,22 +88,25 @@ Arquitecturas de referencia:
 
 Para Capibara V3: **ratio 1 atención por cada 4 capas Mamba**.
 
-### Configuración propuesta V3
+### Configuración V3 — conservadora y validable
 
 ```python
-# Presets V3 — Mamba-Attention híbrido
+# Presets V3 — Mamba-Attention híbrido, 1 atención cada 4 capas, seq=4096
 PRESETS_V3 = {
     "small":  dict(d_model=512,  n_layers=16, attn_every=4, d_state=64,  seq_len=4096),
-    "medium": dict(d_model=768,  n_layers=20, attn_every=4, d_state=128, seq_len=8192),
-    "large":  dict(d_model=1280, n_layers=32, attn_every=4, d_state=256, seq_len=8192),
+    "medium": dict(d_model=768,  n_layers=20, attn_every=4, d_state=128, seq_len=4096),
+    "large":  dict(d_model=1280, n_layers=32, attn_every=4, d_state=256, seq_len=4096),
 }
 # d_state: dimensión del estado SSM — mayor = más memoria de contexto
+# attn_every=4: 25% de capas son atención densa, 75% son Mamba
 ```
 
-Con seq=8192 y arquitectura híbrida:
-- Un expediente judicial de 30 páginas entra en contexto
-- Un contrato de arrendamiento completo con todas sus cláusulas
-- Historial de conversación de ~1 hora sin compactar
+Con seq=4096 y arquitectura híbrida V3:
+- Un contrato de arrendamiento completo con todas sus cláusulas (~2500 palabras)
+- Una sentencia de primera instancia completa
+- Historial de conversación de ~30 minutos sin compactar
+
+seq=8192 y los documentos más largos quedan para V4.
 
 ### Implementación en JAX/Flax
 
@@ -170,9 +194,9 @@ MoE reemplaza el routing implícito en el backbone.
 ### Configuración MoE para Capibara V3
 
 ```python
-# 8 experts, top-2 activos, 1 capa MoE cada 2 capas densas
-MOE_CONFIG = dict(
-    num_experts=8,
+# 4 experts, top-2 activos — conservador, menor riesgo de expert collapse
+MOE_CONFIG_V3 = dict(
+    num_experts=4,
     top_k=2,
     moe_every=2,          # MoE en capas pares, densa en impares
     expert_capacity=1.25, # buffer para balance de carga
@@ -180,11 +204,19 @@ MOE_CONFIG = dict(
 )
 ```
 
-Con 8 experts para Capibara, los experts emergen naturalmente hacia:
-- Experts 0-2: terminología legal (sustantiva)
-- Experts 3-4: procedimiento y proceso
-- Experts 5-6: razonamiento y argumentación
-- Expert 7: herramientas y código
+4 experts es el mínimo para routing útil y el más estable de entrenar.
+Con top-2 activos siempre, cada token usa el 50% de los experts —
+el routing aprende a diferenciar sin riesgo de colapso (todos los tokens
+a un solo expert, problema frecuente con E≥8 y datasets pequeños).
+
+Con 4 experts para Capibara V3, la especialización emergente esperada:
+- Expert 0: terminología y sustantiva legal
+- Expert 1: procedimiento, proceso y plazos
+- Expert 2: razonamiento y argumentación jurídica
+- Expert 3: herramientas, extracción y formato
+
+En V4 se dobla a 8 experts aprovechando el corpus más grande (~30B tokens)
+que permite una especialización más granular sin riesgo de colapso.
 
 No se asignan manualmente — el router los aprende. Se puede observar post-entrenamiento
 con análisis de activación para entender qué aprendió cada expert.
@@ -380,22 +412,23 @@ La fase más larga (Large V3 fase 1) puede reducirse significativamente si:
 
 ---
 
-## Comparación V1 / V2 / V3
+## Comparación V1 / V2 / V3 / V4
 
-| Capacidad | V1 | V2 | V3 |
-|-----------|----|----|-----|
-| Vocab | 512 byte-level | 32k BPE | 32k–64k BPE |
-| Contexto | ~220 palabras | ~1500 palabras | ~6000 palabras |
-| Arquitectura | Transformer denso | Transformer denso | Mamba-Attn híbrido + MoE |
-| Complejidad atención | O(n²) | O(n²) | O(n) capas Mamba |
-| Think tags | No | Sí (1 token) | Sí (1 token) |
-| Routing especialidad | Keyword heurístico | Keyword heurístico | MoE aprendido |
-| LoRA adapters | 15 adapters ×15 MB | 15 adapters + think | LoRA over MoE |
-| Chats largos | Trunca | Trunca | Compactación automática |
-| Agentes | Tools + MCP | Tools + CrewAI | CrewAI + memoria persistente |
-| Corpus | 1.7B tokens ES | 1.7B tokens ES | ~16B tokens ES+LATAM |
-| Speedup speculative | ~4.4× | ~4.4× | ~3× (Mamba verify secuencial) |
-| Días entrenamiento Large | ~8 | ~18 | ~30+ |
+| Capacidad | V1 | V2 | V3 | V4 |
+|-----------|----|----|-----|-----|
+| Vocab | 512 byte-level | 32k BPE | 32k–64k BPE | 64k BPE |
+| Contexto | ~220 palabras | ~1500 palabras | ~3000 palabras | ~6000 palabras |
+| seq_len | 1024 | 2048 | 4096 | 8192 |
+| Arquitectura | Transformer denso | Transformer denso | Mamba híbrido (1/4) | Mamba híbrido (1/8) |
+| Complejidad atención | O(n²) total | O(n²) total | O(n²) 25% capas | O(n²) 12.5% capas |
+| MoE experts | — | — | 4 top-2 | 8 top-2 |
+| Think tags | No | Sí (1 tok) | Sí (1 tok) | Sí (1 tok) |
+| Routing especialidad | Keyword | Keyword | MoE aprendido | MoE aprendido |
+| Chats largos | Trunca | Trunca | Compactación auto | Mamba state + compactación |
+| Agentes | Tools + MCP | Tools + CrewAI | CrewAI + memoria | CrewAI + mem. persistente |
+| Corpus | 1.7B ES | 1.7B ES | ~16B ES+LATAM | ~30B ES+LATAM+sintético |
+| Speedup speculative | ~4.4× | ~4.4× | ~3.5× | ~3× |
+| Días entrenamiento Large | ~8 | ~18 | ~35 | ~55 |
 
 ---
 
