@@ -43,6 +43,14 @@ suficiente información entre capas de atención.
 distancia >2048 tokens respecto a V2, mantener ratio 1/4 también en V4 y
 compensar con d_state más grande.
 
+**Advertencia de diseño (MAD paper, Poli et al. 2024)**: el análisis de leyes de
+escala sobre >500 modelos de 70M–7B parámetros encuentra que el ratio de hibridación
+óptimo es **25% en todos los presupuestos de cómputo** evaluados. El 12.5% de V4
+está fuera del rango validado por este estudio. Las condiciones go/no-go de V3
+son por tanto más críticas de lo inicialmente estimado. Como alternativa, se puede
+usar el protocolo MAD (`scripts/run_mad_validation.py`) para validar el ratio 1/8
+en Small V4 (minutos de compute) antes de comprometer el entrenamiento Large.
+
 ```python
 # Presets V4 — ratio 1/8, seq=8192
 PRESETS_V4 = {

@@ -86,7 +86,17 @@ Arquitecturas de referencia:
 - **Zamba** (Zyphra, 2024): 7B params, supera Mistral-7B en benchmarks
 - **Samba** (Microsoft, 2024): lineal + atención periódica
 
-Para Capibara V3: **ratio 1 atención por cada 4 capas Mamba**.
+Para Capibara V3: **ratio 1 atención por cada 4 capas Mamba** (25%).
+
+**Validación empírica independiente**: Poli et al. 2024 ("Mechanistic Design and Scaling
+of Hybrid Architectures") entrenaron >500 modelos de lenguaje entre 70M y 7B parámetros
+con diferentes arquitecturas y reportan que **la proporción de hibridación óptima es
+exactamente el 25% en todos los grupos IsoFLOP** evaluados. V3 usa este ratio por diseño.
+
+Además confirman que los híbridos son **más robustos al overtraining** que los Transformers
+puros: la brecha de perplejidad cuando se entrena fuera de la frontera eficiente es menor
+en híbridos. Esto es directamente relevante para Capibara, que entrena modelos pequeños
+durante más pasos de los Chinchilla-óptimos.
 
 ### Fundamento teórico: limitaciones computacionales de los SSMs puros
 
@@ -644,6 +654,9 @@ Las siguientes decisiones requieren resultados de V1 y V2 antes de poder tomarse
    seq=8192 cuadruplica la memoria de atención vs seq=4096.
    Con Mamba dominando el 75% de las capas, el impacto real es menor —
    benchmark en Medium antes de decidir para Large.
+   Nota positiva (MAD paper, Hallazgo 6): los híbridos son más robustos al overtraining
+   que los Transformers, lo que significa que entrenar con seq=4096 y luego inferir con
+   8192 (gracias a Infini-attention) tiene menor riesgo de degradación que en un puro.
 
 5. **¿Transfer learning de V2 a V3?**
    Las capas de atención son compatibles si d_model es igual.
@@ -752,9 +765,92 @@ memoria verdaderamente ilimitada de Infini-attention.
 
 ---
 
+## Protocolo de validación MAD para Small V3
+
+*Extraído de: "Mechanistic Design and Scaling of Hybrid Architectures" — Poli et al. 2024,
+Together AI + Stanford + Hessian AI. Código: https://github.com/athms/mad-lab*
+
+Antes de comprometer 4 días de entrenamiento en Small V3, se puede validar la arquitectura
+en **minutos** con el protocolo MAD (Mechanistic Architecture Design): 6 tareas sintéticas
+de manipulación de tokens que correlacionan linealmente con la perplejidad de cómputo
+óptimo a escala (Hallazgo 9 del paper).
+
+### Las 6 tareas MAD
+
+| Tarea | Qué mide | Primitiva que destaca |
+|-------|----------|----------------------|
+| Recall en contexto | Recuperar valores de pares clave-valor | Atención |
+| Recall difuso | Recuperar claves de longitud variable | Hyena (convolucional) |
+| Recall ruidoso | Ignorar tokens irrelevantes al recuperar | Atención |
+| Copia selectiva | Copiar tokens no-ruido en orden | Atención |
+| Compresión | Codificar secuencia en un solo token | **Mamba** |
+| Memorización | Aprender mapa clave-valor fijo | Memorización paramétrica |
+
+Mamba destaca específicamente en compresión — coherente con su rol en V3 para
+procesar flujos de texto legal y comprimir información en el estado SSM antes
+de que las capas Infini-attention hagan la recuperación global.
+
+### Cómo usar MAD en V3
+
+```python
+# Paso 0: instalar mad-lab (sin GPU requerida, corre en Axion)
+# pip install mad-lab   o   git clone https://github.com/athms/mad-lab
+
+# Paso 1: definir la arquitectura V3 candidata como config MAD
+V3_SMALL_MAD = {
+    "n_layers": 4,          # 2 bloques de [Mamba Mamba Mamba Infini-attn]
+    "d_model": 128,         # ancho reducido para prototipo
+    "attn_every": 4,        # ratio 25%
+    "primitives": ["mamba", "mamba", "mamba", "attention"],
+    "channel_mixing": "moe",  # MoE en lugar de SwiGLU
+}
+
+# Paso 2: ejecutar las 6 tareas MAD
+# Tiempo estimado: ~15 minutos en Axion (no GPU necesaria)
+mad_score = run_mad_pipeline(V3_SMALL_MAD, tasks="all")
+
+# Paso 3: comparar vs baseline Transformer y Mamba puro
+# Si mad_score(V3_hybrid) > mad_score(Transformer): go
+# Si mad_score(V3_hybrid) < mad_score(Mamba_puro): reconsiderar ratio
+```
+
+### Hallazgos adicionales del paper aplicables a V3
+
+**Hallazgo 2 — Head expansion trick** (+2.3% en MAD):
+Organizar la dimensión de estado fija en **menos cabezas con estado más grande**
+(en lugar de muchas cabezas pequeñas) mejora la capacidad de memorización.
+Para V3 Small: preferir `n_heads=4, d_head=16` sobre `n_heads=8, d_head=8`
+con el mismo `d_state` total.
+
+**Hallazgo 3 — MoE channel mixing** (+1.7% en MAD):
+Usar MoE como capa de mezcla de canales (sustituyendo SwiGLU/FFN) añade
++1.7% de precisión en todas las tareas sintéticas. V3 ya usa MoE — ✅ validado.
+
+**Ley de escalado de estado** (Hallazgo 8):
+Relación entre perplejidad óptima P y tamaño total de estado M:
+```
+P ~ M^c   con c = -0.28
+```
+Guía para calibrar `d_state` en función del objetivo de perplejidad:
+- Si V3 Large apunta a PPL=X, el d_state mínimo necesario es `M = (P_target)^(1/-0.28)`
+- En la práctica: comparar `d_state=64` vs `d_state=256` en Small para ver si
+  la curva P–M sigue esta ley en nuestro dominio legal especializado.
+
+### Criterio go/no-go MAD para V3
+
+| Condición | Acción |
+|-----------|--------|
+| MAD hybrid V3 > MAD Transformer baseline | Go con V3 tal como está |
+| MAD hybrid V3 ≈ MAD Transformer (< 2% diferencia) | Revisar ratio attn_every |
+| MAD Mamba puro > MAD hybrid V3 | Error de diseño — revisar implementación |
+| Puntuación compresión Mamba baja | Problema con la implementación Mamba/JAX |
+
+---
+
 ## Archivos a diseñar para V3
 
 ```
+[ ] scripts/run_mad_validation.py      — validar arquitectura V3 con protocolo MAD antes de entrenar
 [ ] models/mamba_block.py          — implementación Mamba selectivo en JAX
 [ ] models/hybrid_mamba_attn.py    — backbone Mamba-Attention híbrido
 [ ] models/moe_layer.py            — capa MoE con router top-k y aux loss
