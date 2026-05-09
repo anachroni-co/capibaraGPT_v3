@@ -200,6 +200,38 @@ La arquitectura híbrida de V4 deja esa puerta abierta sin arriesgar la calidad.
 
 ---
 
+## Mejora adicional — Prefetch especulativo de experts (alta prioridad en V4)
+
+El impacto de la técnica de arXiv:2603.19289v1 es mayor en V4 que en V3:
+
+| Factor | V3 (4 experts) | V4 (8 experts) |
+|--------|----------------|----------------|
+| Tamaño de pesos por expert | ~40 MB | ~80 MB |
+| Transferencia PCIe por token | 2 experts × 40 MB | 2 experts × 80 MB |
+| Beneficio del prefetch | 5–8% TPOT | **10–16% TPOT estimado** |
+
+Con 8 experts y pesos más grandes, la latencia PCIe domina más la inferencia y
+el prefetch especulativo libera proporcionalmente más tiempo de GPU.
+
+**La implementación es idéntica a V3** (`moe_prefetch_server.py`) — solo cambia el
+número de experts en el mapa de device_map. No requiere reentrenamiento.
+
+### Combinación con speculative decoding en V4
+
+```
+Token generado:
+  [Cerebro draft] → token propuesto
+  [Large verify]  → k tokens en paralelo (capas atención)
+                  + experts prefetcheados (capas MoE)
+
+Speedup compuesto estimado:
+  speculative decoding: ~3× (V4 con 1/8 atención)
+  MoE prefetch:         +12% TPOT sobre throughput base
+  → ~3.4× efectivo sobre Large-solo
+```
+
+---
+
 ## Archivos nuevos en V4 (sobre V3)
 
 ```
@@ -207,6 +239,7 @@ La arquitectura híbrida de V4 deja esa puerta abierta sin arriesgar la calidad.
 [ ] training/persistent_memory.py     — memoria entre sesiones (FAISS por usuario)
 [ ] scripts/transfer_v3_to_v4.py      — inicialización con pesos de V3
 [ ] scripts/analyze_experts_v4.py     — comparar especialización V3 (4) vs V4 (8)
+[ ] scripts/moe_prefetch_server.py    — heredado de V3, actualizar para 8 experts
 [ ] scripts/run_full_training_v4.sh   — pipeline completo V4
 [ ] docs/RUNBOOK_V4.md                — runbook detallado V4
 ```

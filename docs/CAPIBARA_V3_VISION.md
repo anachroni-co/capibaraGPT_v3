@@ -413,6 +413,116 @@ Similar al LoRA merging de V2, en V3 se puede:
 
 ---
 
+## Mejora 6 — Prefetch especulativo de experts en inferencia GPU
+
+**Paper**: arXiv:2603.19289v1 — "Speculating Experts: MoE Expert Prefetching"  
+**Aplica**: Despliegue en GPU con experts en CPU offloading. **No aplica** a Axion (CPU-only).
+
+### El problema en despliegue GPU
+
+Cuando los pesos de los experts MoE no caben en VRAM se cargan desde CPU (CPU offloading).
+Cada paso de inferencia requiere:
+1. Calcular el router → saber qué experts se necesitan en capa L
+2. Transferir pesos de esos experts CPU→GPU
+3. Ejecutar la capa L
+
+Las transferencias PCIe (pasos 2) no se solapan con el cómputo (paso 3) porque los
+experts no se conocen hasta que el router termina. Resultado: la GPU queda idle
+esperando datos — cuello de botella dominante en MoE con offloading.
+
+### Solución: quasi-hidden state para predecir experts anticipadamente
+
+La idea central es que el estado interno después de los componentes densos de la capa
+actual puede predecir con alta fidelidad qué experts se activarán en la capa siguiente:
+
+```
+Capa L en ejecución:
+  input_L → [denso d_L] + residual r_L
+                  ↓
+  q_L = LN_{L+1}(d_L + r_L)   ← quasi-hidden state de capa L
+                  ↓
+  router especulativo: top-k experts(q_L) ≈ top-k experts reales de capa L+1
+                  ↓
+  → iniciar prefetch CPU→GPU de esos experts MIENTRAS capa L termina
+```
+
+El quasi-hidden state `q_L = LN_{L+1}(d_L + r_L)` usa la salida del componente
+denso antes de pasar por los experts, con la normalización de la próxima capa.
+**No requiere parámetros adicionales ni entrenamiento extra.**
+
+```python
+# Pseudo-código: inferencia con prefetch especulativo
+def forward_moe_with_prefetch(x, layers):
+    # Prefetch inicial de capa 0
+    prefetch_experts(router_predict(x, layers[0]))
+
+    for i, layer in enumerate(layers):
+        if layer.is_moe:
+            # Experts ya están en GPU (prefetcheados)
+            d_i = layer.dense_component(x)  # parte densa
+            q_i = layer.next_norm(d_i + x)  # quasi-hidden state
+
+            # Predecir y prefetchear experts de capa i+1 ahora
+            # (solapado con el cómputo del router real de capa i)
+            if i + 1 < len(layers) and layers[i+1].is_moe:
+                async_prefetch_experts(router_predict(q_i, layers[i+1]))
+
+            # Router real de capa i (sobre x completo, más preciso)
+            x = layer.moe_forward(x, d_i)
+        else:
+            x = layer(x)
+    return x
+```
+
+### Resultados del paper
+
+| Configuración | Tasa de acierto | Mejora TPOT |
+|---------------|-----------------|-------------|
+| Prefetch 1 capa adelante | ~90% | 5–8% |
+| Prefetch 2 capas adelante | ~85% | 8–14% |
+| Prefetch con routing adaptativo | ~92% | 10–14% |
+
+TPOT = Time Per Output Token. Mejoras medidas sobre modelos Mixtral-class con offloading.
+
+### Relevancia para Capibara
+
+| Escenario | Aplica | Impacto |
+|-----------|--------|---------|
+| Entrenamiento Axion (CPU-only) | ❌ | No hay PCIe ni GPU |
+| Despliegue producción GPU | ✅ | 5–14% más rápido en TPOT |
+| Combinado con speculative decoding (Cerebro→Large) | ✅ | Speedups se multiplican parcialmente |
+| V3 con 4 experts (pequeños) | ✅ moderado | Menos beneficio que V4 (experts más grandes) |
+| V4 con 8 experts | ✅ alto | Experts más grandes → transferencia PCIe más lenta → más beneficio |
+
+### Integración en V3
+
+La técnica se implementa **solo en el servidor de inferencia**, no cambia el modelo:
+
+```python
+# En speculative_inference.py V3 (modo GPU con offloading)
+class MoEPrefetcher:
+    """Prefetch experts de la capa siguiente usando quasi-hidden state."""
+
+    def __init__(self, model, device_map: dict):
+        self.model = model
+        self.device_map = device_map  # mapa layer → GPU/CPU
+
+    def quasi_hidden_state(self, dense_out, residual, next_layer_norm):
+        return next_layer_norm(dense_out + residual)
+
+    def predict_experts(self, q, layer_idx: int) -> list[int]:
+        router_weights = self.model.layers[layer_idx].router.weight
+        scores = q @ router_weights.T
+        return jnp.argsort(scores, descending=True)[:self.model.top_k].tolist()
+```
+
+Artefacto a añadir al checklist de V3:
+```
+[ ] scripts/moe_prefetch_server.py  — servidor de inferencia GPU con prefetch especulativo
+```
+
+---
+
 ## Timeline estimado V3
 
 La duración depende fuertemente de cuánto corpus se use:
@@ -496,7 +606,8 @@ Las siguientes decisiones requieren resultados de V1 y V2 antes de poder tomarse
 [ ] scripts/generate_synthetic.py  — generar datos sintéticos con V2
 [ ] scripts/streaming_kv.py        — gestión KV cache con sink tokens
 [ ] training/conversation_manager.py — compactación automática de contexto
-[ ] scripts/analyze_experts.py     — análisis de activación de experts post-entrenamiento
-[ ] scripts/run_full_training_v3.sh — pipeline completo V3
-[ ] docs/RUNBOOK_V3.md             — runbook detallado V3
+[ ] scripts/analyze_experts.py         — análisis de activación de experts post-entrenamiento
+[ ] scripts/moe_prefetch_server.py     — inferencia GPU con prefetch especulativo (arXiv:2603.19289v1)
+[ ] scripts/run_full_training_v3.sh    — pipeline completo V3
+[ ] docs/RUNBOOK_V3.md                 — runbook detallado V3
 ```
