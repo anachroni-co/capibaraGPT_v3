@@ -160,6 +160,12 @@ PRESETS_V3 = {
 se reemplazan por **Infini-attention** (Munkhdalai et al. 2024, arXiv:2404.07143).
 Esto combina dos mecanismos complementarios:
 
+**Nota sobre Position Interpolation** (Chen et al. 2023, arXiv:2306.15595v2): esta técnica
+extiende la ventana de contexto de Transformers con RoPE con solo 1000 pasos de fine-tuning
+y es muy útil para **V2**. Para V3, no es necesaria: Mamba no usa codificación posicional
+explícita, e Infini-attention ya generaliza a contexto ilimitado por diseño. Ver Mejora 7 de
+V2 para la estrategia completa (PI como paso rápido → Infini-attention como paso final).
+
 ```
 Mamba block:      recurrencia lineal O(n) — patrones locales y secuenciales
 Infini-attention: memoria compresiva fija — recuperación global ilimitada

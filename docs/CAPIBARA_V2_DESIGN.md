@@ -599,6 +599,73 @@ El paper demuestra SOTA en BookSum 500K tokens — resumir libros completos.
 | Memorizing Transformers (65K KV) | 183M params | 65K tokens |
 | **Infini-Transformer** | **1.6M (114× menor)** | **∞ (acumulativo)** |
 
+### Alternativa rápida: Position Interpolation (PI) como paso previo
+
+*Extraído de: "Extending Context Window of Large Language Models via Position Interpolation"
+— Chen et al. 2023 (Meta AI), arXiv:2306.15595v2.*
+
+Antes de hacer el continual pre-training de Infini-attention (3 días), existe una
+opción mucho más barata: **interpolación de posición RoPE** para extender V2 de
+seq=2048 a seq=16384 con solo **1000 pasos de fine-tuning** (~2 horas en Axion).
+
+La idea: en lugar de extrapolar los índices RoPE más allá del rango de entrenamiento
+(lo que causa puntuaciones de atención catastróficas), se comprimen proporcionalmente:
+
+```python
+# RoPE estándar: f(x, m) — posición m tal cual
+# PI: f'(x, m) = f(x, m * L / L')
+# Ejemplo: extender de L=2048 a L'=16384
+# posición 16000 se convierte en 16000 * 2048/16384 = 2000 ← dentro del rango entrenado
+
+def apply_rope_pi(x: jnp.ndarray, seq_len: int, original_len: int = 2048):
+    """Position Interpolation: escalar índices para que quepan en [0, original_len]."""
+    scale = original_len / seq_len          # = 1.0 si seq_len <= original_len
+    positions = jnp.arange(seq_len) * scale # comprimir al rango entrenado
+    return rope_encoding(x, positions)
+```
+
+Resultados del paper (LLaMA 7B–65B, The Pile, 1000 pasos):
+- seq=8192: perplexity **-0.28** vs baseline en PG-19 (mejora real, no solo extensión)
+- seq=16384: perplexity **-0.54** vs baseline — el modelo usa el contexto extra
+- Passkey retrieval: **100% de precisión** al target context tras solo 200 pasos
+- Benchmarks originales (BoolQ, PIQA, etc.): degradación < 2% — calidad preservada
+- Fine-tuning directo sin PI: context effective máx=2560 tras 10000 pasos (inútil)
+
+**Cuándo usar PI vs Infini-attention**:
+
+| Criterio | PI (1000 pasos) | Infini-attention (30K pasos) |
+|----------|-----------------|------------------------------|
+| Coste de adaptación | ~2 horas | ~3 días |
+| Límite de contexto | 16K–32K tokens (O(n²) atención) | Ilimitado (O(1) memoria) |
+| Memoria en inferencia | crece con contexto | tamaño fijo (M,z) |
+| Calidad en contexto original | < 2% degradación | < 1% degradación |
+| Mejor para | Documentos hasta 20K tokens | Sesiones largas, >32K tokens |
+
+**Estrategia recomendada para V2**:
+```
+Large V2 entrenado (seq=2048)
+  │
+  ├─ Fase 1 (inmediata): PI fine-tuning 1000 pasos → V2-PI (seq=16384)
+  │   └─ Disponible en ~2h. Cubre contratos largos y expedientes completos.
+  │
+  └─ Fase 2 (cuando el servidor esté libre): Infini-attention 30K pasos → V2-Infini
+      └─ Contexto ilimitado para V2. Prerrequisito antes de V3.
+```
+
+PI no requiere cambios en la arquitectura — solo reescala los índices de posición
+en RoPE antes de cada forward pass. Compatible con los checkpoints V2 existentes.
+
+```bash
+# PI fine-tuning sobre Large V2 (~2 horas, 1000 pasos)
+python scripts/extend_context_pi.py \
+    --base-ckpt   checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+    --tokenizer   tokenizer/capibara_legal.model \
+    --data-dir    data/tokenized_bpe/ \
+    --target-len  16384 \
+    --steps       1000 --lr 2e-5 --dtype bf16 \
+    --output      checkpoints/v2/axion_large_pi16k
+```
+
 ### Aplicación en V2: continual pre-training plug-and-play
 
 La ventaja operativa clave: **no hay que reentrenar desde cero**. El paper
@@ -932,6 +999,7 @@ en el momento de iniciar V2.
 [ ] scripts/merge_loras.py              — merging ponderado de adapters LoRA
 [ ] scripts/openai_wrapper.py           — traducción protocolo OpenAI → Capibara
 [ ] scripts/crewai_legal.py             — definición agentes CrewAI
+[ ] scripts/extend_context_pi.py        — (Mejora 7, PI) Position Interpolation RoPE, 1000 pasos → 16K contexto
 [ ] scripts/infini_pretrain.py          — continual pre-training con Infini-attention
 [ ] models/infini_attention.py          — implementación InfiniAttention en JAX/Flax
 [ ] examples/crew_analisis_caso.py      — ejemplo flujo multi-agent
