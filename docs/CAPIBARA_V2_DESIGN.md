@@ -622,6 +622,88 @@ def is_valid_tool_call(example: dict) -> bool:
 
 Esto contrasta con los adapters conversacionales (`dialogo`, `instruccion`) donde la variedad de formatos de respuesta es deseable para la naturalidad.
 
+### Datos, métricas e hyperparámetros para `herramientas`
+
+*Referencia adicional: Kavathekar et al. 2025 "Small Models, Big Tasks: An Exploratory Empirical Study on SLMs for Function Calling" (EASE 2025, arXiv:2504.19277v1).*
+
+**Fuente de datos principal**: Salesforce-XLAM (`Salesforce/xlam-function-calling-60k` en HuggingFace) — 60K ejemplos JSON con query + tools + answer, cobertura multidomain. Pipeline de adaptación para Capibara:
+
+```
+1. Descargar XLAM completo (60K samples, formato JSON)
+2. Traducir queries y tool descriptions al español (Capibara Large, una vez entrenado en V2)
+3. Adaptar tool names a herramientas legales: búsqueda BOE, consulta CENDOJ,
+   cálculo de plazos procesales, extracción de entidades de sentencias, etc.
+4. Combinar con ejemplos curados manualmente (≥200 ejemplos propios de dominio legal)
+→ Añadir a scripts/curate_instruction_data.py como fuente "xlam-es"
+```
+
+**Hyperparámetros LoRA óptimos para function calling** (validados en el paper sobre 55K samples):
+
+```python
+# En scripts/lora_finetune.py — configuración para adapter herramientas
+HERRAMIENTAS_LORA_CONFIG = {
+    "rank": 8,
+    "alpha": 8,           # alpha == rank: escala unitaria, conservadora
+    "dropout": 0.05,
+    "target_modules": "all_linear",  # incluye query y value projections
+    "lr": 2e-5,
+    "epochs": 2,          # más épocas → sobreajuste al formato, no a contenido
+    "batch_size": 2,
+    "grad_accum_steps": 4,  # batch efectivo = 8
+    "precision": "bf16",
+}
+```
+
+Nota: alpha=rank (escala=1) es la elección más conservadora y funciona bien para function calling donde la salida es muy estructurada. Para adapters conversacionales, alpha=2×rank da más expresividad.
+
+**Métrica primaria de evaluación** — JSON Parsability (del paper, ecuación 1):
+
+```python
+def json_parsability(predictions: list[str]) -> float:
+    """Fracción de predicciones que son JSON válido."""
+    return sum(
+        1 for p in predictions
+        if _try_json(p)
+    ) / len(predictions)
+
+def _try_json(s: str) -> bool:
+    try:
+        json.loads(s)
+        return True
+    except json.JSONDecodeError:
+        return False
+```
+
+Objetivo para el adapter `herramientas` tras fine-tuning: **JSON Parsability ≥ 99%** (Deepseek-Coder-1.3B y Phi-3-mini alcanzan 99.44% y 99.62% respectivamente con esta configuración).
+
+**Salvaguarda de producción — grammar-constrained decoding**: cuando el modelo produce JSON malformado en inferencia (parsability <99%), añadir un paso de post-procesado con `outlines` (compatible con JAX) para forzar estructura JSON válida:
+
+```python
+# En speculative_inference.py — fallback para adapter herramientas
+import json, re
+
+def _coerce_json_output(raw: str) -> str:
+    """Extraer bloque JSON si el modelo genera texto adicional."""
+    # Intentar parseo directo
+    try:
+        json.loads(raw)
+        return raw
+    except json.JSONDecodeError:
+        pass
+    # Extraer primer bloque JSON del output
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if match:
+        candidate = match.group(0)
+        try:
+            json.loads(candidate)
+            return candidate
+        except json.JSONDecodeError:
+            pass
+    return "{}"  # fallback vacío — el caller debe manejar el error
+```
+
+El paper documenta que fine-tuning hace los modelos significativamente más robustos ante prompt injection (1-2% de caída vs 10-15% en few-shot), confirmando que LoRA es el enfoque correcto para producción.
+
 ---
 
 ## Mejora 6 — Multi-seed soup en destilación
