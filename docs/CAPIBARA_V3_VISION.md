@@ -91,22 +91,39 @@ Para Capibara V3: **ratio 1 atención por cada 4 capas Mamba**.
 ### Configuración V3 — conservadora y validable
 
 ```python
-# Presets V3 — Mamba-Attention híbrido, 1 atención cada 4 capas, seq=4096
+# Presets V3 — Mamba + Infini-attention híbrido, 1 Infini-attn cada 4 capas, seq=4096
 PRESETS_V3 = {
     "small":  dict(d_model=512,  n_layers=16, attn_every=4, d_state=64,  seq_len=4096),
     "medium": dict(d_model=768,  n_layers=20, attn_every=4, d_state=128, seq_len=4096),
     "large":  dict(d_model=1280, n_layers=32, attn_every=4, d_state=256, seq_len=4096),
 }
-# d_state: dimensión del estado SSM — mayor = más memoria de contexto
-# attn_every=4: 25% de capas son atención densa, 75% son Mamba
+# attn_every=4: 25% de capas son Infini-attention, 75% son Mamba
+# Infini-attention tiene memoria compresiva ilimitada (M, z) — ver Mejora 7 de V2
 ```
 
-Con seq=4096 y arquitectura híbrida V3:
+**Actualización respecto al diseño original**: las capas de "atención densa" del híbrido
+se reemplazan por **Infini-attention** (Munkhdalai et al. 2024, arXiv:2404.07143).
+Esto combina dos mecanismos complementarios:
+
+```
+Mamba block:      recurrencia lineal O(n) — patrones locales y secuenciales
+Infini-attention: memoria compresiva fija — recuperación global ilimitada
+
+[Mamba  Mamba  Mamba  Infini-Attn] × 8 bloques
+   local  local  local   global+memoria
+```
+
+Resultado: V3 tiene contexto **verdaderamente ilimitado** incluso con seq=4096 de entrenamiento.
+La Infini-attention generaliza a secuencias arbitrariamente largas en inferencia
+(demostrado a 1M tokens en el paper con modelos entrenados a 32K).
+
+Con esta arquitectura V3:
 - Un contrato de arrendamiento completo con todas sus cláusulas (~2500 palabras)
 - Una sentencia de primera instancia completa
-- Historial de conversación de ~30 minutos sin compactar
+- Historial de conversación de duración arbitraria — la memoria M acumula sin límite
+- Referencias cruzadas entre documentos lejanos: "el artículo 3 citado 50 páginas atrás"
 
-seq=8192 y los documentos más largos quedan para V4.
+seq=4096 como ventana de segmento de entrenamiento; el contexto efectivo es ilimitado.
 
 ### Implementación en JAX/Flax
 
@@ -295,9 +312,18 @@ En un chat legal de múltiples turnos (consulta inicial → documentos → pregu
 el contexto crece indefinidamente. En V1/V2 con ventana fija, los turnos antiguos
 simplemente se truncan — el modelo pierde el hilo de la consulta.
 
-### Solución: KV Cache Eviction + Resumen comprimido
+### Solución principal: Infini-attention nativa (V3)
 
-Tres estrategias combinadas:
+Con la arquitectura Mamba + Infini-attention de V3, **la compactación es nativa y aprendida**.
+La memoria compresiva `(M, z)` de cada cabeza Infini-attention acumula todo el historial
+sin límite de longitud. No hay truncación — la información se comprime incrementalmente
+con 114× menos memoria que un KV cache estándar (ver paper arXiv:2404.07143).
+
+El estado `(M, z)` se persiste entre turnos de conversación al igual que los pesos del modelo.
+
+### Estrategias complementarias (fallback y casos extremos)
+
+Tres estrategias adicionales para casos donde se quiera control explícito:
 
 #### A — Sliding window con atención esparsa (en modelo)
 

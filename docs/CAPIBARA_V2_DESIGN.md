@@ -8,7 +8,7 @@
 
 ## Resumen ejecutivo
 
-V2 introduce seis mejoras que, combinadas, producen un salto cualitativo
+V2 introduce siete mejoras que, combinadas, producen un salto cualitativo
 significativo respecto a V1:
 
 | Mejora | Impacto principal | Coste |
@@ -19,10 +19,12 @@ significativo respecto a V1:
 | CrewAI multi-agent | Flujos de trabajo legales complejos | Wrapper + config |
 | LoRA merging | Adapters combinados sin reentrenar | Script nuevo |
 | Multi-seed soup en destilación | Student más robusto y generalizable | 3× tiempo destilación |
+| **Infini-attention** | **Contexto infinito con memoria fija** | **~3 días continual pre-training** |
 
 Las mejoras 1 y 3 están acopladas (BPE habilita seq\_len largo con sentido).
 Las mejoras 2, 5 y 6 son independientes y pueden hacerse en paralelo.
 La mejora 4 requiere que 1 y 3 estén terminadas.
+La mejora 7 se aplica sobre el checkpoint Large ya entrenado — no bloquea ninguna otra.
 
 ---
 
@@ -491,6 +493,138 @@ python scripts/soup_checkpoints.py \
 
 ---
 
+## Mejora 7 — Infini-attention: contexto infinito con memoria fija
+
+### Paper de referencia
+
+**"Leave No Context Behind: Efficient Infinite Context Transformers with Infini-attention"**
+Munkhdalai, Faruqui, Gopal — Google, arXiv:2404.07143 (abril 2024)
+
+### Qué propone
+
+Infini-attention añade una **memoria compresiva asociativa** `M ∈ ℝ^(d_key × d_value)`
+a cada cabeza de atención estándar. En lugar de descartar el KV cache del segmento
+anterior, lo comprime incrementalmente en M con **tamaño fijo e independiente de la
+longitud de la secuencia**:
+
+```
+Memory retrieval:  A_mem = σ(Q)·M_{s-1} / (σ(Q)·z_{s-1})
+Memory update:     M_s ← M_{s-1} + σ(K)ᵀ·(V − σ(K)·M_{s-1}/z_{s-1})   ← Delta rule
+Output:            A = sigmoid(β)·A_mem + (1−sigmoid(β))·A_dot           ← gate aprendido
+```
+
+donde σ es ELU+1, z es el normalizador, y β es un escalar por cabeza aprendido
+durante el entrenamiento.
+
+### Por qué es crítico para Capibara Legal
+
+El análisis legal requiere recuperar información específica de páginas anteriores:
+
+```
+"Como establece el artículo 3 de este contrato [página 1], y en consonancia
+con la cláusula 47 de los estatutos [página 8], la parte demandada..."  [página 23]
+```
+
+Infini-attention recupera esos tokens comprimidos con precisión demostrada hasta
+**1M tokens** (benchmark passkey retrieval: 100% tras solo 400 pasos de fine-tuning).
+El paper demuestra SOTA en BookSum 500K tokens — resumir libros completos.
+
+**Comparación de footprint de memoria**:
+
+| Modelo | Memoria (contexto) | Contexto efectivo |
+|--------|--------------------|-------------------|
+| Transformer-XL | crece con N×l | solo último segmento |
+| Memorizing Transformers (65K KV) | 183M params | 65K tokens |
+| **Infini-Transformer** | **1.6M (114× menor)** | **∞ (acumulativo)** |
+
+### Aplicación en V2: continual pre-training plug-and-play
+
+La ventaja operativa clave: **no hay que reentrenar desde cero**. El paper
+demuestra que reemplazar MHA con Infini-attention y hacer continual pre-training
+30K pasos (batch=64, seg=2K) es suficiente para adaptar un LLM existente.
+
+```bash
+# Paso 1 — Continual pre-training sobre Large V2 (~3 días, 32 threads)
+tmux send-keys -t infini "python scripts/infini_pretrain.py \
+    --base-ckpt   checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+    --tokenizer   tokenizer/capibara_legal.model \
+    --data-dir    data/tokenized_bpe/legal/ \
+    --output      checkpoints/v2/axion_large_infini \
+    --steps 30000 --batch-size 16 --seg-len 2048 \
+    --lr 1e-4 --dtype bf16 --threads 32" Enter
+
+# Paso 2 — Opcional: fine-tuning passkey 400 pasos para forzar long-range recall
+python scripts/infini_pretrain.py \
+    --base-ckpt checkpoints/v2/axion_large_infini/ckpt_final.pkl \
+    --finetune-passkey --ft-steps 400
+```
+
+### Implementación: `models/infini_attention.py`
+
+```python
+import jax.numpy as jnp
+import flax.linen as nn
+
+class InfiniAttention(nn.Module):
+    d_model: int
+    n_heads: int
+
+    @nn.compact
+    def __call__(self, x, memory):
+        # memory = (M, z)  — asociativa + normalizador, tamaño fijo
+        M, z = memory
+        B, N, _ = x.shape
+        d_head = self.d_model // self.n_heads
+
+        Q = nn.Dense(self.d_model)(x).reshape(B, N, self.n_heads, d_head)
+        K = nn.Dense(self.d_model)(x).reshape(B, N, self.n_heads, d_head)
+        V = nn.Dense(self.d_model)(x).reshape(B, N, self.n_heads, d_head)
+
+        # Local causal attention (actual segment)
+        A_dot = causal_dot_attention(Q, K, V)
+
+        # Memory retrieval
+        sigma_Q = jnp.where(Q > 0, Q, jnp.exp(Q) - 1) + 1  # ELU+1
+        A_mem = jnp.einsum('bnhd,nhde->bnhe', sigma_Q, M) / (
+            jnp.einsum('bnhd,nhd->bnh', sigma_Q, z)[..., None] + 1e-6)
+
+        # Learned gate β per head
+        beta = self.param('beta', nn.initializers.zeros, (self.n_heads,))
+        gate = jax.nn.sigmoid(beta)
+        A = gate[None, None, :, None] * A_mem + (1 - gate[None, None, :, None]) * A_dot
+
+        # Memory update — Delta rule
+        sigma_K = jnp.where(K > 0, K, jnp.exp(K) - 1) + 1
+        V_delta = V - jnp.einsum('bnhd,nhde->bnhe', sigma_K, M) / (
+            jnp.einsum('bnhd,nhd->bnh', sigma_K, z)[..., None] + 1e-6)
+        M_new = M + jnp.einsum('bnhd,bnhe->nhde', sigma_K, V_delta)
+        z_new = z + sigma_K.sum(axis=1)  # sum over sequence dim
+
+        output = A.reshape(B, N, self.d_model)
+        return nn.Dense(self.d_model)(output), (M_new, z_new)
+```
+
+### Impacto en speculative decoding
+
+Infini-attention preserva el estado de memoria `(M, z)` entre segmentos.
+Durante el speculative decoding:
+- Cerebro (draft): actualiza M con cada token generado → estado de memoria crece sin límite de longitud
+- Medium/Large (verify): reciben el mismo M inicial → la verificación es correcta
+- El estado se pasa entre turnos de conversación → memoria persistente nativa
+
+### Posición en el grafo de dependencias
+
+Infini-attention se aplica **después** de que Large V2 esté listo, en paralelo
+con destilación y LoRA:
+
+```
+Large V2 DAPT soup ──► Infini continual pre-train (30K steps, 3d) ──► infini soup
+                    ├──► Destilación ×3 seeds ...
+                    └──► LoRA ×15 adapters ...
+```
+
+---
+
 ## Plan de ejecución V2
 
 ### Grafo de dependencias y paralelismo
@@ -705,6 +839,9 @@ python examples/crew_analisis_caso.py
 | Exact match QA legal | — | > V1 |
 | Palabras en contexto (seq=2048) | ~220 | ~1500 |
 | Perplexity destilación (multi-seed vs single) | — | -2–4% |
+| Passkey retrieval a 32K tokens | 0% | ~100% (Infini) |
+| Passkey retrieval a 256K tokens | 0% | ~99% (Infini) |
+| BookSum Rouge-L (500K input) | n/a | >17.0 (Infini) |
 
 ---
 
@@ -732,6 +869,8 @@ en el momento de iniciar V2.
 [ ] scripts/merge_loras.py             — merging ponderado de adapters LoRA
 [ ] scripts/openai_wrapper.py          — traducción protocolo OpenAI → Capibara
 [ ] scripts/crewai_legal.py            — definición agentes CrewAI
+[ ] scripts/infini_pretrain.py         — continual pre-training con Infini-attention
+[ ] models/infini_attention.py         — implementación InfiniAttention en JAX/Flax
 [ ] examples/crew_analisis_caso.py     — ejemplo flujo multi-agent
 [ ] examples/crew_redaccion_demanda.py — ejemplo redacción automática
 ```
@@ -741,9 +880,11 @@ Modificaciones a scripts existentes:
 [ ] scripts/distil.py              — añadir --tokenizer, --seed
 [ ] scripts/lora_finetune.py       — añadir --tokenizer, --data-extra
 [ ] scripts/soup_checkpoints.py    — añadir --files para inter-run soup
-[ ] scripts/speculative_inference.py — BPETokenizer en lugar de byte-level,
-                                       _strip_think_blocks(), tool tokens por ID
-[ ] scripts/run_full_training.sh   — pipeline V2 completo con 3 seeds por destilación
+[ ] scripts/speculative_inference.py — BPETokenizer, _strip_think_blocks(),
+                                       tool tokens por ID, pasar estado (M,z)
+                                       entre turnos de conversación
+[ ] models/slim_200m.py            — add_infini flag para reemplazar MHA layers
+[ ] scripts/run_full_training.sh   — pipeline V2 completo con 3 seeds + infini
 [ ] RUNBOOK.md                     — sección V2
 ```
 
