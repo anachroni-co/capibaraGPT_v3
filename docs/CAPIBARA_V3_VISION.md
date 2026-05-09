@@ -88,6 +88,51 @@ Arquitecturas de referencia:
 
 Para Capibara V3: **ratio 1 atención por cada 4 capas Mamba**.
 
+### Fundamento teórico: limitaciones computacionales de los SSMs puros
+
+*Extraído de: "The Illusion of State in State Space Models" — arXiv:2404.08819v1, Merrill et al. 2024.*
+
+Los SSMs puros (S4, Mamba) y los Transformers pertenecen a la misma clase de
+complejidad computacional: **TC^0** (threshold circuits de profundidad constante).
+TC^0 no puede resolver problemas inherentemente secuenciales que requieran seguimiento
+de estado a través de posiciones arbitrarias del texto.
+
+Problemas que TC^0 **no puede resolver en el caso general**:
+- Permutation composition (grupo S₅)
+- Entity state tracking (¿quién tiene qué objeto en qué momento?)
+- Parity sobre secuencias largas
+- Composición de relaciones a lo largo de N pasos
+
+En contraste, las RNNs con recurrencia no acotada *sí* pueden resolver estos
+problemas — pero Mamba/S4 tienen estado acotado (d_state fijo), lo que los sitúa
+en TC^0 igual que el Transformer.
+
+**Implicación directa para Capibara Legal**: los tres tipos de tarea más frecuentes
+en uso jurídico son exactamente los que TC^0 falla:
+
+| Tarea legal | Equivalente formal | Puede Mamba solo? |
+|-------------|-------------------|-------------------|
+| Seguimiento de partes en un procedimiento | Entity state tracking | No |
+| Cadena de hechos procesales secuenciales | Permutation composition | No |
+| Referencia cruzada entre cláusulas de un contrato | Multi-hop relation tracking | No |
+| Pista probatoria con múltiples eslabones | Sequential state composition | No |
+
+**Las capas Infini-attention de V3 son las que cubren estas tareas**.
+Al estar en una clase de complejidad estrictamente mayor que TC^0, la atención
+puede en principio rastrear estado a distancia arbitraria — lo que Mamba no puede
+hacer por su estado acotado.
+
+Extensiones del paper que merecen atención futura (no en V3):
+- **Input-output selection**: modificar el SSM para que la selección de entrada y
+  salida dependa del token actual, análogo al Infini-attention gate
+- **Stacked recurrence**: múltiples capas de recurrencia acotada pueden aproximar
+  problemas TC^1 — no cambia la complejidad teórica pero mejora los casos prácticos
+
+**Conclusión**: la elección de arquitectura híbrida en V3 no es solo empírica
+(Jamba, Zamba en benchmarks) sino teóricamente necesaria para tareas de estado
+secuencial. Un modelo Mamba puro tiene un límite de expresividad que lo haría
+fallar sistemáticamente en procedimientos complejos con muchas partes y eventos.
+
 ### Configuración V3 — conservadora y validable
 
 ```python
@@ -581,9 +626,11 @@ La fase más larga (Large V3 fase 1) puede reducirse significativamente si:
 
 Las siguientes decisiones requieren resultados de V1 y V2 antes de poder tomarse:
 
-1. **¿Mamba puro o híbrido?**
-   Evaluar en Small V3: ¿el recall a larga distancia es suficiente con Mamba puro
-   para tareas legales de V1/V2? Si sí, simplifica la implementación.
+1. **¿Mamba puro o híbrido?** ✅ **RESUELTO — híbrido obligatorio**
+   Merrill et al. 2024 (arXiv:2404.08819v1) demuestra que los SSMs puros (Mamba, S4)
+   están en TC^0 y no pueden resolver tracking de estado secuencial — exactamente lo
+   que requieren las tareas jurídicas de seguimiento de partes y eventos procesales.
+   Las capas Infini-attention son teóricamente necesarias, no solo empíricamente útiles.
 
 2. **¿Cuántos experts?**
    4 experts (mínimo para routing útil) vs 8 experts (capacidad suficiente) vs

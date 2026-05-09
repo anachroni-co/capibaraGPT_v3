@@ -142,8 +142,40 @@ verifican) pero se elimina del output final antes de devolver al usuario.
 
 ### Datos de entrenamiento
 
-Se necesitan ejemplos de fine-tuning con think traces para las especialidades
-que más se benefician:
+*Metodología inspirada en: "LIMA: Less Is More for Alignment" — arXiv:2305.11206v1, Zhou et al. 2023.*
+
+**Superficial Alignment Hypothesis**: el conocimiento viene del pre-entrenamiento;
+el fine-tuning solo enseña el estilo de interacción. Consecuencia directa:
+**1 000–3 000 ejemplos curados son suficientes** si son de alta calidad y diversidad.
+Más ejemplos mediocres empeoran el modelo; menos ejemplos excelentes lo mejoran.
+
+#### Estrategia de curation — calidad sobre cantidad
+
+| Fuente | Volumen | Filtro de calidad |
+|--------|---------|-------------------|
+| Stack Exchange Legal ES (fuente de referencia) | ~500 ej. | >10 votos, respuesta aceptada, >200 palabras |
+| Casos prácticos legales manuales | ~200 ej. | Revisión humana, format IRAC |
+| Think traces sintéticos (V1 como teacher) | ~600 ej. | Perplexity < umbral, verificado factualmente |
+| Diálogos multi-turno legales | ~50 ej. | Mínimo 3 turnos, resolución clara |
+
+**Total objetivo**: ~1 350 ejemplos altamente curados.
+
+#### Diversidad por subdominio (necesaria, no opcional)
+
+Sin diversidad suficiente, el modelo aprende el "estilo" de solo uno o dos subdominos
+y generaliza mal. Distribución target:
+
+| Subdominio | Ejemplos | Tipos de consulta |
+|------------|----------|-------------------|
+| Derecho civil | ~200 | contratos, familia, herencias |
+| Derecho penal | ~200 | tipificación, atenuantes, prescripción |
+| Derecho laboral | ~200 | despidos, convenios, ERE |
+| Derecho administrativo | ~200 | procedimientos, recursos, sanciones |
+| Derecho mercantil | ~200 | sociedades, concurso, marcas |
+| Derecho constitucional | ~100 | derechos fundamentales, recursos amparo |
+| Consulta general | ~200 | orientación, dónde acudir, plazos |
+
+#### Formato de ejemplos
 
 **razonamiento** (adaptador existente, extender con think traces):
 ```jsonl
@@ -156,10 +188,38 @@ que más se benefician:
  "completion": "<think>Elementos del tipo: ...\nHechos: ...\nSubsunción: ...</think>\nSí, concurren los elementos..."}
 ```
 
-Script nuevo a crear: `scripts/download_think_data.py`
-- Genera ~2000 ejemplos sintéticos con think traces por especialidad legal
-- Usa plantillas de razonamiento jurídico (análisis de hechos → norma → subsunción)
-- Ejemplos de IRAC (Issue, Rule, Application, Conclusion) en español
+#### Sin RLHF — SFT curado es suficiente
+
+LIMA demuestra que SFT estándar con 1K ejemplos curados alcanza calidad
+cercana a RLHF en GPT-4 en evaluaciones humanas. Para Capibara Legal esto
+significa: **no implementar PPO/DPO en V2**; enfocarse en la calidad del dataset.
+Si V2 muestra problemas de alineamiento, el remedio es mejorar los datos, no añadir RLHF.
+
+Scripts a crear:
+
+`scripts/curate_instruction_data.py` — curation pipeline:
+```python
+def filter_stackexchange(posts, min_score=10, min_length=200):
+    """Filtro calidad: votos + longitud + respuesta aceptada."""
+    return [p for p in posts
+            if p["score"] >= min_score
+            and len(p["accepted_answer"]) >= min_length
+            and p["accepted_answer"] is not None]
+
+def diversity_sample(examples, subdomains, target_per_domain=200):
+    """Asegurar distribución uniforme entre subdominos."""
+    by_domain = {d: [] for d in subdomains}
+    for ex in examples:
+        domain = classify_legal_domain(ex["prompt"])
+        if len(by_domain[domain]) < target_per_domain:
+            by_domain[domain].append(ex)
+    return [ex for exs in by_domain.values() for ex in exs]
+```
+
+`scripts/download_think_data.py` — generación de think traces:
+- Genera think traces usando V1 como teacher sobre plantillas IRAC
+- Filtra por perplexity: descarta ejemplos donde el modelo duda demasiado
+- Verificación factual básica: artículos citados existen en corpus BOE
 
 ### Cambios en `speculative_inference.py`
 
@@ -867,6 +927,7 @@ en el momento de iniciar V2.
 ## Archivos a crear para V2 (checklist)
 
 ```
+[ ] scripts/curate_instruction_data.py  — (Mejora 2, LIMA) curation pipeline: filtro calidad + diversity sampling
 [ ] scripts/download_think_data.py      — datos think traces para fine-tuning
 [ ] scripts/merge_loras.py              — merging ponderado de adapters LoRA
 [ ] scripts/openai_wrapper.py           — traducción protocolo OpenAI → Capibara
