@@ -302,6 +302,15 @@ El tokenizador BPE de V2 (32k) puede mantenerse o ampliarse:
 
 Recomendación: evaluar en V2. Si hay muchos `<unk>` en textos latinoamericanos, subir a 64k.
 
+### Modelo de embedding RAG (heredado de V2)
+
+V3 usa `capibara-embed-m` entrenado en V2 (Mejora 8, receta Arctic-Embed, 110M BERT-base).
+Para el corpus LATAM expandido de V3, re-finetunear el embedder con las nuevas fuentes
+(legislación latinoamericana, TJUE, académico iberoamericano) usando el mismo pipeline.
+
+En V4, `capibara-embed-m` sirve también como encoder para la memoria persistente FAISS
+por usuario (ver CAPIBARA_V4_VISION.md § Mejora 5).
+
 ---
 
 ## Mejora 4 — Compactación de memoria para chats largos

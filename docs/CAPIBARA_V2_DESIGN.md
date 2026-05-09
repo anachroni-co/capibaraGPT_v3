@@ -19,12 +19,14 @@ significativo respecto a V1:
 | CrewAI multi-agent | Flujos de trabajo legales complejos | Wrapper + config |
 | LoRA merging | Adapters combinados sin reentrenar | Script nuevo |
 | Multi-seed soup en destilación | Student más robusto y generalizable | 3× tiempo destilación |
-| **Infini-attention** | **Contexto infinito con memoria fija** | **~3 días continual pre-training** |
+| Infini-attention | Contexto infinito con memoria fija | ~3 días continual pre-training |
+| **Embedding legal (Arctic-Embed recipe)** | **RAG domain-specific español jurídico** | **~2 días CPU, paralelo al LLM** |
 
 Las mejoras 1 y 3 están acopladas (BPE habilita seq\_len largo con sentido).
 Las mejoras 2, 5 y 6 son independientes y pueden hacerse en paralelo.
 La mejora 4 requiere que 1 y 3 estén terminadas.
 La mejora 7 se aplica sobre el checkpoint Large ya entrenado — no bloquea ninguna otra.
+La mejora 8 es completamente independiente del LLM — entrena en paralelo en CPU.
 
 ---
 
@@ -865,14 +867,18 @@ en el momento de iniciar V2.
 ## Archivos a crear para V2 (checklist)
 
 ```
-[ ] scripts/download_think_data.py     — datos think traces para fine-tuning
-[ ] scripts/merge_loras.py             — merging ponderado de adapters LoRA
-[ ] scripts/openai_wrapper.py          — traducción protocolo OpenAI → Capibara
-[ ] scripts/crewai_legal.py            — definición agentes CrewAI
-[ ] scripts/infini_pretrain.py         — continual pre-training con Infini-attention
-[ ] models/infini_attention.py         — implementación InfiniAttention en JAX/Flax
-[ ] examples/crew_analisis_caso.py     — ejemplo flujo multi-agent
-[ ] examples/crew_redaccion_demanda.py — ejemplo redacción automática
+[ ] scripts/download_think_data.py      — datos think traces para fine-tuning
+[ ] scripts/merge_loras.py              — merging ponderado de adapters LoRA
+[ ] scripts/openai_wrapper.py           — traducción protocolo OpenAI → Capibara
+[ ] scripts/crewai_legal.py             — definición agentes CrewAI
+[ ] scripts/infini_pretrain.py          — continual pre-training con Infini-attention
+[ ] models/infini_attention.py          — implementación InfiniAttention en JAX/Flax
+[ ] examples/crew_analisis_caso.py      — ejemplo flujo multi-agent
+[ ] examples/crew_redaccion_demanda.py  — ejemplo redacción automática
+[ ] scripts/mine_hard_negatives.py      — (Mejora 8) tunable hard negative mining
+[ ] scripts/generate_retrieval_data.py  — (Mejora 8) synthetic queries grounded in negatives
+[ ] scripts/train_legal_embedder.py     — (Mejora 8) capibara-embed-m training
+[ ] scripts/eval_legal_retrieval.py     — (Mejora 8) benchmark retrieval legal
 ```
 
 Modificaciones a scripts existentes:
@@ -886,6 +892,246 @@ Modificaciones a scripts existentes:
 [ ] models/slim_200m.py            — add_infini flag para reemplazar MHA layers
 [ ] scripts/run_full_training.sh   — pipeline V2 completo con 3 seeds + infini
 [ ] RUNBOOK.md                     — sección V2
+```
+
+---
+
+## Mejora 8 — Embedding legal específico: receta Arctic-Embed
+
+**Paper**: arXiv:2405.05374v1 — "Arctic-Embed: Scalable, Efficient, and Accurate Text Embedding Models"
+(Snowflake Inc., 2024). Pesos con licencia Apache-2.
+
+### El problema con embeddings genéricos para RAG legal
+
+El índice RAG de V1/V2 usa `sentence-transformers` genérico (multilingual-e5 o similar).
+Estos modelos no entienden:
+- Terminología legal específica: "interdicto", "apremio", "contencioso-administrativo"
+- Citas jurídicas: "STS 234/2021, de 15 de marzo" vs "SAP Madrid 44/2021"
+- Near-misses legales peligrosos: artículo 14 CE (igualdad) ≠ artículo 24 CE (tutela judicial),
+  pero un modelo genérico los tratará como similares por estructura
+- Sistemas de fuentes: jerarquía constitución → ley orgánica → ley ordinaria → reglamento
+
+Un embedding legal específico convierte el RAG de "búsqueda por palabras" a
+"búsqueda por concepto jurídico".
+
+### La receta Arctic-Embed aplicada al dominio legal
+
+Arctic-Embed identifica tres innovaciones clave sobre métodos previos (E5, BGE, GTE):
+
+#### 1 — Source stratification (el más impactante)
+
+En lugar de mezclar fuentes de datos en cada batch, cada mini-batch contiene
+**ejemplos de una sola fuente**. En el paper: +3.2 puntos nDCG@10 vs sin estratificación
+(46.97 vs 43.74), con el mismo volumen de datos y cómputo.
+
+Nuestras fuentes legales son naturalmente estratificables:
+```
+Fuente A: BOE (pares artículo_título → artículo_cuerpo)
+Fuente B: CENDOJ (pares holding → texto_sentencia)
+Fuente C: TJUE (pares resumen → sentencia)
+Fuente D: Legislación LATAM (DOF, etc.)
+Fuente E: Académico (abstract → paper jurídico)
+Fuente F: Sintético V2 (query_generada → documento_legal)
+```
+
+#### 2 — Tunable hard negative mining (Algoritmo 1 del paper)
+
+Los negativos aleatorios son trivialmente fáciles. Los negativos "duros" son documentos
+similares que no son la respuesta correcta — los más útiles para el entrenamiento:
+
+```python
+def mine_legal_hard_negatives(
+    queries: list[str],
+    corpus: list[str],
+    embedder,           # modelo embedding actual (arranca con multilingual-e5)
+    R_min: float = 0.1, # excluir negativos obvios (muy distintos)
+    R_max: float = 0.7, # excluir positivos contaminados (demasiado similares)
+    k_neg: int = 10,    # negativos por query en fine-tuning
+) -> list[tuple]:
+    """
+    Para cada (query, doc_positivo):
+      1. Embede toda la query contra el corpus
+      2. Obtiene top-100 por similitud coseno
+      3. Filtra: mantiene solo los que tienen R_min <= sim <= R_max
+      4. Toma los k_neg más similares del rango permitido
+    """
+    results = []
+    q_embs = embedder.encode(queries, batch_size=512)
+    c_embs = embedder.encode(corpus, batch_size=512)
+    scores = q_embs @ c_embs.T  # (n_queries, n_corpus)
+
+    for i, (query, pos_doc) in enumerate(zip(queries, pos_docs)):
+        s = scores[i]
+        mask = (s >= R_min) & (s <= R_max)
+        hard_neg_ids = jnp.where(mask)[0]
+        hard_neg_ids = hard_neg_ids[jnp.argsort(-s[hard_neg_ids])[:k_neg]]
+        results.append((query, pos_doc, [corpus[j] for j in hard_neg_ids]))
+
+    return results
+```
+
+En el dominio legal, `R_max=0.7` es crítico: sin él, artículos del mismo código con
+estructura similar pero contenido distinto se tratan como negativos, confundiendo al modelo.
+
+#### 3 — Generación sintética de queries fundamentada en negativos (Algoritmo 2)
+
+La innovación más original del paper: usar el LLM para generar queries que recuperen
+el documento positivo pero **no** los documentos similares (negativos duros):
+
+```
+Prompt a V2 LLM:
+  Documento positivo: "Art. 348 CP — El robo con violencia..."
+  Documentos similares que NO queremos recuperar:
+    - "Art. 237 CP — Son reos del delito de robo..."
+    - "Art. 242 CP — El culpable de robo con violencia..."
+  
+  Genera una consulta que recupere el primero y no los segundos.
+  → Query: "¿Cuál es la pena del robo con violencia en casa habitada?"
+```
+
+Esto produce queries mucho más precisas que generar queries sobre documentos aislados
+(sin contexto de qué las hace únicas). El paper demuestra que supera al HotpotQA original
+en fine-tuning performance (Figure 4 del paper).
+
+```python
+SYNTHETIC_QUERY_PROMPT = """
+Eres un asistente especializado en derecho. Tu tarea es generar una consulta
+legal precisa que recupere el siguiente documento cuando se ejecuta en un motor
+de búsqueda jurídica.
+
+Documento objetivo:
+{positive_doc}
+
+Documentos similares que la consulta NO debe recuperar:
+{negative_docs}
+
+La consulta debe:
+1. Identificar con precisión el documento objetivo
+2. No poder ser respondida igualmente bien por los documentos similares
+3. Ser una consulta natural que haría un abogado o usuario de derecho
+
+Responde SOLO con la consulta, sin explicaciones.
+"""
+```
+
+### Datos de entrenamiento para capibara-embed
+
+**Fase pretraining** (~1.2M pares, in-batch negatives, sin supervisión adicional):
+
+| Fuente | Tipo de par | Pares est. |
+|--------|-------------|------------|
+| BOE artículos | (referencia_art, cuerpo_art) | 500K |
+| CENDOJ sentencias | (encabezado_ratio, párrafo_clave) | 300K |
+| TJUE (ES) | (resumen_oficial, considerando) | 150K |
+| Legislación LATAM | (título_art, cuerpo_art) | 200K |
+| S2ORC jurídico | (abstract, introducción) | 50K |
+| **Total** | | **~1.2M** |
+
+**Fase fine-tuning** (~100K pares, 10 negativos duros por query):
+
+```bash
+# 1. Generar negativos duros del corpus con embedder actual
+python scripts/mine_hard_negatives.py \
+    --corpus data/raw/legal/ \
+    --embedder sentence-transformers/multilingual-e5-base \
+    --R-min 0.1 --R-max 0.7 \
+    --k-neg 10 \
+    --output data/hard_negatives/legal_pairs.jsonl
+
+# 2. Generar queries sintéticas con V2 LLM (grounded in hard negatives)
+python scripts/generate_retrieval_data.py \
+    --hard-negatives data/hard_negatives/legal_pairs.jsonl \
+    --model checkpoints/v2/axion_large_legal/soup_uniform.pkl \
+    --tokenizer tokenizer/capibara_legal.model \
+    --n-queries 100000 \
+    --output data/retrieval_ft/legal_synthetic.jsonl
+
+# 3. Entrenar capibara-embed
+python scripts/train_legal_embedder.py \
+    --pretrain-data data/retrieval_pretrain/ \
+    --finetune-data data/retrieval_ft/legal_synthetic.jsonl \
+    --base-model snowflake-arctic-embed-m \
+    --output checkpoints/capibara-embed-m/ \
+    --source-stratify \
+    --pretrain-seq-len 256 \
+    --finetune-seq-len 512 \
+    --pretrain-batch-size 4096 \
+    --finetune-batch-size 512
+```
+
+### Arquitectura del modelo
+
+Base: `snowflake-arctic-embed-m` (110M, BERT-base, Apache-2) o `multilingual-e5-base`
+(mejor para español si el vocabulario es importante).
+
+```python
+# capibara-embed-m: encoder-only BERT-base
+# Input: texto legal (artículo, consulta, fragmento sentencia)
+# Output: vector de 768 dimensiones (CLS token)
+# Distancia: coseno
+# Idiomas: español (ES, ES-MX, ES-AR, ES-CO, CA)
+
+class CapibaraEmbedConfig:
+    base_model = "snowflake-arctic-embed-m"   # o "intfloat/multilingual-e5-base"
+    embedding_dim = 768                        # CLS token embedding
+    max_seq_len = 512                          # fine-tuning
+    pooling = "cls"                            # no mean pooling
+    normalize = True                           # L2 normalize for cosine sim
+```
+
+### Resultados esperados
+
+Con base `multilingual-e5-base` + receta Arctic-Embed sobre corpus legal ES:
+
+| Tarea | Antes (e5 genérico) | Esperado (capibara-embed) |
+|-------|---------------------|--------------------------|
+| Recuperar artículo por descripción | ~60% R@10 | ~80% R@10 |
+| Recuperar sentencia por holding | ~50% R@10 | ~75% R@10 |
+| Discriminar artículos similares del mismo código | ~40% nDCG@10 | ~65% nDCG@10 |
+| Recuperar en LATAM (ES-MX, ES-AR) | ~45% R@10 | ~70% R@10 |
+
+### Coste de entrenamiento
+
+| Fase | Pasos | Tiempo CPU Axion (8T) | Tiempo GPU (1×A100) |
+|------|-------|----------------------|---------------------|
+| Pretraining (1.2M pares) | ~20K steps | ~20 h | ~2 h |
+| Fine-tuning (100K pares) | ~7K steps | ~7 h | ~45 min |
+| **Total** | | **~1 día** | **~3 h** |
+
+El entrenamiento es paralelo al LLM V2 — usa 8 de los 32 cores del Axion sin
+impactar el Medium V2 (que usa 16T).
+
+### Integración en el pipeline
+
+**En V2 (RAG tool del servidor)**:
+```python
+# speculative_inference.py V2 — reemplazar embedder genérico
+from sentence_transformers import SentenceTransformer
+
+# Antes:
+# embedder = SentenceTransformer("sentence-transformers/multilingual-e5-base")
+
+# V2:
+embedder = SentenceTransformer("checkpoints/capibara-embed-m/")
+# → misma API, mejor retrieval legal
+```
+
+**En V3/V4 (memoria persistente FAISS)**:
+```python
+# training/persistent_memory.py V4
+class PersistentMemory:
+    def __init__(self, user_id: str):
+        self.embedder = SentenceTransformer("checkpoints/capibara-embed-m/")
+        self.index = faiss.IndexFlatIP(768)  # inner product = cosine con L2-norm
+```
+
+### Nuevos scripts
+
+```
+[ ] scripts/mine_hard_negatives.py      — Algoritmo 1 (tunable hard neg mining)
+[ ] scripts/generate_retrieval_data.py  — Algoritmo 2 (synthetic queries grounded in negatives)
+[ ] scripts/train_legal_embedder.py     — training con source stratification + contrastive loss
+[ ] scripts/eval_legal_retrieval.py     — benchmark retrieval sobre test set legal
 ```
 
 ---
