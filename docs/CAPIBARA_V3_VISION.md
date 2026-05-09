@@ -143,6 +143,58 @@ Extensiones del paper que merecen atención futura (no en V3):
 secuencial. Un modelo Mamba puro tiene un límite de expresividad que lo haría
 fallar sistemáticamente en procedimientos complejos con muchas partes y eventos.
 
+#### Fundamento teórico complementario: decaimiento exponencial de memoria (Wang & Xue, NeurIPS 2023)
+
+*Referencia: "State-space Models with Layer-wise Nonlinearity are Universal Approximators
+with Exponential Decaying Memory" — Wang & Xue, NeurIPS 2023.*
+
+Este paper aporta dos resultados que se complementan con el análisis TC^0 anterior:
+
+**Resultado 1 (positivo) — SSM multicapa es aproximador universal**: con activaciones
+no lineales entre capas (layer-wise, no dentro de la recurrencia), un SSM de 5+ capas
+puede aproximar cualquier función continua secuencia→secuencia. V3 tiene 32 capas —
+muy por encima del mínimo teórico. La capacidad expresiva no es el problema.
+
+**Resultado 2 (restricción fundamental) — decaimiento exponencial de memoria es inevitable**:
+
+**Teorema 3.13** (Wang & Xue): para cualquier SSM multicapa con activaciones Lipschitz
+continuas y matriz de estado estable (eigenvalues acotados por 1), la función de memoria
+ρ̂(t) decae exponencialmente:
+
+```
+lim(t→∞)  e^(c₀t) · ρ̂(t) → 0    para algún c₀ > 0
+```
+
+Esto significa que la influencia de un token en la posición t sobre la salida actual
+decae como e^(-c₀·t). No importa cuántas capas Mamba se apilen ni qué activaciones
+se usen — el decaimiento exponencial es una propiedad matemática de la estructura
+lineal de la recurrencia, no de una implementación concreta.
+
+La inicialización HiPPO (usada por S4 y por Mamba) **solo ralentiza c₀**, no lo
+elimina — verificado empíricamente en el paper (Figura 6: S4 con inicialización
+inteligente sigue mostrando decaimiento exponencial, simplemente más lento).
+
+**Consecuencias directas para V3**:
+
+| Consecuencia | Implicación de diseño |
+|--------------|----------------------|
+| Información de tokens lejanos decae exponencialmente en Mamba | Las capas de atención son matemáticamente necesarias para recall preciso — no opcional |
+| d_state más grande = c₀ más pequeño = decaimiento más lento | Justifica d_state=64/128/256 en V3; el estado V4 lo dobla a 512 |
+| El decaimiento no se puede eliminar apilando más capas Mamba | El ratio de atención 25% no es excesivo — es el mínimo para compensar |
+| S4/Mamba con inicialización especial no resuelve el problema | No hay "truco" que haga innecesaria la atención |
+
+**Relación directa con el go/no-go de V3**: la condición "degradación < 5% en recall
+a >2048 tokens vs V2" es precisamente el test empírico de este teorema. Si el
+decaimiento exponencial de Mamba en V3 es demasiado rápido para el dominio legal
+(documentos con referencias cruzadas a cláusulas/artículos miles de tokens atrás),
+lo veremos directamente en esa métrica.
+
+**Relación con el go/no-go de V4 (ratio 1/8)**: pasar de 25% a 12.5% de atención
+reduce a la mitad las capas que compensan el decaimiento inevitable del SSM. Si V3
+ya está en el límite aceptable con 25%, V4 con 12.5% tiene mayor riesgo teórico —
+de ahí la criticidad del test MAD y del análisis de recall antes de comprometer
+el entrenamiento Large de V4.
+
 ### Configuración V3 — conservadora y validable
 
 ```python
