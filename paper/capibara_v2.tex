@@ -158,16 +158,19 @@ jurídica y tipo de tarea (Tabla~\ref{tab:loras}).
 
 \begin{table}[h]
 \centering
-\caption{Adapters LoRA V2. rank=16, $\alpha$=32 para todos excepto \textit{herramientas}
+\caption{Adapters LoRA V2. rank=16, $\alpha$=32 para todos excepto \textit{herramientas} y \textit{documentos}
 (rank=8, $\alpha$=8, dropout=0.05, siguiendo~\citep{salesforce2025xlam}).}
 \label{tab:loras}
-\begin{tabular}{lll}
+\begin{tabular}{llll}
 \toprule
-\textbf{Categoría} & \textbf{Adapters} & \textbf{Configuración} \\
+\textbf{Categoría} & \textbf{Adapters} & \textbf{Configuración} & \textbf{Filtro} \\
 \midrule
-Legal por área  & penal, civil, laboral, constitucional, administrativo, mercantil & rank=16, $\alpha$=32 \\
-Tarea general   & resumen, instruccion, qa, extraccion, redaccion, dialogo, razonamiento, traduccion & rank=16, $\alpha$=32 \\
-Herramientas    & herramientas & rank=8, $\alpha$=8, dropout=0.05 \\
+Legal por área  & penal, civil, laboral, constitucional, & rank=16, $\alpha$=32 & keywords \\
+                & administrativo, mercantil & & \\
+Tarea general   & resumen, instruccion, qa, extraccion, & rank=16, $\alpha$=32 & keywords \\
+                & redaccion, dialogo, razonamiento, traduccion & & \\
+Herramientas    & herramientas & rank=8, $\alpha$=8, dr=0.05 & JSON-parsability $\geq$99\% \\
+Documentos      & documentos & rank=8, $\alpha$=8, dr=0.05 & estructura Markdown $\geq$0.4 \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -286,6 +289,7 @@ adapter (Tabla~\ref{tab:sampling}).
 extraccion, herramientas & 0.40 & 0.80 \\
 razonamiento, qa         & 0.60 & 0.85 \\
 resumen, legal (penal/civil/...) & 0.65 & 0.85 \\
+documentos               & 0.70 & 0.88 \\
 instruccion              & 0.75 & 0.90 \\
 dialogo, redaccion       & 0.85 & 0.95 \\
 \bottomrule
@@ -381,6 +385,27 @@ exclusivamente con ejemplos de JSON puro. Un filtro de parsabilidad JSON
 
 Objetivo: JSON-parsability $\geq 99\%$ tras fine-tuning LoRA con rank=8, $\alpha$=8,
 dropout=0.05 y lr=$2\times10^{-5}$~\citep{salesforce2025xlam}.
+
+\subsection{Alineamiento de formato para documentos}
+
+El adapter \textit{documentos} genera escritos legales (contratos, demandas, actas,
+poderes notariales, sentencias) en \textbf{Markdown estructurado} — el formato
+nativo para exportación posterior a DOCX vía Pandoc, que es el estándar de los
+despachos de abogados españoles.
+
+Se define una métrica de estructura Markdown legal:
+
+\begin{equation}
+  s_{\text{doc}}(y) = \mathbb{1}[\text{headings}] \cdot 0.3
+  + \mathbb{1}[\text{art.\,}N] \cdot 0.3
+  + \mathbb{1}[\textbf{definición}] \cdot 0.2
+  + \mathbb{1}[\text{lista num.}] \cdot 0.1
+  + \mathbb{1}[|y| \geq 300] \cdot 0.1
+\end{equation}
+
+El filtro de entrenamiento exige $s_{\text{doc}} \geq 0.4$. Las convenciones de salida son:
+secciones con \texttt{\#\#} / \texttt{\#\#\#}, artículos numerados (\texttt{Artículo 1.}),
+definiciones en negrita, y ningún bloque de código fuente — solo texto legal fluido.
 
 %% ─────────────────────────────────────────────────────────────────────────────
 \section{Mejora 6: Sopa multi-semilla en destilación}
@@ -663,6 +688,7 @@ Exact match QA legal & -- & $>$ V1 \\
 Palabras efectivas en contexto & $\sim$220 (seq 1024 byte-level) & $\sim$1500 (seq 2048 BPE) \\
 Ganancia sopa multi-semilla & -- & $-$2--4\% perplexity \\
 JSON-parsability herramientas & $\sim$0--7\% (zero-shot) & $\geq$99\% (post-LoRA) \\
+$s_{\text{doc}}$ documentos (estructura Markdown) & $\sim$0.1 (zero-shot) & $\geq$0.75 (post-LoRA) \\
 Passkey retrieval @32K tokens & 0\% & $\sim$100\% (Infini) \\
 R@10 retrieval legal & $\sim$60\% & $\sim$80\% (capibara-embed) \\
 \bottomrule

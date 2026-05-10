@@ -19,6 +19,11 @@ next-token prediction. Loss is masked to the response tokens only.
 Specialties (--specialty) filter examples by keyword match on the prompt.
 Use "all" to train on every example.
 
+Available specialties:
+  penal, civil, laboral, constitucional, administrativo, mercantil,
+  herramientas (JSON tool-call format filter),
+  documentos (Markdown legal structure filter — contracts, demandas, actas)
+
 Usage:
     # Legal Q&A fine-tuning on large legal model
     python scripts/lora_finetune.py \\
@@ -85,7 +90,15 @@ SPECIALTY_KEYWORDS = {
                        "expediente", "licencia"],
     "mercantil":      ["mercantil", "sociedad", "concurso", "quiebra", "accionista"],
     "herramientas":   [],  # JSON-format filter applied post-load; no keyword matching
+    "documentos":     ["contrato", "escritura", "acta", "demanda", "recurso",
+                       "poder notarial", "testamento", "auto", "sentencia",
+                       "providencia", "decreto", "resolución", "certificado",
+                       "notificación", "requerimiento", "edicto", "convenio",
+                       "estatutos", "protocolo"],
 }
+
+# Minimum Markdown legal structure score to keep a documentos example (0.0–1.0)
+_DOCUMENTO_MIN_SCORE = 0.4
 
 SEP = "\n### Respuesta:\n"
 
@@ -121,7 +134,35 @@ def coerce_json_output(raw: str) -> str:
             return match.group(0)
         except Exception:
             pass
-    return "{}"   # prompt/response separator
+    return "{}"
+
+
+def markdown_structure_score(text: str) -> float:
+    """Score 0–1 how well a legal document follows Markdown structural conventions.
+
+    Checks for: section headings (##/###), numbered articles, bold definitions,
+    and minimum length. Used to filter low-quality documentos training examples.
+    """
+    if len(text) < 100:
+        return 0.0
+    score = 0.0
+    if re.search(r'^#{1,3} ', text, re.MULTILINE):
+        score += 0.3
+    if re.search(r'artículo\s+\d+|art\.\s*\d+', text, re.IGNORECASE):
+        score += 0.3
+    if re.search(r'\*\*[^*]+\*\*', text):
+        score += 0.2
+    if re.search(r'^\d+[\.\)]\s', text, re.MULTILINE):
+        score += 0.1
+    if len(text) >= 300:
+        score += 0.1
+    return min(score, 1.0)
+
+
+def is_valid_documento(example: dict) -> bool:
+    return markdown_structure_score(example.get("response", "")) >= _DOCUMENTO_MIN_SCORE
+
+
 PAD_ID = 256
 
 
@@ -230,6 +271,11 @@ def _load_jsonl(path: str, specialty: str) -> list[dict]:
         before = len(examples)
         examples = [ex for ex in examples if is_valid_tool_call(ex)]
         logger.info("Herramientas JSON filter: %d → %d valid tool calls", before, len(examples))
+    if specialty == "documentos":
+        before = len(examples)
+        examples = [ex for ex in examples if is_valid_documento(ex)]
+        logger.info("Documentos structure filter: %d → %d valid (score≥%.1f)",
+                    before, len(examples), _DOCUMENTO_MIN_SCORE)
     logger.info("Loaded %d examples (specialty=%s) from %s",
                 len(examples), specialty, path)
     return examples
