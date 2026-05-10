@@ -1065,6 +1065,99 @@ La diferencia clave entre V3 e Hymba: Hymba usa atención estándar O(n²) para 
 
 **Objetivo de throughput V3**: Hymba-1.5B @ 3× Transformer-1.5B es el umbral de referencia del sector. V3-Small (42M parámetros) en Axion debería superar ese ratio dado el menor tamaño del modelo y la complejidad O(1) de Infini-attention en inferencia.
 
+### Experimento V3: Recursive Language Model (RLM) para documentos ultra-largos
+
+*Referencia: Zhang, Kraska, Khattab 2026 "Recursive Language Models" (MIT CSAIL, arXiv:2512.24601v2).*
+
+**El problema que resuelve**: documentos legales que superan el context window de V3 (8192 tokens) — expedientes completos, BOE completo de un día, contratos de cientos de páginas. Infini-attention extiende el contexto pero no lo hace ilimitado; RLM sí.
+
+**Cómo funciona**: el modelo carga el documento como una variable en un entorno Python REPL externo. Solo recibe metadatos (longitud, prefijo) en su context window. Luego *escribe código* para examinar fragmentos programáticamente y llamarse a sí mismo recursivamente sobre ellos.
+
+**Por qué Capibara-Slim sí podría hacerlo** (contra la intuición inicial):
+
+El código que generan los RLMs en producción es Python *elemental* — no algoritmos complejos:
+
+```python
+# Patrón más frecuente en trayectorias RLM reales (Figure 4b del paper)
+chunks = documento.split('\n')
+for chunk in chunks:
+    if termino_legal in chunk.lower():
+        resultado = sub_llm(f"Analiza este fragmento del BOE: {chunk}")
+print(resultado)
+```
+
+Slim200M tiene en su distribución de entrenamiento:
+- UltraLink-Es: 16K samples de código en español
+- Corpus web: snippets de código de Stack Overflow ES, tutoriales, GitHub comentado
+- Large-515M: mayor capacidad para retener esa distribución
+
+El código requerido (split, bucle, string matching, una llamada a función con API fija) está dentro del rango de lo que un modelo de 200-500M con algo de código en pre-training puede generar de forma fiable *después de fine-tuning específico en trayectorias RLM*.
+
+**Resultados del paper** (referencia de qué esperar):
+
+| Configuración | Base model | + RLM scaffold | Ganancia |
+|---------------|-----------|---------------|---------|
+| Qwen3-8B (CodeQA) | 4.0% | **32.0%** | +28.3pp |
+| Qwen3-8B (OOLONG 131K tokens) | 0.0% | **32.0%** | +32pp |
+| Fine-tuning necesario | — | **1.000 trayectorias** | — |
+
+**Plan de validación empírica (prerequisito antes de integrar)**:
+
+```python
+# Test de viabilidad — ejecutar con Capibara Large-515M después de V2
+TEST_PROMPT = """
+Tienes acceso a un entorno Python donde la variable 'documento' contiene
+un texto legal largo. Escribe código Python para encontrar todos los 
+artículos que mencionen 'indemnización' y resumirlos.
+Usa sub_llm(prompt) para analizar cada fragmento.
+"""
+
+# Si el modelo genera código Python válido y ejecutable: RLM viable
+# Si genera texto sin código: no viable sin fine-tuning específico
+# Umbral: >70% de intentos generan código sintácticamente válido
+```
+
+**Si el test es positivo — implementación V3**:
+
+```python
+# scripts/rlm_scaffold.py — scaffold RLM para Capibara
+import ast, textwrap
+from capibara_client import generate  # cliente HTTP del servidor
+
+def rlm_query(documento: str, pregunta: str, max_depth: int = 3) -> str:
+    metadata = f"Documento legal ({len(documento)} chars, {documento.count(chr(10))} líneas)"
+    
+    repl_state = {"documento": documento, "sub_llm": _sub_llm_call, "depth": 0}
+    
+    system = textwrap.dedent("""
+        Eres un asistente legal que procesa documentos largos.
+        El documento está cargado en la variable 'documento'.
+        Escribe código Python para analizarlo y responde la pregunta.
+        Usa sub_llm(prompt) para razonar sobre fragmentos específicos.
+        Almacena la respuesta final en la variable RESPUESTA_FINAL.
+    """)
+    
+    for _ in range(10):  # max iterations
+        code = generate(system=system, prompt=f"{metadata}\nPregunta: {pregunta}")
+        try:
+            exec(code, repl_state)
+            if "RESPUESTA_FINAL" in repl_state:
+                return repl_state["RESPUESTA_FINAL"]
+        except SyntaxError:
+            break  # modelo no generó código válido — fallback a RAG
+    
+    return None  # señal para que el caller use RAG estándar
+
+def _sub_llm_call(prompt: str) -> str:
+    return generate(prompt=prompt)
+```
+
+**Coste de entrenamiento**: 1.000 trayectorias de fine-tuning RLM — generables con Capibara Large-V2 sobre documentos del BOE/CENDOJ como fuente. Un adapter LoRA `rlm` adicional a los 15 existentes.
+
+**Relación con Infini-attention**: complementario, no sustitutivo.
+- Infini-attention: documentos de 4K–8K tokens, latencia mínima
+- RLM: documentos de 50K–1M tokens, latencia mayor pero ilimitado
+
 ---
 
 ## Archivos a diseñar para V3
@@ -1080,6 +1173,8 @@ La diferencia clave entre V3 e Hymba: Hymba usa atención estándar O(n²) para 
 [ ] training/conversation_manager.py — compactación automática de contexto
 [ ] scripts/analyze_experts.py         — análisis de activación de experts post-entrenamiento
 [ ] scripts/moe_prefetch_server.py     — inferencia GPU con prefetch especulativo (arXiv:2603.19289v1)
+[ ] scripts/rlm_scaffold.py            — scaffold RLM para documentos >8K tokens (arXiv:2512.24601v2)
+[ ] scripts/generate_rlm_trajectories.py — generar 1K trayectorias RLM desde BOE/CENDOJ para LoRA rlm
 [ ] scripts/run_full_training_v3.sh    — pipeline completo V3
 [ ] docs/RUNBOOK_V3.md                 — runbook detallado V3
 ```
