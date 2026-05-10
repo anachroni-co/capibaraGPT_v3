@@ -799,6 +799,106 @@ python scripts/soup_checkpoints.py \
     --output checkpoints/v2/distil_medium_legal/soup_uniform.pkl
 ```
 
+### Extensión: Phase-Aware Soup — expertos implícitos por distribución de datos
+
+*Referencias: Wortsman et al. 2022 "Model Soups" (condición de cuenca); Li et al. 2022
+"Branch-Train-Merge"; Ilharco et al. 2023 "Editing Models with Task Arithmetic".*
+
+**Motivación**: los soups anteriores (intra-run e inter-run) promedian checkpoints
+del mismo run o de seeds distintos sobre la **misma distribución de datos**. La
+extensión que se propone añade una dimensión nueva: agrupar checkpoints por
+**fase de entrenamiento** (distribución de datos distinta), crear un soup experto
+por fase, y luego combinar esos expertos en el espacio de parámetros.
+
+**Por qué funciona** — la condición matemática de Model Soup es que los checkpoints
+estén en la misma cuenca del espacio de loss. Wortsman et al. demuestran que
+checkpoints entrenados en la misma distribución de datos casi siempre cumplen esto;
+checkpoints de distribuciones muy distintas casi nunca. El two-level soup respeta
+esa condición: soup intra-fase primero (misma cuenca garantizada), merge cross-fase
+después (combina cuencas distintas con pesos controlados).
+
+**Aplicación directa al SFT de 2 fases de Capibara V2**:
+
+```
+checkpoint_base (preentrenamiento)
+        │
+        ▼
+SFT Fase 1 — UltraLink-Es (93K, español general, 1 época)
+  → ckpt_ul_ep1
+  → SOUP intra-fase → soup_ultralink  ← experto: español general
+
+SFT Fase 2 — Legal curado (1.350 samples, 3 épocas)
+  → ckpt_legal_ep1
+  → ckpt_legal_ep2
+  → ckpt_legal_ep3
+  → SOUP intra-fase → soup_legal  ← experto: derecho español
+
+Cross-phase merge:
+  soup_ultralink × 0.25 + soup_legal × 0.75 → modelo_final_v2
+```
+
+Pesos cross-fase recomendados: `legal=0.75, ultralink=0.25` — la fase legal domina
+porque es el dominio objetivo, pero UltraLink aporta la base lingüística española
+que no se debe perder. Los pesos óptimos se buscan con grid search sobre el
+validation set legal en pasos de 0.05.
+
+**Variante más precisa: Task Vectors** (Ilharco et al. 2023)
+
+En lugar de promediar pesos directamente, calcular el *task vector* de cada fase
+(diferencia con respecto al checkpoint base) y sumar con escalar λ. Los task
+vectors de tareas suficientemente distintas son casi ortogonales → menos interferencia:
+
+```python
+# En scripts/soup_checkpoints.py — modo --task-vectors
+def task_vector_merge(base: dict, phase_soups: dict[str, dict],
+                      lambdas: dict[str, float]) -> dict:
+    """
+    modelo_final = base + Σ λ_i * (soup_i - base)
+    Equivalente a weighted average cuando Σ λ_i = 1,
+    pero permite λ_i > 1 para amplificar una especialización.
+    """
+    result = {k: v.copy() for k, v in base.items()}
+    for phase_name, soup in phase_soups.items():
+        lam = lambdas[phase_name]
+        for k in result:
+            result[k] += lam * (soup[k] - base[k])
+    return result
+
+# Uso:
+# python scripts/soup_checkpoints.py \
+#     --mode task-vectors \
+#     --base checkpoints/v2/axion_large_legal/pretrain_final.pkl \
+#     --phases ultralink:checkpoints/v2/sft_ul_soup.pkl \
+#              legal:checkpoints/v2/sft_legal_soup.pkl \
+#     --lambdas ultralink:0.25 legal:0.75 \
+#     --output checkpoints/v2/model_final_v2.pkl
+```
+
+**Relación con el multi-seed soup existente**: son complementarios, no excluyentes.
+El orden óptimo es:
+
+```
+1. Multi-seed (3 seeds por fase) → reduce varianza de optimización dentro de cada fase
+2. Intra-fase soup → obtiene experto de fase más robusto
+3. Cross-fase merge (task vectors) → combina expertos sin interferencia
+```
+
+| Nivel de soup | Qué promedia | Resultado |
+|---------------|--------------|-----------|
+| Intra-run (actual V1) | Últimos N ckpts mismo run | Reduce ruido final de entrenamiento |
+| Inter-run multiseed (V2) | 3 seeds misma distribución | Reduce varianza de optimización |
+| **Phase-aware (extensión)** | **Ckpts por distribución de datos** | **Expertos implícitos por dominio** |
+| Task vector merge | Diferencias con base | Combinación con mínima interferencia |
+
+**Scripts a modificar**:
+```
+[ ] scripts/soup_checkpoints.py — añadir:
+      --mode {intra-run, inter-run, phase-aware, task-vectors}
+      --base para task-vector mode
+      --phases name:path [name:path ...] para phase-aware
+      --lambdas name:float [name:float ...] para task-vector mode
+```
+
 ---
 
 ## Mejora 7 — Infini-attention: contexto infinito con memoria fija
