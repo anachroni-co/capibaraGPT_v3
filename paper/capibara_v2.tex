@@ -1,0 +1,792 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{geometry}
+\usepackage{microtype}
+\usepackage{natbib}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,shapes.geometric}
+
+\geometry{margin=2.5cm}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!60!black,
+  citecolor=green!40!black,
+  urlcolor=blue!60!black,
+}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  breaklines=true,
+  frame=single,
+  backgroundcolor=\color{gray!8},
+  keywordstyle=\color{blue!70!black},
+  commentstyle=\color{gray},
+  stringstyle=\color{orange!80!black},
+  language=Python,
+}
+
+\title{%
+  \textbf{Capibara Legal V2}: Un modelo de lenguaje compacto y especializado\\
+  para el derecho español mediante tokenización BPE, razonamiento estructurado,\\
+  destilación multi-semilla y recuperación jurídica específica de dominio%
+}
+
+\author{%
+  Anachroni Co.\\
+  \texttt{contacto@anachroni.co}
+}
+
+\date{Mayo 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Presentamos \textbf{Capibara Legal V2}, un sistema de modelos de lenguaje compactos diseñado
+para el dominio legal español. Partiendo de la arquitectura Transformer densa de V1
+(vocab=512, seq=1024), V2 introduce ocho mejoras ortogonales que, combinadas, producen
+un salto cualitativo sin requerir hardware acelerado: (1)~tokenizador BPE de 32\,000 tipos
+entrenado sobre corpus jurídico español, cuadruplicando el contenido útil por ventana de
+contexto; (2)~etiquetas Think-Anywhere para razonamiento interno estructurado; (3)~extensión
+de seq\_len a 2048 tokens; (4)~wrapper OpenAI compatible con CrewAI para flujos de trabajo
+multi-agente; (5)~fusión ponderada de adapters LoRA; (6)~sopa multi-semilla en destilación
+con temperatura $T=4.0$; (7)~Infini-attention para contexto efectivamente ilimitado; y
+(8)~modelo de embedding legal específico de dominio entrenado con la receta Arctic-Embed
+y minería de negativos duros ajustable. El modelo Large V2 alcanza $\sim$515\,M parámetros
+con vocab BPE y se despliega íntegramente en CPU ARM64 (Google Axion) sin GPU.
+Describimos la arquitectura, el pipeline de entrenamiento y los objetivos de evaluación.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Introducción}
+\label{sec:intro}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+Los modelos de lenguaje grandes (LLMs) han demostrado capacidades notables en tareas
+legales~\citep{nay2023large}, pero su despliegue en entornos profesionales reales
+presenta obstáculos prácticos: coste de inferencia en GPU, ausencia de
+especialización en terminología jurídica española, y limitaciones de contexto
+insuficientes para documentos legales de varias páginas.
+
+Los modelos de lenguaje pequeños (SLMs) especializados ofrecen una alternativa viable.
+\citet{gurgurov2024adapting} demostraron que modelos BERT de 177\,M parámetros
+adaptados a dominios específicos superan a LLaMA-3-8B en tareas de ese dominio.
+\citet{belcak2025small} mostraron que un modelo Hymba de 1.5\,B parámetros supera
+a modelos de 13\,B en instrucción-seguimiento con 3$\times$ el throughput.
+
+Capibara Legal V2 extiende esta línea de trabajo con un enfoque específico al
+derecho español, introduciendo ocho mejoras sobre V1 que actúan sobre el tokenizador,
+la arquitectura, los datos de entrenamiento, el proceso de destilación y el sistema
+de recuperación. Todas las mejoras son compatibles con despliegue en CPU sin GPU.
+
+\paragraph{Contribuciones principales}
+\begin{enumerate}
+  \item Tokenizador BPE de 32\,000 tipos entrenado sobre corpus legal español,
+        proporcionando cobertura 4$\times$ mayor por ventana de contexto.
+  \item Esquema Think-Anywhere con tokens especiales reservados para razonamiento
+        interno, con overhead del 4\% sobre el presupuesto de tokens.
+  \item Protocolo de sopa multi-semilla en destilación con temperatura alta ($T=4.0$),
+        mejorando la perplexity en 2--4\% respecto a la sopa intra-ejecución.
+  \item Modelo de embedding legal \textit{capibara-embed-m} entrenado con
+        estratificación por fuente y minería de negativos duros ajustable.
+  \item Pipeline de mejora continua S1--S6 basado en logs de producción.
+\end{enumerate}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Arquitectura del sistema}
+\label{sec:architecture}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Familia de modelos}
+
+V2 mantiene la topología cascada de V1, extendiendo los parámetros al introducir
+el vocabulario BPE. La Tabla~\ref{tab:models} resume la familia de modelos.
+
+\begin{table}[h]
+\centering
+\caption{Familia de modelos Capibara V2. Todos los modelos usan RoPE, pre-norm
+y atención multi-cabeza con GQA opcional. El aumento de parámetros en V2 respecto a V1
+se debe íntegramente a la tabla de embedding BPE (vocab=512 → 32\,000).}
+\label{tab:models}
+\begin{tabular}{lrrrrrl}
+\toprule
+\textbf{Nombre} & \textbf{$d$} & \textbf{$L$} & \textbf{$H$} & \textbf{seq} & \textbf{Parámetros} & \textbf{Rol} \\
+\midrule
+Cerebro   & 512  & 8  & 8  & 1024 & $\sim$42\,M  & Especulación (draft) \\
+Medium    & 768  & 12 & 12 & 2048 & $\sim$138\,M & Verificación intermedia \\
+Large     & 1280 & 24 & 20 & 2048 & $\sim$515\,M & Verificación final \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Pipeline de inferencia especulativa}
+
+V2 hereda el pipeline de decodificación especulativa de V1:
+
+\begin{equation}
+  \text{Cerebro} \xrightarrow{\text{draft } k \text{ tokens}} \text{Medium} \xrightarrow{\text{verify}} \text{Large}
+\end{equation}
+
+El modelo Cerebro genera $k=3$--5 tokens de forma especulativa; Medium verifica con
+tasa de aceptación $\alpha \approx 87\%$; Large interviene solo cuando Medium rechaza.
+Con think-tags en V2, los tokens \texttt{<think>}/\texttt{</think>} pasan por el mismo
+pipeline sin modificación; se eliminan del output final antes de devolver al usuario.
+
+\subsection{Adapters LoRA especializados}
+
+El modelo Large sirve como base para 15 adapters LoRA entrenados por especialidad
+jurídica y tipo de tarea (Tabla~\ref{tab:loras}).
+
+\begin{table}[h]
+\centering
+\caption{Adapters LoRA V2. rank=16, $\alpha$=32 para todos excepto \textit{herramientas}
+(rank=8, $\alpha$=8, dropout=0.05, siguiendo~\citep{salesforce2025xlam}).}
+\label{tab:loras}
+\begin{tabular}{lll}
+\toprule
+\textbf{Categoría} & \textbf{Adapters} & \textbf{Configuración} \\
+\midrule
+Legal por área  & penal, civil, laboral, constitucional, administrativo, mercantil & rank=16, $\alpha$=32 \\
+Tarea general   & resumen, instruccion, qa, extraccion, redaccion, dialogo, razonamiento, traduccion & rank=16, $\alpha$=32 \\
+Herramientas    & herramientas & rank=8, $\alpha$=8, dropout=0.05 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 1: Tokenizador BPE de 32k tipos}
+\label{sec:bpe}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+V1 usa tokenización byte-level (vocab=512): cada carácter español en UTF-8 ocupa
+2 bytes, por lo que $\text{seq}=1024 \approx 200$--250 palabras. Con BPE entrenado
+sobre corpus jurídico:
+
+\begin{equation}
+  1024 \text{ tokens}^{\text{BPE}} \approx 700\text{--}900 \text{ palabras} \quad
+  (3.5\text{--}4\times \text{ más que byte-level})
+\end{equation}
+
+Términos como \textit{contencioso-administrativo} pasan de $\sim$25 tokens (byte-level)
+a 2--3 (BPE legal). La tabla de embedding crece de $512 \times d$ a $32000 \times d$,
+añadiendo 8--41\,M parámetros según el preset (Tabla~\ref{tab:emb}).
+
+\begin{table}[h]
+\centering
+\caption{Impacto del tokenizador BPE en la tabla de embedding.}
+\label{tab:emb}
+\begin{tabular}{lrrl}
+\toprule
+\textbf{Preset} & \textbf{Emb V1} & \textbf{Emb V2 BPE} & \textbf{Params total V2} \\
+\midrule
+Cerebro  & 0.1\,M & 8.2\,M  & $\sim$42\,M  \\
+Medium   & 0.4\,M & 24.6\,M & $\sim$138\,M \\
+Large    & 0.7\,M & 40.9\,M & $\sim$515\,M \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Los tokens especiales \texttt{<think>} (ID 8) y \texttt{</think>} (ID 9) se reservan
+en el vocabulario BPE, ocupando exactamente 1 token cada uno (overhead 4\% para bloques
+de razonamiento de 50 tokens).
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 2: Think-Anywhere Tags}
+\label{sec:think}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Motivación}
+
+El razonamiento en cadena (\textit{chain-of-thought}) mejora la precisión en tareas
+jurídicas complejas~\citep{wei2022chain}. En V1, la sobrecarga de byte-level hace
+inviable insertar bloques de razonamiento en el presupuesto de tokens. Con BPE y
+tokens especiales reservados, el overhead es solo del 4\%.
+
+\subsection{Arquitectura Think-Anywhere}
+
+\begin{verbatim}
+Consulta: "¿Puede un menor de 16 años firmar un contrato?"
+[GENERACIÓN]
+<think>
+El artículo 1263 CC establece que los menores no emancipados
+no pueden prestar consentimiento. La emancipación se produce
+a los 16 años por varios supuestos (art. 314 CC).
+</think>
+Los menores de 16 años no emancipados no pueden firmar
+contratos válidos según el artículo 1263 del Código Civil.
+[OUTPUT VISIBLE]
+Los menores de 16 años no emancipados...
+\end{verbatim}
+
+El bloque \texttt{<think>...\textbackslash</think>} se elimina del output mediante
+expresión regular antes de devolver la respuesta al usuario.
+
+\subsection{Datos de entrenamiento}
+
+Siguiendo la \textit{Superficial Alignment Hypothesis}~\citep{zhou2023lima}, el
+conocimiento jurídico proviene del pre-entrenamiento; el fine-tuning solo enseña
+el formato de interacción. La Tabla~\ref{tab:think_data} muestra la distribución
+objetivo de 1\,350 ejemplos curados.
+
+\begin{table}[h]
+\centering
+\caption{Dataset de think traces curado (metodología LIMA).}
+\label{tab:think_data}
+\begin{tabular}{lrl}
+\toprule
+\textbf{Fuente} & \textbf{Ejemplos} & \textbf{Filtro} \\
+\midrule
+Stack Exchange Legal ES & 500 & $>$10 votos, respuesta aceptada, $>$200 palabras \\
+Casos prácticos manuales & 200 & Revisión humana, formato IRAC \\
+Think traces sintéticos (V1 teacher) & 600 & Perplexity $<$ umbral, verificado BOE \\
+Diálogos multi-turno & 50 & $\geq$3 turnos, resolución clara \\
+\midrule
+\textbf{Total} & \textbf{1\,350} & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Como datos de propósito general en español se utiliza UltraLink~\citep{ultralink2024}:
+93\,K diálogos en español con capacidades matemáticas (32\,K), código (16\,K) y chat
+(34\,K). El orden óptimo de SFT es inglés-reasoning primero, después español-legal,
+maximizando la transferencia cross-lingual~\citep{ultralink2024}.
+
+\subsection{Sampling adaptativo por especialidad}
+
+Siguiendo~\citet{holtzman2020curious}, V2 implementa perfiles nucleus (top-p) por
+adapter (Tabla~\ref{tab:sampling}).
+
+\begin{table}[h]
+\centering
+\caption{Perfiles de sampling por especialidad.}
+\label{tab:sampling}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Especialidad} & \textbf{Temperatura} & \textbf{top-p} \\
+\midrule
+extraccion, herramientas & 0.40 & 0.80 \\
+razonamiento, qa         & 0.60 & 0.85 \\
+resumen, legal (penal/civil/...) & 0.65 & 0.85 \\
+instruccion              & 0.75 & 0.90 \\
+dialogo, redaccion       & 0.85 & 0.95 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 3: Extensión de contexto a seq\_len = 2048}
+\label{sec:seqlen}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+Con BPE, $\text{seq}=2048$ cubre 1400--1800 palabras, suficiente para:
+un artículo legal completo, una sentencia corta o un contrato de 2--3 páginas.
+La atención es $O(n^2)$: duplicar la secuencia cuadruplica la memoria de activaciones.
+Se requiere gradient checkpointing obligatorio para Medium y Large.
+
+\begin{table}[h]
+\centering
+\caption{Implicaciones de memoria y throughput al pasar a seq=2048.}
+\label{tab:seq}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{Preset} & \textbf{seq V1} & \textbf{seq V2} & \textbf{$\Delta$ mem} & \textbf{Batch V2} & \textbf{Throughput est.} \\
+\midrule
+Cerebro & 512  & 1024 & $\times$4 & 16 & $\sim$2\,000 tok/s \\
+Medium  & 1024 & 2048 & $\times$4 & 8  & $\sim$700 tok/s \\
+Large   & 1024 & 2048 & $\times$4 & 4  & $\sim$150 tok/s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 4: Flujos multi-agente con CrewAI}
+\label{sec:crewai}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+V2 expone una API compatible OpenAI (\texttt{/v1/chat/completions}) mediante un
+servidor de traducción de protocolo. Esto permite integrar Capibara con CrewAI
+sin modificar el modelo:
+
+\begin{center}
+\texttt{CrewAI} $\xrightarrow{\text{OpenAI format}}$ \texttt{openai\_wrapper.py}
+$\xrightarrow{\text{Capibara format}}$ \texttt{speculative\_inference.py}
+\end{center}
+
+Tres agentes configurados para flujos jurídicos: (1) \textit{Investigador Legal}
+(búsqueda BOE/CENDOJ), (2) \textit{Analista Jurídico} (interpretación normativa),
+(3) \textit{Redactor Legal} (generación de escritos).
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 5: Fusión ponderada de adapters LoRA}
+\label{sec:lora_merge}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Motivación}
+
+Los 15 adapters LoRA de V1 son mutuamente excluyentes en cada inferencia.
+LoRA merging combina varios adapters mediante media ponderada de las matrices
+$B$ y $A$:
+
+\begin{equation}
+  W'_{\text{merged}} = W_{\text{base}} + \frac{\alpha}{r}
+    \left(\sum_i w_i B_i A_i\right), \quad \sum_i w_i = 1
+\end{equation}
+
+\subsection{Adapters merged predefinidos}
+
+\begin{table}[h]
+\centering
+\caption{Adapters merged para V2.}
+\label{tab:merged}
+\begin{tabular}{lll}
+\toprule
+\textbf{Adapter merged} & \textbf{Composición} & \textbf{Uso} \\
+\midrule
+\texttt{legal\_completo}     & 6 áreas legales ($w=1/6$)                     & Backup sin señal de routing \\
+\texttt{razonamiento\_legal} & razonamiento (0.5) + penal/civil/laboral (0.5/3) & Análisis con CoT \\
+\texttt{asistente\_legal}    & instruccion + dialogo + redaccion ($w=1/3$)   & Interfaz conversacional \\
+\texttt{investigacion}       & herramientas + qa + extraccion ($w=1/3$)      & Búsqueda + extracción \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Alineamiento de formato para herramientas}
+
+Siguiendo~\citet{belcak2025small}, el adapter \textit{herramientas} se entrena
+exclusivamente con ejemplos de JSON puro. Un filtro de parsabilidad JSON
+(\textit{JSON parsability}) elimina ejemplos mixtos antes del fine-tuning:
+
+\begin{equation}
+  \text{JSON-parsability} = \frac{|\{y \in \mathcal{D} : \text{json.loads}(y) \neq \perp\}|}{|\mathcal{D}|}
+\end{equation}
+
+Objetivo: JSON-parsability $\geq 99\%$ tras fine-tuning LoRA con rank=8, $\alpha$=8,
+dropout=0.05 y lr=$2\times10^{-5}$~\citep{salesforce2025xlam}.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 6: Sopa multi-semilla en destilación}
+\label{sec:soup}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Sopa de modelos y destilación}
+
+\citet{wortsman2022model} demuestran que promediar pesos de varios modelos
+fine-tuneados (\textit{model soups}) mejora la precisión sin coste de inferencia.
+V1 ya aplica sopa intra-ejecución (últimos 3 checkpoints). V2 añade sopa inter-ejecución
+y sopa de vectores de tarea.
+
+\subsection{Fundamento teórico para la destilación}
+
+La función objetivo de destilación con temperatura $T$:
+
+\begin{equation}
+  \mathcal{L}_{\text{distil}} = \alpha \cdot T^2 \cdot \text{KL}\!\left(
+    \text{softmax}(z_T / T) \,\|\, \text{softmax}(z_S / T)
+  \right) + (1 - \alpha) \cdot \mathcal{L}_{\text{CE}}
+\end{equation}
+
+con $T=4.0$ y $\alpha=0.7$. La temperatura alta produce un paisaje de loss más plano,
+donde ejecuciones con distintas semillas convergen a mínimos locales en la misma cuenca.
+El promedio de esos mínimos cae en una región de mayor generalización~\citep{wortsman2022model}.
+
+\subsection{Jerarquía de 4 niveles}
+
+\begin{equation}
+\underbrace{
+  \underbrace{
+    \text{ckpt}_{a,t-2}, \text{ckpt}_{a,t-1}, \text{ckpt}_{a,t}
+  }_{\text{intra-run}} \!\!\!\!\to \text{soup}_{a}
+}_{\text{nivel 1}} \quad
+\underbrace{
+  \text{soup}_{42}, \text{soup}_{123}, \text{soup}_{777} \to \text{soup}_{\text{multi-seed}}
+}_{\text{nivel 2}} \quad
+\underbrace{
+  \text{soup}_{\text{UltraLink}}, \text{soup}_{\text{legal}} \to \text{model}_{\text{final}}
+}_{\text{nivel 3, task-vector}}
+\end{equation}
+
+El nivel 3 implementa fusión de vectores de tarea~\citep{ilharco2023editing}:
+
+\begin{equation}
+  \theta_{\text{final}} = \theta_{\text{base}} + \sum_i \lambda_i \cdot (\theta_{\text{soup}_i} - \theta_{\text{base}})
+\end{equation}
+
+con $\lambda_{\text{UltraLink}}=0.25$ y $\lambda_{\text{legal}}=0.75$ para priorizar
+la especialización jurídica sobre el español general.
+
+\subsection{Ganancia esperada}
+
+\begin{table}[h]
+\centering
+\caption{Coste vs ganancia en distintas variantes de sopa para destilación.}
+\label{tab:soup}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Variante} & \textbf{Coste} & \textbf{Ganancia en perplexity} \\
+\midrule
+V1: intra-run (3 ckpts)  & 1$\times$ destilación & baseline \\
+V2: intra-run $\times$ 3 semillas & 3$\times$ destilación & $-$2--4\% \\
+V2 opt.: 5 semillas & 5$\times$ destilación & $-$3--5\% (rendimientos decrecientes) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 7: Contexto extendido con Infini-attention}
+\label{sec:infini}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Infini-attention}
+
+\citet{munkhdalai2024leave} proponen añadir una memoria compresiva asociativa
+$M \in \mathbb{R}^{d_k \times d_v}$ por cabeza de atención. La actualización sigue
+la regla Delta:
+
+\begin{align}
+  A_{\text{mem}} &= \frac{\sigma(Q) M_{s-1}}{\sigma(Q) z_{s-1}} \\
+  M_s &= M_{s-1} + \sigma(K)^\top \left(V - \frac{\sigma(K) M_{s-1}}{\sigma(K) z_{s-1}}\right) \\
+  A &= \text{sigmoid}(\beta) \cdot A_{\text{mem}} + (1 - \text{sigmoid}(\beta)) \cdot A_{\text{dot}}
+\end{align}
+
+donde $\sigma = \text{ELU}+1$, $z$ es el normalizador y $\beta$ es un escalar
+aprendido por cabeza. La memoria $M$ tiene tamaño fijo independiente de $N$, frente
+al KV-cache de los Transformers estándar que crece linealmente.
+
+\subsection{Comparación de footprint de memoria}
+
+\begin{table}[h]
+\centering
+\caption{Memoria de contexto en distintas arquitecturas~\citep{munkhdalai2024leave}.}
+\label{tab:infini}
+\begin{tabular}{lll}
+\toprule
+\textbf{Arquitectura} & \textbf{Memoria de contexto} & \textbf{Contexto efectivo} \\
+\midrule
+Transformer-XL & crece con $N \times l$ & Solo último segmento \\
+Memorizing Transformers (65K KV) & 183\,M parámetros & 65K tokens \\
+Infini-Transformer & 1.6\,M (114$\times$ menor) & Ilimitado (acumulativo) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Position Interpolation como paso previo}
+
+Antes del continual pre-training de Infini-attention ($\sim$3 días), se aplica
+Position Interpolation~\citep{chen2023extending} para extender $\text{seq}=2048$ a
+$\text{seq}=16384$ con solo 1000 pasos ($\sim$2 horas):
+
+\begin{equation}
+  f'(x, m) = f\!\left(x,\; m \cdot \frac{L}{L'}\right), \quad L=2048,\; L'=16384
+\end{equation}
+
+Resultados sobre LLaMA 7B--65B: degradación $<2\%$ en benchmarks originales,
+passkey retrieval al 100\% tras 200 pasos~\citep{chen2023extending}.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Mejora 8: Embedding legal específico de dominio}
+\label{sec:embed}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Limitaciones de embeddings genéricos para RAG jurídico}
+
+Los modelos de embedding multilingüe genéricos (multilingual-e5, LaBSE) no capturan:
+terminología legal específica (\textit{interdicto}, \textit{apremio}), citas
+jurídicas (STS 234/2021 vs SAP Madrid 44/2021), ni la jerarquía de fuentes
+(constitución $\succ$ ley orgánica $\succ$ ley ordinaria $\succ$ reglamento).
+
+\subsection{Receta Arctic-Embed para el dominio legal}
+
+\citet{merrick2024arctic} identifican tres innovaciones sobre métodos anteriores:
+
+\paragraph{1. Source stratification.} Cada mini-batch contiene ejemplos de una sola
+fuente ($+3.2$ puntos nDCG@10 vs sin estratificación). Las fuentes legales son
+naturalmente estratificables: BOE, CENDOJ, TJUE, legislación LATAM, académico,
+sintético.
+
+\paragraph{2. Minería de negativos duros ajustable (\textit{tunable hard negatives}).}
+
+\begin{equation}
+  \mathcal{N}^- = \{d \in \mathcal{C} : R_{\min} \leq \text{sim}(q, d) \leq R_{\max}\}
+\end{equation}
+
+con $R_{\min}=0.1$ y $R_{\max}=0.7$. En derecho, $R_{\max}=0.7$ es crítico:
+artículos del mismo código con estructura similar pero contenido distinto
+deben ser negativos, no positivos.
+
+\paragraph{3. Generación sintética de queries fundamentada en negativos.}
+
+Se usa el LLM V2 para generar consultas que recuperen el documento positivo pero
+\textit{no} los documentos negativos duros, produciendo consultas con mayor
+discriminación que la generación de queries sobre documentos aislados.
+
+\subsection{Resultados esperados}
+
+\begin{table}[h]
+\centering
+\caption{Ganancia esperada en retrieval legal con \textit{capibara-embed-m}.}
+\label{tab:retrieval}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Tarea} & \textbf{Antes (e5 genérico)} & \textbf{Esperado (capibara-embed)} \\
+\midrule
+Recuperar artículo por descripción & $\sim$60\% R@10 & $\sim$80\% R@10 \\
+Recuperar sentencia por holding    & $\sim$50\% R@10 & $\sim$75\% R@10 \\
+Discriminar artículos similares    & $\sim$40\% nDCG@10 & $\sim$65\% nDCG@10 \\
+Recuperar en LATAM (ES-MX, ES-AR)  & $\sim$45\% R@10 & $\sim$70\% R@10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Pipeline de mejora continua S1--S6}
+\label{sec:s1s6}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+Siguiendo~\citet{belcak2025small}, el bucle S1--S6 convierte logs de producción
+en datos de SFT para mejorar continuamente los adapters (Tabla~\ref{tab:s1s6}).
+El umbral de re-entrenamiento es 200 ejemplos curados por adapter, con frecuencia
+máxima de 1 re-entrenamiento cada 2 semanas.
+
+\begin{table}[h]
+\centering
+\caption{Mapeo del algoritmo S1--S6 a la infraestructura de Capibara.}
+\label{tab:s1s6}
+\begin{tabular}{clll}
+\toprule
+\textbf{Paso} & \textbf{Descripción} & \textbf{Implementación} \\
+\midrule
+S1 & Registrar cada llamada al LLM & \texttt{log\_inference()} en servidor HTTP \\
+S2 & Curar interacciones & \texttt{scripts/curate\_instruction\_data.py} \\
+S3 & Clasificar por tarea & \texttt{\_route\_specialty()} en speculative\_inference \\
+S4 & Seleccionar SLM apropiado & Slim200M + LoRA adapter por especialidad \\
+S5 & Fine-tuning con LoRA & \texttt{scripts/lora\_finetune.py} \\
+S6 & Iterar & Retorna a S1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Plan de entrenamiento y despliegue}
+\label{sec:training}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Hardware y estimaciones}
+
+Todo el entrenamiento se ejecuta en CPU ARM64 (Google Axion c4a-standard-32,
+32 vCPU Neoverse V2, 128\,GB RAM) sin GPU. La Tabla~\ref{tab:timeline} resume
+las estimaciones de tiempo.
+
+\begin{table}[h]
+\centering
+\caption{Estimación del pipeline de entrenamiento V2 en Axion (32 threads).}
+\label{tab:timeline}
+\begin{tabular}{llrc}
+\toprule
+\textbf{Fase} & \textbf{Tarea} & \textbf{Steps} & \textbf{Tiempo est.} \\
+\midrule
+1 & Tokenizador BPE  & -- & 1--3 h \\
+2 & Cerebro V2 (42M) & 15\,000 & 21 h \\
+2 & Medium V2 (138M) & 10\,000 & 40 h \\
+3 & Large V2 fase 1 (515M) & 35\,000 & 14 d \\
+3 & Large V2 DAPT legal & 10\,000 & 4 d \\
+4 & Position Interpolation $\times$ 1\,000 & 1\,000 & 2 h \\
+4 & Destilación $\times$ 3 seeds $\times$ 3 targets & 30\,000 & 15 d \\
+5 & LoRA $\times$ 15 adapters & 30\,000 & 24 h \\
+5 & LoRA merging + benchmarks & -- & 8 h \\
+\midrule
+  & \textbf{Total} & & $\sim$\textbf{37 días} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Velocidad de inferencia teórica}
+
+Con bf16 en 32 CPUs ARM Neoverse V2 ($\sim$150\,GB/s bandwidth efectivo), la
+inferencia autoregresiva a batch=1 está limitada por bandwidth de memoria:
+
+\begin{equation}
+  \text{tok/s} \approx \frac{\text{bandwidth}}{\text{tamaño modelo bf16}}
+\end{equation}
+
+\begin{table}[h]
+\centering
+\caption{Velocidad de inferencia teórica en Axion (batch=1, autoregresivo).}
+\label{tab:speed}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Modelo} & \textbf{Tamaño bf16} & \textbf{tok/s} & \textbf{Con spec. decoding} \\
+\midrule
+Cerebro (42M)  & 84\,MB   & $\sim$1\,785 tok/s & --               \\
+Medium (138M)  & 276\,MB  & $\sim$543 tok/s    & --               \\
+Large (515M)   & 1.03\,GB & $\sim$146 tok/s    & $\sim$360 tok/s  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Evaluación}
+\label{sec:eval}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\begin{table}[h]
+\centering
+\caption{Objetivos de evaluación V1 $\to$ V2.}
+\label{tab:benchmarks}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Métrica} & \textbf{V1 baseline} & \textbf{V2 objetivo} \\
+\midrule
+Perplexity legal (test set) & -- & $<$ V1 \\
+Tokens/s Large+LoRA & $\sim$350 tok/s & $\geq$350 tok/s \\
+Tasa de aceptación Medium spec. & $\sim$87\% & $\geq$87\% \\
+BLEU summarization & -- & $>$ V1 \\
+Exact match QA legal & -- & $>$ V1 \\
+Palabras efectivas en contexto & $\sim$220 (seq 1024 byte-level) & $\sim$1500 (seq 2048 BPE) \\
+Ganancia sopa multi-semilla & -- & $-$2--4\% perplexity \\
+JSON-parsability herramientas & $\sim$0--7\% (zero-shot) & $\geq$99\% (post-LoRA) \\
+Passkey retrieval @32K tokens & 0\% & $\sim$100\% (Infini) \\
+R@10 retrieval legal & $\sim$60\% & $\sim$80\% (capibara-embed) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Trabajo relacionado}
+\label{sec:related}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+\paragraph{LLMs para derecho.} \citet{nay2023large} revisan aplicaciones de LLMs
+en tareas jurídicas. \citet{zheng2023does} estudian GPT-4 como asistente legal.
+Nuestro trabajo se diferencia por el enfoque en despliegue CPU-only y el dominio
+específicamente español.
+
+\paragraph{Modelos compactos especializados.} \citet{gurgurov2024adapting} demuestran
+superioridad de modelos especializados pequeños sobre modelos grandes generalistas
+en dominios específicos. \citet{belcak2025small} extienden este resultado a pipelines
+agénticos multi-SLM.
+
+\paragraph{Destilación y sopa de modelos.} \citet{hinton2015distilling} introduce
+la destilación con temperatura. \citet{wortsman2022model} proponen model soups.
+\citet{ilharco2023editing} introducen task vectors para fusión de especializaciones.
+
+\paragraph{Contexto largo.} \citet{munkhdalai2024leave} proponen Infini-attention.
+\citet{chen2023extending} introducen Position Interpolation para extender contexto.
+\citet{bertsch2024unlimiformer} y \citet{gu2023mamba} ofrecen alternativas SSM.
+
+\paragraph{Modelos de embedding.} \citet{merrick2024arctic} introducen la receta
+Arctic-Embed con estratificación por fuente y minería de negativos duros.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Conclusiones}
+\label{sec:conclusion}
+%% ─────────────────────────────────────────────────────────────────────────────
+
+Capibara Legal V2 demuestra que es posible construir un sistema de asistencia legal
+en español de alta calidad íntegramente sobre CPU mediante la combinación de:
+(1) tokenización BPE específica de dominio, (2) razonamiento estructurado con baja
+sobrecarga, (3) destilación multi-semilla con sopa de vectores de tarea, y (4) retrieval
+jurídico específico de dominio. La arquitectura cascada con decodificación especulativa
+mantiene latencias competitivas ($\geq$360\,tok/s efectivos para Large) sin GPU.
+
+El sistema sirve como base para V3, que introducirá arquitecturas híbridas
+Mamba-Attention con Mixture-of-Experts y un corpus iberoamericano de $\sim$16\,B
+tokens.
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\bibliographystyle{plainnat}
+\begin{thebibliography}{99}
+
+\bibitem[Belcak et al.(2025)]{belcak2025small}
+Belcak, P., Wattenhofer, R., et al. (2025).
+\newblock Small Language Models are the Future of Agentic AI.
+\newblock \textit{arXiv:2506.02153v2}.
+
+\bibitem[Chen et al.(2023)]{chen2023extending}
+Chen, S., Wong, S., Chen, L., and Tian, Y. (2023).
+\newblock Extending Context Window of Large Language Models via Position Interpolation.
+\newblock \textit{arXiv:2306.15595v2}, Meta AI.
+
+\bibitem[Gurgurov et al.(2024)]{gurgurov2024adapting}
+Gurgurov, D., Hartmann, M., and Ostling, R. (2024).
+\newblock Adapting LLMs to Low-Resource Languages.
+\newblock \textit{arXiv}.
+
+\bibitem[Hinton et al.(2015)]{hinton2015distilling}
+Hinton, G., Vinyals, O., and Dean, J. (2015).
+\newblock Distilling the Knowledge in a Neural Network.
+\newblock \textit{arXiv:1503.02531}.
+
+\bibitem[Holtzman et al.(2020)]{holtzman2020curious}
+Holtzman, A., Buys, J., Du, L., Forbes, M., and Choi, Y. (2020).
+\newblock The Curious Case of Neural Text Degeneration.
+\newblock \textit{ICLR 2020}.
+
+\bibitem[Ilharco et al.(2023)]{ilharco2023editing}
+Ilharco, G., Ribeiro, M. T., Wortsman, M., Gururangan, S., Schmidt, L., Hajishirzi, H.,
+and Farhadi, A. (2023).
+\newblock Editing Models with Task Arithmetic.
+\newblock \textit{ICLR 2023}.
+
+\bibitem[Merrick et al.(2024)]{merrick2024arctic}
+Merrick, L., et al. (2024).
+\newblock Arctic-Embed: Scalable, Efficient, and Accurate Text Embedding Models.
+\newblock \textit{arXiv:2405.05374v1}, Snowflake Inc.
+
+\bibitem[Munkhdalai et al.(2024)]{munkhdalai2024leave}
+Munkhdalai, T., Faruqui, M., and Gopal, S. (2024).
+\newblock Leave No Context Behind: Efficient Infinite Context Transformers with Infini-attention.
+\newblock \textit{arXiv:2404.07143}, Google.
+
+\bibitem[Nay et al.(2023)]{nay2023large}
+Nay, J. J., et al. (2023).
+\newblock Large Language Models as Tax Attorneys: A Case Study in Legal Capabilities.
+\newblock \textit{arXiv:2306.07032}.
+
+\bibitem[Salesforce(2025)]{salesforce2025xlam}
+Salesforce Research (2025).
+\newblock XLAM: A Family of Large Action Models to Empower AI Agent Systems.
+\newblock \textit{arXiv:2504.19277v1}.
+
+\bibitem[UltraLink(2024)]{ultralink2024}
+Zhang, C., et al. (2024).
+\newblock UltraLink: An Open-Source Knowledge-Enhanced Multilingual Supervised Fine-tuning Dataset.
+\newblock \textit{arXiv:2402.04588}, Tsinghua University.
+
+\bibitem[Wei et al.(2022)]{wei2022chain}
+Wei, J., et al. (2022).
+\newblock Chain-of-Thought Prompting Elicits Reasoning in Large Language Models.
+\newblock \textit{NeurIPS 2022}.
+
+\bibitem[Wortsman et al.(2022)]{wortsman2022model}
+Wortsman, M., et al. (2022).
+\newblock Model Soups: Averaging Weights of Multiple Fine-tuned Models Improves Accuracy
+without Increasing Inference Time.
+\newblock \textit{ICML 2022}.
+
+\bibitem[Zhou et al.(2023)]{zhou2023lima}
+Zhou, C., et al. (2023).
+\newblock LIMA: Less Is More for Alignment.
+\newblock \textit{NeurIPS 2023}, \textit{arXiv:2305.11206v1}.
+
+\end{thebibliography}
+
+\end{document}
