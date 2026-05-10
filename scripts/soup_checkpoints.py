@@ -29,6 +29,13 @@ Usage:
         --mode slerp --t 0.5 \\
         --slerp-a checkpoints/axion_mixed/ckpt_step_0004000.pkl \\
         --slerp-b checkpoints/axion_mixed/ckpt_step_0005000.pkl
+
+    # Phase-aware task-vector merge (Ilharco et al. 2023)
+    python scripts/soup_checkpoints.py checkpoints/axion_large_legal/ \\
+        --mode task_vector \\
+        --base checkpoints/axion_large_phase1/soup_uniform.pkl \\
+        --phases "ultralink:checkpoints/axion_large_phase1/soup_uniform.pkl,legal:checkpoints/axion_large_legal/soup_uniform.pkl" \\
+        --lambdas "ultralink:0.25,legal:0.75"
 """
 from __future__ import annotations
 
@@ -169,6 +176,27 @@ def slerp_soup(path_a: Path, path_b: Path, t: float) -> tuple:
     return soup, last_step
 
 
+def task_vector_merge(base_path: Path, phase_soups: dict,
+                      lambdas: dict) -> tuple:
+    """Ilharco et al. 2023: model_final = base + Σ λᵢ · (soupᵢ − base)."""
+    import jax
+    logger.info("Task-vector merge | phases: %s", list(phase_soups))
+    base_ckpt = _load(base_path)
+    base = base_ckpt["params"]
+    last_step = base_ckpt.get("step", 0)
+    result = base
+    for phase_name, soup_path in phase_soups.items():
+        lam = lambdas[phase_name]
+        soup_ckpt = _load(soup_path)
+        soup = soup_ckpt["params"]
+        last_step = max(last_step, soup_ckpt.get("step", 0))
+        logger.info("  %s  λ=%.3f  ← %s", phase_name, lam, soup_path.name)
+        result = jax.tree_util.tree_map(
+            lambda r, s, b, _l=lam: r + _l * (s - b), result, soup, base,
+        )
+    return result, last_step
+
+
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -177,7 +205,7 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("ckpt_dir", help="Directory containing ckpt_step_*.pkl files")
-    parser.add_argument("--mode", choices=["uniform", "greedy", "slerp"],
+    parser.add_argument("--mode", choices=["uniform", "greedy", "slerp", "task_vector"],
                         default="uniform", help="Soup mode (default: uniform)")
     parser.add_argument("--n", type=int, default=3,
                         help="Number of last checkpoints to use (uniform/greedy, default: 3)")
@@ -195,6 +223,14 @@ def main() -> None:
     parser.add_argument("--slerp-b", default=None, help="Second checkpoint for SLERP")
     parser.add_argument("--t", type=float, default=0.5,
                         help="Interpolation factor for SLERP (0=A, 1=B, default: 0.5)")
+
+    # Task-vector options
+    parser.add_argument("--base", default=None,
+                        help="Base checkpoint path (required for task_vector mode)")
+    parser.add_argument("--phases", default=None,
+                        help="Phase soups 'name:path,name:path' (required for task_vector mode)")
+    parser.add_argument("--lambdas", default=None,
+                        help="Task-vector weights 'name:val,name:val' (required for task_vector mode)")
 
     args = parser.parse_args()
 
@@ -227,6 +263,26 @@ def main() -> None:
             sys.exit(1)
         soup, step = slerp_soup(Path(args.slerp_a), Path(args.slerp_b), args.t)
         _save(out_path, soup, step, {"type": "soup_slerp", "t": args.t})
+
+    elif args.mode == "task_vector":
+        if not args.base or not args.phases or not args.lambdas:
+            logger.error("--base, --phases, and --lambdas required for task_vector mode")
+            sys.exit(1)
+        phase_soups: dict = {}
+        for item in args.phases.split(","):
+            name, path = item.split(":", 1)
+            phase_soups[name.strip()] = Path(path.strip())
+        lambdas_map: dict = {}
+        for item in args.lambdas.split(","):
+            name, val = item.split(":", 1)
+            lambdas_map[name.strip()] = float(val.strip())
+        soup, step = task_vector_merge(Path(args.base), phase_soups, lambdas_map)
+        _save(out_path, soup, step, {
+            "type": "soup_task_vector",
+            "base": args.base,
+            "phases": args.phases,
+            "lambdas": args.lambdas,
+        })
 
     logger.info("Done.")
 

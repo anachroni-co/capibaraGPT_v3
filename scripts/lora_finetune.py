@@ -50,6 +50,7 @@ import argparse
 import json
 import logging
 import pickle
+import re
 import sys
 import time
 from pathlib import Path
@@ -83,9 +84,44 @@ SPECIALTY_KEYWORDS = {
     "administrativo": ["administrativo", "administración", "sanción", "recurso",
                        "expediente", "licencia"],
     "mercantil":      ["mercantil", "sociedad", "concurso", "quiebra", "accionista"],
+    "herramientas":   [],  # JSON-format filter applied post-load; no keyword matching
 }
 
-SEP = "\n### Respuesta:\n"   # prompt/response separator
+SEP = "\n### Respuesta:\n"
+
+
+def is_valid_tool_call(example: dict) -> bool:
+    try:
+        json.loads(example.get("response", ""))
+        return True
+    except json.JSONDecodeError:
+        return False
+
+
+def json_parsability(predictions: list[str]) -> float:
+    def _try(p: str) -> bool:
+        try:
+            json.loads(p)
+            return True
+        except Exception:
+            return False
+    return sum(_try(p) for p in predictions) / len(predictions) if predictions else 0.0
+
+
+def coerce_json_output(raw: str) -> str:
+    try:
+        json.loads(raw)
+        return raw
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r'\{.*\}', raw, re.DOTALL)
+    if match:
+        try:
+            json.loads(match.group(0))
+            return match.group(0)
+        except Exception:
+            pass
+    return "{}"   # prompt/response separator
 PAD_ID = 256
 
 
@@ -190,6 +226,10 @@ def _load_jsonl(path: str, specialty: str) -> list[dict]:
                 if not any(kw in text for kw in keywords):
                     continue
             examples.append(ex)
+    if specialty == "herramientas":
+        before = len(examples)
+        examples = [ex for ex in examples if is_valid_tool_call(ex)]
+        logger.info("Herramientas JSON filter: %d → %d valid tool calls", before, len(examples))
     logger.info("Loaded %d examples (specialty=%s) from %s",
                 len(examples), specialty, path)
     return examples
@@ -266,6 +306,8 @@ def main() -> None:
                         help="LoRA rank r (default: 16)")
     parser.add_argument("--lora-alpha", type=float, default=32.0,
                         help="LoRA scaling α (default: 32.0)")
+    parser.add_argument("--dropout",    type=float, default=0.0,
+                        help="Dropout rate (default: 0.0; recommended: 0.05 for herramientas)")
 
     # Training
     parser.add_argument("--steps",      type=int,   default=3000)
@@ -317,7 +359,7 @@ def main() -> None:
         num_layers=preset["num_layers"],
         num_heads=preset["num_heads"],
         max_seq_len=preset["seq_len"],
-        dropout_rate=0.0,
+        dropout_rate=args.dropout,
     )
     model = Slim200M(cfg)
 
@@ -388,6 +430,7 @@ def main() -> None:
         "specialty":   args.specialty,
         "rank":        args.rank,
         "lora_alpha":  args.lora_alpha,
+        "dropout":     args.dropout,
         "base_ckpt":   args.base_ckpt,
     }
 
@@ -397,6 +440,9 @@ def main() -> None:
     logger.info("LoRA fine-tuning | preset=%s rank=%d α=%.0f specialty=%s",
                 args.preset, args.rank, args.lora_alpha, args.specialty)
     logger.info("Examples: %d | steps: %d | lr: %g", len(examples), args.steps, args.lr)
+    if args.specialty == "herramientas":
+        parsability = json_parsability([ex.get("response", "") for ex in examples])
+        logger.info("Data JSON parsability: %.1f%%", parsability * 100)
     logger.info("=" * 60)
 
     t0 = time.perf_counter()
