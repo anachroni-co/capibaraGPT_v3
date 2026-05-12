@@ -1,0 +1,54 @@
+# CUNCA-Gestoria — Corpus mix para Phase 4 (DAPT administrativo galego)
+#
+# Parte de cunca-v2-base (631M entrenado en gl/es) y especializa el modelo
+# en xestorías, asesorías e administración pública galega.
+#
+# Distribución:
+#   DOG        35% — Diario Oficial de Galicia (normativa autonómica)
+#   ATRIGA     20% — Axencia Tributaria de Galicia (fiscalidade)
+#   Xunta      15% — Procedementos sede.xunta.gal
+#   CulturaX   20% — Web galego xeral (evitar esquecemento catastrófico)
+#   Legal-es   10% — BOE/CENDOJ español (modelos AEAT, normativa estatal)
+#
+# Preparación dos datos:
+#   python scripts/download_dog.py --source all --output data/raw/galicia_admin/
+#   python scripts/prepare_corpus.py --input data/raw/galicia_admin/ --output data/tokenized/galicia_admin/
+#
+# Lanzamento (retomar dende cunca-v2-base):
+#   python scripts/launch_axion_training.py \
+#       --data-dir data/tokenized/galicia_admin/ \
+#       --preset large --batch-size 8 --grad-accum 16 \
+#       --dtype bf16 --steps 3000 \
+#       --resume checkpoints/cunca_v2_base/soup_uniform.pkl \
+#       --output checkpoints/cunca_admin/
+
+name: cunca_gestoria
+description: "CUNCA Phase 4 — DAPT xestorías e administración galega"
+seed: 42
+epoch_size: 0    # 0 = auto
+
+sources:
+  - path: data/tokenized/galicia_admin/dog/
+    lang: gl
+    weight: 0.35
+    name: "DOG — Diario Oficial de Galicia"
+
+  - path: data/tokenized/galicia_admin/atriga/
+    lang: gl
+    weight: 0.20
+    name: "ATRIGA — Axencia Tributaria de Galicia"
+
+  - path: data/tokenized/galicia_admin/xunta/
+    lang: gl
+    weight: 0.15
+    name: "Xunta de Galicia — procedementos sede electrónica"
+
+  - path: data/tokenized/gl/
+    lang: gl
+    weight: 0.20
+    name: "CulturaX Galego — web xeral (anti-forgetting)"
+
+  - path: data/tokenized/legal/
+    lang: es
+    weight: 0.10
+    name: "BOE/CENDOJ español — modelos AEAT, normativa estatal"
