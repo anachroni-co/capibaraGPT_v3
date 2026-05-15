@@ -206,9 +206,10 @@ def speculative_step(
     draft_tokens: list[int] = []
     draft_probs:  list[float] = []
 
-    ctx = list(context[-seq_len:])
+    draft_seq_len = draft_m.seq_len
+    ctx = list(context[-draft_seq_len:])
     for _ in range(k):
-        ids = np.array(ctx, dtype=np.int32)
+        ids = np.array(ctx[-draft_seq_len:], dtype=np.int32)
         logits = _get_logits(draft_m, ids)
         p = _softmax(logits)
         tok = _sample(p, temperature, rng)
@@ -288,7 +289,8 @@ def cascade_generate(
     """
     rng = np.random.default_rng(seed)
 
-    context = [BOS_ID] + encode(prompt)
+    seq_len = min(draft_m.seq_len, target_m.seq_len)
+    context = ([BOS_ID] + encode(prompt))[-seq_len:]
     generated: list[int] = []
 
     total_drafted  = 0
