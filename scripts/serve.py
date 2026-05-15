@@ -49,7 +49,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # ── Global state ──────────────────────────────────────────────────────────────
 
 _state: dict = {}          # draft_m, target_m, k, api_key
-_queue: asyncio.Queue      # serialises JAX calls (not thread-safe)
+_lock: asyncio.Lock        # serialises JAX calls (not thread-safe)
 
 
 # ── Request / response schemas ────────────────────────────────────────────────
@@ -112,28 +112,10 @@ def _generate_sync(prompt: str, max_tokens: int, temperature: float) -> tuple[st
 
 async def _generate(prompt: str, max_tokens: int, temperature: float) -> tuple[str, dict]:
     loop = asyncio.get_event_loop()
-    fut: asyncio.Future = loop.create_future()
-
-    async def _worker():
-        try:
-            result = await loop.run_in_executor(
-                None, _generate_sync, prompt, max_tokens, temperature
-            )
-            fut.set_result(result)
-        except Exception as exc:
-            fut.set_exception(exc)
-
-    await _queue.put(_worker)
-    return await fut
-
-
-# ── Queue consumer ────────────────────────────────────────────────────────────
-
-async def _queue_consumer():
-    while True:
-        worker = await _queue.get()
-        await worker()
-        _queue.task_done()
+    async with _lock:
+        return await loop.run_in_executor(
+            None, _generate_sync, prompt, max_tokens, temperature
+        )
 
 
 # ── Streaming helper ──────────────────────────────────────────────────────────
@@ -173,9 +155,8 @@ async def _stream_response(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global _queue
-    _queue = asyncio.Queue()
-    asyncio.create_task(_queue_consumer())
+    global _lock
+    _lock = asyncio.Lock()
 
     args = _state["args"]
     os.environ["JAX_PLATFORMS"] = "cpu"
