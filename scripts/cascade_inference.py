@@ -73,7 +73,7 @@ BOS_ID     = 257
 EOS_ID     = 258
 
 
-# ── Tokenizer (byte-level) ────────────────────────────────────────────────────
+# ── Tokenizer (byte-level) ────────────────────────────────────────────
 
 def encode(text: str) -> list[int]:
     return list(text.encode("utf-8"))
@@ -83,7 +83,7 @@ def decode(ids: list[int]) -> str:
     return bytes(t for t in ids if t < 256).decode("utf-8", errors="replace")
 
 
-# ── Model loading ─────────────────────────────────────────────────────────────
+# ── Model loading ─────────────────────────────────────────────────
 
 class LoadedModel(NamedTuple):
     params: dict
@@ -151,7 +151,7 @@ def load_model(ckpt_path: str, lora_path: str | None = None) -> LoadedModel:
                        preset=preset_name, seq_len=preset["seq_len"])
 
 
-# ── Sampling helpers ──────────────────────────────────────────────────────────
+# ── Sampling helpers ────────────────────────────────────────────────
 
 def _softmax(logits: np.ndarray) -> np.ndarray:
     logits = logits - logits.max()
@@ -183,7 +183,7 @@ def _get_logits_all(m: LoadedModel, input_ids: np.ndarray) -> np.ndarray:
     return logits[0, :, :]                             # (T, V)
 
 
-# ── Core speculative decoding step ────────────────────────────────────────────
+# ── Core speculative decoding step ─────────────────────────────────────────
 
 def speculative_step(
     context: list[int],
@@ -202,7 +202,7 @@ def speculative_step(
     """
     seq_len = min(draft_m.seq_len, target_m.seq_len)
 
-    # ── Phase 1: draft model generates k tokens ───────────────────────────────
+    # ── Phase 1: draft model generates k tokens ─────────────────────────────────
     draft_tokens: list[int] = []
     draft_probs:  list[float] = []
 
@@ -229,7 +229,7 @@ def speculative_step(
     # logit[context_trimmed_len - 1 + i] predicts draft_tokens[i]
     base = context_trimmed_len - 1
 
-    # ── Phase 3: accept / reject ──────────────────────────────────────────────
+    # ── Phase 3: accept / reject ────────────────────────────────────────────
     accepted: list[int] = []
     n_accepted = 0
 
@@ -268,7 +268,7 @@ def speculative_step(
     return accepted, n_accepted, len(draft_tokens)
 
 
-# ── Main generation loop ──────────────────────────────────────────────────────
+# ── Main generation loop ──────────────────────────────────────────────────
 
 def cascade_generate(
     prompt: str,
@@ -399,7 +399,7 @@ def run_benchmark(
         "cascade_viable":        float(np.mean(all_alpha)) >= 0.60,
     }
 
-    print("\n── Benchmark Results ──────────────────────────────────")
+    print("\n── Benchmark Results ────────────────────────────────────")
     print(f"  Mean acceptance rate α : {result['mean_acceptance_rate']:.1%}")
     print(f"  Mean speedup           : {result['mean_speedup']:.1f}x tokens/target-step")
     print(f"  Mean throughput        : {result['mean_tok_per_s']:.0f} tok/s")
@@ -420,8 +420,10 @@ def main() -> None:
                         help="Draft model checkpoint (Small)")
     parser.add_argument("--target", required=True,
                         help="Target model checkpoint (Large)")
-    parser.add_argument("--lora",   default=None,
+    parser.add_argument("--lora",       default=None,
                         help="LoRA adapter to merge into target (optional)")
+    parser.add_argument("--draft-lora", default=None,
+                        help="LoRA adapter to merge into draft (optional)")
     parser.add_argument("--prompt", default=None,
                         help="Prompt to generate from")
     parser.add_argument("--k",            type=int,   default=5,
@@ -446,7 +448,7 @@ def main() -> None:
         "--xla_cpu_enable_fast_math=true "
         "--xla_force_host_platform_device_count=1")
 
-    draft_m  = load_model(args.draft)
+    draft_m  = load_model(args.draft,  lora_path=args.draft_lora)
     target_m = load_model(args.target, lora_path=args.lora)
 
     if args.benchmark:
@@ -467,7 +469,7 @@ def main() -> None:
         stream=not args.no_stream,
     )
 
-    print("\n── Stats ───────────────────────────────────────────────")
+    print("\n── Stats ──────────────────────────────────────────────────")
     print(f"  Acceptance rate α : {stats['acceptance_rate']:.1%}")
     print(f"  Tokens / step     : {stats['tokens_per_step']:.1f}  (k={args.k})")
     print(f"  Speedup estimate  : {stats['speedup_estimate']:.1f}x")
