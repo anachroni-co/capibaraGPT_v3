@@ -225,6 +225,7 @@ async def list_models(request: Request):
 
 
 @app.post("/v1/chat/completions")
+@app.post("/chat/completions")
 async def chat_completions(request: Request, body: ChatRequest):
     _check_auth(request)
 
