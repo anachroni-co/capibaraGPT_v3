@@ -82,16 +82,13 @@ def _check_auth(request: Request) -> None:
 # ── Prompt builder ────────────────────────────────────────────────────────────
 
 def _messages_to_prompt(messages: list[Message]) -> str:
-    parts = []
-    for m in messages:
-        if m.role == "system":
-            parts.append(f"[Sistema] {m.content}")
-        elif m.role == "user":
-            parts.append(f"[Usuario] {m.content}")
-        elif m.role == "assistant":
-            parts.append(f"[Asistente] {m.content}")
-    parts.append("[Asistente]")
-    return "\n".join(parts)
+    # Model was trained on bare prompt→response pairs (no chat markers).
+    # Use the last user message as the prompt; prepend system content if present.
+    system = next((m.content for m in messages if m.role == "system"), None)
+    user   = next((m.content for m in reversed(messages) if m.role == "user"), "")
+    if system:
+        return f"{system}\n\n{user}"
+    return user
 
 
 # ── Inference worker (runs in executor to avoid blocking event loop) ──────────
