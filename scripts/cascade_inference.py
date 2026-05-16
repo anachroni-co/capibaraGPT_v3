@@ -86,10 +86,11 @@ def decode(ids: list[int]) -> str:
 # ── Model loading ─────────────────────────────────────────────────
 
 class LoadedModel(NamedTuple):
-    params: dict
-    model:  object
-    preset: str
-    seq_len: int
+    params:    dict
+    model:     object
+    preset:    str
+    seq_len:   int
+    apply_jit: object = None
 
 
 def _detect_preset(params: dict) -> str:
@@ -142,13 +143,16 @@ def load_model(ckpt_path: str, lora_path: str | None = None) -> LoadedModel:
     )
     model = Slim200M(cfg)
 
-    # Warm up JIT
-    dummy = np.zeros((1, 4), dtype=np.int32)
-    _ = model.apply(params, dummy)
+    # Warm up JIT with full seq_len shape so subsequent calls don't recompile
+    import jax
+    _apply_jit = jax.jit(model.apply)
+    dummy = np.zeros((1, preset["seq_len"]), dtype=np.int32)
+    _ = _apply_jit(params, dummy).block_until_ready()
     logger.info("Model ready (%s)", preset_name)
 
     return LoadedModel(params=params, model=model,
-                       preset=preset_name, seq_len=preset["seq_len"])
+                       preset=preset_name, seq_len=preset["seq_len"],
+                       apply_jit=_apply_jit)
 
 
 # ── Sampling helpers ────────────────────────────────────────────────
@@ -167,20 +171,29 @@ def _sample(probs: np.ndarray, temperature: float, rng: np.random.Generator) -> 
     return int(rng.choice(len(p), p=p))
 
 
-def _get_logits(m: LoadedModel, input_ids: np.ndarray) -> np.ndarray:
-    """Run one forward pass, return logits at last position. Shape: (vocab,)"""
+def _pad_and_apply(m: LoadedModel, input_ids: np.ndarray) -> np.ndarray:
+    """Pad input to fixed seq_len and run JIT-compiled forward pass. Shape: (1, seq_len, vocab)"""
     import jax.numpy as jnp
-    ids = jnp.array(input_ids[np.newaxis, :])   # (1, T)
-    logits = np.array(m.model.apply(m.params, ids))  # (1, T, V)
-    return logits[0, -1, :]                            # (V,)
+    T = len(input_ids)
+    padded = np.zeros((m.seq_len,), dtype=np.int32)
+    padded[:T] = input_ids
+    ids = jnp.array(padded[np.newaxis, :])      # always (1, seq_len)
+    fn = m.apply_jit if m.apply_jit is not None else m.model.apply
+    return np.array(fn(m.params, ids))           # (1, seq_len, vocab)
+
+
+def _get_logits(m: LoadedModel, input_ids: np.ndarray) -> np.ndarray:
+    """Return logits at last real token position. Shape: (vocab,)"""
+    T = len(input_ids)
+    logits = _pad_and_apply(m, input_ids)
+    return logits[0, T - 1, :]
 
 
 def _get_logits_all(m: LoadedModel, input_ids: np.ndarray) -> np.ndarray:
-    """Forward pass returning logits at ALL positions. Shape: (T, vocab)"""
-    import jax.numpy as jnp
-    ids = jnp.array(input_ids[np.newaxis, :])   # (1, T)
-    logits = np.array(m.model.apply(m.params, ids))  # (1, T, V)
-    return logits[0, :, :]                             # (T, V)
+    """Return logits at ALL real token positions. Shape: (T, vocab)"""
+    T = len(input_ids)
+    logits = _pad_and_apply(m, input_ids)
+    return logits[0, :T, :]
 
 
 # ── Core speculative decoding step ─────────────────────────────────────────
