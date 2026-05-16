@@ -86,11 +86,12 @@ def decode(ids: list[int]) -> str:
 # ── Model loading ─────────────────────────────────────────────────
 
 class LoadedModel(NamedTuple):
-    params:    dict
-    model:     object
-    preset:    str
-    seq_len:   int
-    apply_jit: object = None
+    params:      dict
+    model:       object
+    preset:      str
+    seq_len:     int
+    apply_jit:   object = None
+    bucket_fns:  dict   = None   # {bucket_size: jit_fn}
 
 
 def _detect_preset(params: dict) -> str:
@@ -143,16 +144,27 @@ def load_model(ckpt_path: str, lora_path: str | None = None) -> LoadedModel:
     )
     model = Slim200M(cfg)
 
-    # Warm up JIT with full seq_len shape so subsequent calls don't recompile
+    # Compile one JIT function per bucket — avoids recompilation AND
+    # avoids padding to full seq_len for short contexts.
     import jax
+    seq_len = preset["seq_len"]
+    raw_buckets = [64, 128, 256, 512, 1024]
+    buckets = [b for b in raw_buckets if b <= seq_len]
+    if buckets[-1] < seq_len:
+        buckets.append(seq_len)
+
+    bucket_fns: dict = {}
     _apply_jit = jax.jit(model.apply)
-    dummy = np.zeros((1, preset["seq_len"]), dtype=np.int32)
-    _ = _apply_jit(params, dummy).block_until_ready()
-    logger.info("Model ready (%s)", preset_name)
+    for b in buckets:
+        logger.info("  Compiling bucket=%d ...", b)
+        dummy = np.zeros((1, b), dtype=np.int32)
+        _ = _apply_jit(params, dummy).block_until_ready()
+        bucket_fns[b] = _apply_jit
+    logger.info("Model ready (%s) — %d buckets %s", preset_name, len(buckets), buckets)
 
     return LoadedModel(params=params, model=model,
-                       preset=preset_name, seq_len=preset["seq_len"],
-                       apply_jit=_apply_jit)
+                       preset=preset_name, seq_len=seq_len,
+                       apply_jit=_apply_jit, bucket_fns=bucket_fns)
 
 
 # ── Sampling helpers ────────────────────────────────────────────────
@@ -172,14 +184,18 @@ def _sample(probs: np.ndarray, temperature: float, rng: np.random.Generator) -> 
 
 
 def _pad_and_apply(m: LoadedModel, input_ids: np.ndarray) -> np.ndarray:
-    """Pad input to fixed seq_len and run JIT-compiled forward pass. Shape: (1, seq_len, vocab)"""
+    """Pad to smallest bucket >= T and run cached JIT. Shape: (1, bucket, vocab)"""
     import jax.numpy as jnp
     T = len(input_ids)
-    padded = np.zeros((m.seq_len,), dtype=np.int32)
+    if m.bucket_fns:
+        bucket = next((b for b in sorted(m.bucket_fns) if b >= T), m.seq_len)
+    else:
+        bucket = m.seq_len
+    padded = np.zeros((bucket,), dtype=np.int32)
     padded[:T] = input_ids
-    ids = jnp.array(padded[np.newaxis, :])      # always (1, seq_len)
-    fn = m.apply_jit if m.apply_jit is not None else m.model.apply
-    return np.array(fn(m.params, ids))           # (1, seq_len, vocab)
+    ids = jnp.array(padded[np.newaxis, :])
+    fn = m.bucket_fns.get(bucket, m.apply_jit) if m.bucket_fns else m.model.apply
+    return np.array(fn(m.params, ids))           # (1, bucket, vocab)
 
 
 def _get_logits(m: LoadedModel, input_ids: np.ndarray) -> np.ndarray:
