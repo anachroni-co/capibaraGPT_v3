@@ -698,6 +698,566 @@ TEMPLATES: list[dict] = [
             """),
     },
 
+    # ── IRPF autónomo — pagos fraccionados ───────────────────────────────────
+    {
+        "category": "irpf_autonomo_130",
+        "lang": "gl",
+        "prompt": "Como funciona o modelo 130 de pagos fraccionados do IRPF para autónomos?",
+        "response": textwrap.dedent("""\
+            ## Modelo 130 — Pagos fraccionados do IRPF (autónomos en estimación directa)
+
+            Os autónomos en **estimación directa** (normal ou simplificada) presentan
+            o **Modelo 130** trimestralmente para anticipar o IRPF.
+
+            ### Prazos
+            | Trimestre | Período | Prazo |
+            |---|---|---|
+            | 1.º T | Xaneiro–marzo | 1–20 de abril |
+            | 2.º T | Abril–xuño | 1–20 de xullo |
+            | 3.º T | Xullo–setembro | 1–20 de outubro |
+            | 4.º T | Outubro–decembro | 1–30 de xaneiro |
+
+            ### Cálculo
+            **20%** do rendemento neto acumulado desde o inicio do ano, menos
+            os pagos fraccionados xa ingresados en trimestres anteriores e as
+            retencións sufridas.
+
+            ```
+            Cota = 20% × (ingresos acumulados − gastos deducibles acumulados)
+                 − retencións acumuladas
+                 − pagos fraccionados anteriores do mesmo ano
+            ```
+
+            Se o resultado é **negativo ou cero**, preséntas o modelo con cota 0
+            (sen devolución).
+
+            ### Non están obrigados a presentar o 130
+            - Autónomos cunha taxa de retención ≥ 70% nos seus ingresos
+              (profesionais con retención do 15% que facturen case todo a empresas).
+
+            ### Presentación
+            - Telemática: **sede.agenciatributaria.gob.es** → Modelo 130.
+            - Certificado dixital, Cl@ve PIN ou número de referencia.
+            """),
+    },
+    {
+        "category": "irpf_autonomo_modulos",
+        "lang": "es",
+        "prompt": "¿En qué consiste el régimen de estimación objetiva (módulos) del IRPF para autónomos?",
+        "response": textwrap.dedent("""\
+            ## Estimación objetiva (módulos) en el IRPF — Autónomos
+
+            El régimen de **estimación objetiva** (coloquialmente «módulos») calcula
+            el rendimiento neto de la actividad a partir de parámetros objetivos
+            (empleados, metros del local, potencia instalada, etc.) en lugar de
+            ingresos y gastos reales.
+
+            ### ¿Quién puede acogerse?
+            - Actividades incluidas en la Orden de Módulos anual (Hacienda).
+            - Volumen de rendimientos del año anterior < **250.000 €** (actividades
+              agrícolas/ganaderas: < 250.000 €; resto: < 150.000 € desde 2023
+              en función del sector).
+            - Volumen de compras < **250.000 €**.
+            - No estar excluido por renuncia previa (3 años mínimo en directa).
+
+            ### Pago fraccionado — Modelo 131
+            - **Trimestral**, plazo igual al Modelo 130.
+            - Cota = % fijo sobre el rendimiento neto módulo (varía por actividad).
+
+            ### Ventajas
+            - Simplicidad contable: no es obligatorio llevar libro de ingresos/gastos
+              (sí facturas emitidas/recibidas).
+            - Puede convenir si el rendimiento real es superior al módulo.
+
+            ### Inconvenientes
+            - Pagas aunque tengas pérdidas reales.
+            - Reducción de umbrales en los últimos años → muchos autónomos
+              han sido excluidos.
+
+            ### IVA en módulos (régimen simplificado)
+            Si también tributas en IVA simplificado, el IVA a ingresar se calcula
+            por cuotas devengadas fijadas en la Orden de Módulos.
+            """),
+    },
+
+    # ── ITP-AXD — Actos Xurídicos Documentados ───────────────────────────────
+    {
+        "category": "itpaxd_axd",
+        "lang": "gl",
+        "prompt": "Canto se paga en Actos Xurídicos Documentados (AXD) ao asinar unha hipoteca en Galicia?",
+        "response": textwrap.dedent("""\
+            ## Actos Xurídicos Documentados (AXD) — Hipotecas en Galicia
+
+            Desde a **Lei 5/2019 de Contratos de Crédito Inmobiliario**, o suxeito
+            pasivo do AXD nas escrituras de hipoteca é o **banco** (non o cliente).
+            O comprador xa **non paga** este imposto nas hipotecas novas.
+
+            ### AXD que si paga o comprador
+            - **Escritura de compravenda** (documentos notariais): 1,5% en Galicia
+              sobre a base impoñible (valor declarado do inmoble).
+            - **Actas e outros documentos notariais** suxeitos a inscrición rexistral.
+
+            ### Base impoñible
+            - Para compravenda: valor declarado ou valor de referencia do Catastro
+              (o maior dos dous).
+            - Para hipotecas (pagada polo banco): responsabilidade hipotecaria total
+              (capital + xuros + costas).
+
+            ### Prazo de presentación
+            - **30 días hábiles** desde a sinatura da escritura.
+            - Modelo **600** en ATRIGA (atriga.gal) ou oficinas tributarias.
+
+            ### Exemplo compravenda + escritura
+            Piso 150.000 € → AXD escritura = 150.000 × 1,5% = **2.250 €**
+            (a cargo do comprador; o ITP ou IVE vai separado).
+
+            Consulta: atriga.gal/tributos/transmisions-patrimoniais/
+            """),
+    },
+    {
+        "category": "itpaxd_axd",
+        "lang": "es",
+        "prompt": "¿Qué impuesto se paga al constituir una hipoteca en Galicia? ¿Lo paga el banco o el cliente?",
+        "response": textwrap.dedent("""\
+            ## Impuesto AJD en hipotecas (Galicia) — ¿Quién paga?
+
+            Desde la **Ley 5/2019 de Contratos de Crédito Inmobiliario** (art. 29
+            Real Decreto Legislativo 1/1993, modificado), el sujeto pasivo del
+            **Impuesto de Actos Jurídicos Documentados (AJD)** en las escrituras
+            de préstamo hipotecario es la **entidad financiera (banco)**.
+
+            **El cliente no paga AJD por la hipoteca.**
+
+            ### ¿Qué sí paga el comprador?
+            - **AJD por la escritura de compraventa:** tipo 1,5% en Galicia sobre
+              el valor del inmueble.
+            - **ITP** (si es segunda mano): 10% general (tipos reducidos para
+              jóvenes, familias numerosas, discapacidad).
+            - **IVA + AJD** (si es obra nueva de promotor):
+              IVA 10% + AJD 1,5% sobre el precio.
+
+            ### Resumen de costes de adquisición (segunda mano, Galicia)
+            | Concepto | % / importe |
+            |---|---|
+            | ITP | 10% (general) |
+            | AJD escritura compraventa | 1,5% |
+            | Notaría | 0,2%–0,5% aprox. |
+            | Registro de la Propiedad | 0,1%–0,3% aprox. |
+            | Gestoría | 300–600 € |
+
+            Plazo ITP/AJD: **30 días hábiles** desde escritura → Modelo 600 en ATRIGA.
+            """),
+    },
+
+    # ── Axudas Xunta — Kit Digital ────────────────────────────────────────────
+    {
+        "category": "xunta_kit_digital",
+        "lang": "gl",
+        "prompt": "Como solicito o Kit Dixital para a miña pequena empresa en Galicia?",
+        "response": textwrap.dedent("""\
+            ## Kit Dixital — Axudas para a dixitalización de pemes
+
+            O **Kit Dixital** é un programa do Goberno de España (fondos Next Generation EU)
+            xestionado pola **Red.es** para subvencionar a adopción de solucións dixitais
+            en autónomos e pemes.
+
+            ### Segmentos e contías (convocatoria vixente)
+            | Segmento | Empregados | Axuda máxima |
+            |---|---|---|
+            | Segmento I | 10–49 | 12.000 € |
+            | Segmento II | 3–9 | 6.000 € |
+            | Segmento III | 0–2 (autónomos) | 2.000 € |
+
+            ### Solucións subvencionables (categorías)
+            - Sitio web e presenza en internet.
+            - Comercio electrónico.
+            - Xestión de redes sociais.
+            - Xestión de clientes (CRM).
+            - Business Intelligence e analítica.
+            - Xestión de procesos (ERP).
+            - Facturación electrónica.
+            - Ciberseguridade.
+            - Comunicacións seguras.
+            - Oficina virtual.
+
+            ### Pasos para solicitar
+            1. Accede a **acelerapyme.gob.es** → Solicitar bono Kit Dixital.
+            2. Identifícate con certificado dixital ou Cl@ve.
+            3. Supera o **test de diagnóstico dixital** (Autodiagnóstico).
+            4. Presenta a solicitude e obtén o **bono dixital**.
+            5. Escolle un **Axente Dixitalizador** homologado e asina o acordo de
+               prestación de servizos.
+
+            **Importante:** Debes estar ao corrente de pagos con AEAT e SS.
+            Non están admitidas empresas en crise nin en concurso.
+            """),
+    },
+    {
+        "category": "xunta_bono_aluguer",
+        "lang": "gl",
+        "prompt": "Existe algunha axuda da Xunta para o aluguer de vivenda para mozos en Galicia?",
+        "response": textwrap.dedent("""\
+            ## Bono Alugueiro Novo — Xunta de Galicia
+
+            O **Bono Alugueiro Novo** (procedemento **VI481B**) é unha subvención do
+            **IGVS** (Instituto Galego da Vivenda e Solo) dirixida a facilitar o
+            acceso á vivenda en réxime de arrendamento a persoas mozas.
+
+            ### Requisitos habituais do beneficiario
+            - Idade: entre **18 e 35 anos** (inclusive) na data da solicitude.
+            - Residencia efectiva na vivenda arrendada en Galicia.
+            - Renda arrendataria: renda bruta anual ≤ **22.000 €** (unidade familiar
+              ≤ 30.000 €).
+            - Renda do aluguer ≤ **600 €/mes** (municipios con mercado tenso: ata 900 €).
+            - Non ser propietario/a de ningunha vivenda en España.
+            - Estar ao corrente nas obrigas tributarias e de SS.
+
+            ### Contía da axuda
+            - **50% da renda mensual** do aluguer, ata un máximo de **300 €/mes**.
+            - Duración: 2 anos (prorrogable segundo convocatoria).
+
+            ### Como solicitar
+            1. **sede.xunta.gal** → Buscador → VI481B.
+            2. Certificado dixital ou Chave365.
+            3. Documentación: contrato de arrendamento, DNI, declaración de renda,
+               xustificante de domicilio, certificado bancario.
+            4. Prazo: convocatoria anual (xeralmente primeiro semestre).
+
+            Información: igvs.xunta.gal · Tel.: 981 541 900
+            """),
+    },
+
+    # ── Nóminas ───────────────────────────────────────────────────────────────
+    {
+        "category": "nominas_calculo",
+        "lang": "es",
+        "prompt": "¿Cómo se calcula la nómina de un trabajador? Explica las cotizaciones a la Seguridad Social y la retención de IRPF.",
+        "response": textwrap.dedent("""\
+            ## Cálculo de nómina — Cotizaciones SS y retención IRPF
+
+            ### Estructura básica de una nómina
+
+            ```
+            Salario bruto mensual                          X.XXX,XX €
+            + Complementos (plus transporte, dietas...)    +   XXX,XX €
+            ─────────────────────────────────────────────────────────
+            DEVENGOS TOTALES                               X.XXX,XX €
+
+            − Cuota SS trabajador                         −   XXX,XX €
+            − Retención IRPF                              −   XXX,XX €
+            ─────────────────────────────────────────────────────────
+            LÍQUIDO A PERCIBIR                             X.XXX,XX €
+            ```
+
+            ### Cotizaciones SS a cargo del trabajador (2024)
+            | Contingencia | Tipo trabajador |
+            |---|---|
+            | Contingencias comunes | 4,70% |
+            | Desempleo (contrato indefinido) | 1,55% |
+            | Formación profesional | 0,10% |
+            | **Total aprox.** | **6,35%** |
+
+            Base de cotización = salario bruto + prorrata pagas extras.
+
+            ### Cuotas SS a cargo de la empresa (referencia)
+            | Contingencia | Tipo empresa |
+            |---|---|
+            | Contingencias comunes | 23,60% |
+            | Desempleo (indefinido) | 5,50% |
+            | FOGASA | 0,20% |
+            | Formación profesional | 0,60% |
+            | **Total aprox.** | **29,90%** |
+
+            ### Retención IRPF
+            - Calculada por la empresa al inicio del año con el **modelo 145**
+              (comunicación de datos del trabajador).
+            - Depende del salario bruto anual, situación familiar (hijos, cónyuge,
+              discapacidad) y otras rentas.
+            - Herramienta de cálculo: AEAT → «Retenciones sobre rendimientos
+              del trabajo» (servicio de cálculo en línea).
+
+            **Ingreso a Hacienda:**
+            - Retenciones → Modelo 111 (trimestral) o Modelo 111 mensual (grandes empresas).
+            - Cuotas SS → Sistema RED (SILTRA), pago domiciliado en los primeros 29 días del mes.
+            """),
+    },
+    {
+        "category": "nominas_calculo",
+        "lang": "gl",
+        "prompt": "Que retencións do IRPF lle corresponden a un traballador con salario de 25.000 € brutos anuais en Galicia?",
+        "response": textwrap.dedent("""\
+            ## Retención de IRPF sobre rendementos do traballo — Galicia
+
+            Para un traballador con **25.000 € brutos anuais** (sen outros ingresos nin
+            circunstancias familiares especiais), a retención estímase do xeito seguinte:
+
+            ### Cálculo simplificado (solteiro/a, sen fillos, 2024)
+
+            | Concepto | Importe |
+            |---|---|
+            | Salario bruto anual | 25.000 € |
+            | − Cotización SS traballador (~6,35%) | − 1.588 € |
+            | − Redución por rendementos do traballo | − 2.000 € aprox. |
+            | = Base liquidable | ~21.412 € |
+
+            **Tarifa estatal + autonómica (Galicia):**
+            - Tramo ata 12.450 €: tipo ~9,5% (estatal 9,5% + autonómico 9%)
+            - Tramo 12.450–21.412 €: tipo ~24% (escalas combinadas)
+            - Cota íntegra aproximada: **~3.900 €**
+            - Menos dedución por traballo (mínimo persoal ~1.514 €)
+            - **Retención aproximada: ~14–15%**
+
+            ### Nota importante
+            O tipo real varía segundo:
+            - Estado civil e número de fillos/descendentes.
+            - Discapacidade recoñecida.
+            - Segundo pagador.
+            - Cotizacións a mutualidades ou plans de pensións.
+
+            Utiliza a ferramenta oficial da AEAT:
+            **sede.agenciatributaria.gob.es → Retenciones sobre rendimientos del trabajo**
+            para calcular o tipo exacto coas túas circunstancias persoais.
+            """),
+    },
+
+    # ── Modelos tributarios 111 / 115 / 190 ──────────────────────────────────
+    {
+        "category": "modelo_111",
+        "lang": "gl",
+        "prompt": "Para que serve o modelo 111 e cando hai que presentalo?",
+        "response": textwrap.dedent("""\
+            ## Modelo 111 — Retencións e ingresos a conta do IRPF (traballo e actividades)
+
+            O **Modelo 111** é a declaración mediante a que as empresas e autónomos
+            con persoal ingresam na AEAT as retencións practicadas sobre:
+            - **Rendementos do traballo** (salarios dos empregados).
+            - **Actividades económicas** (honorarios de profesionais con retención do 15%
+              ou do 7% para profesionais de inicio de actividade).
+            - Premios, propiedade intelectual e outros rendementos suxeitos a retención.
+
+            ### Periodicidade e prazos
+            | Obrigado | Periodicidade | Prazo |
+            |---|---|---|
+            | Pemes e autónomos (volume < 6M €) | Trimestral | 1–20 do mes seguinte ao trimestre |
+            | Grandes empresas (volume ≥ 6M €) | Mensual | 1–20 do mes seguinte |
+
+            ### Como presentar
+            1. **sede.agenciatributaria.gob.es** → Modelo 111.
+            2. Certificado dixital ou Cl@ve PIN.
+            3. Indica o importe total das retencións e o número de perceptores.
+            4. Paga (se hai cota positiva) mediante domiciliación ou cargo en conta.
+
+            ### Relación co Modelo 190
+            O **Modelo 190** é o resumo anual das retencións declaradas en cada
+            Modelo 111 do exercicio. Preséntase en **xaneiro** do ano seguinte.
+            """),
+    },
+    {
+        "category": "modelo_115",
+        "lang": "es",
+        "prompt": "¿Qué es el modelo 115 y quién está obligado a presentarlo?",
+        "response": textwrap.dedent("""\
+            ## Modelo 115 — Retenciones e ingresos a cuenta por arrendamientos
+
+            El **Modelo 115** recoge las retenciones practicadas sobre los alquileres
+            de **inmuebles urbanos** satisfechos a arrendadores personas físicas o
+            jurídicas (siempre que no estén excluidas de retención).
+
+            ### ¿Quién debe presentarlo?
+            Toda empresa o autónomo que pague alquileres de locales u oficinas a un
+            arrendador y esté obligado a practicar retención (arrendador no es
+            SOCIMI, fondo de inversión, etc. exentos).
+
+            ### Tipo de retención
+            - **19%** sobre la renta del alquiler pagada.
+
+            ### ¿Cuándo no hay retención?
+            - Arrendador es una SICAV, fondo de inversión inmobiliaria o persona
+              jurídica que tributa por el IS y está exenta.
+            - Renta anual del arrendatario a ese arrendador < **900 €**.
+            - El arrendador acredita que la actividad de arrendamiento está afecta
+              a una actividad económica con local propio y empleado.
+
+            ### Plazos (igual que el 111)
+            - Trimestral (pymes): 1–20 del mes siguiente al trimestre.
+            - Mensual (grandes empresas): 1–20 del mes siguiente.
+
+            ### Resumen anual
+            **Modelo 180** — resumen anual de las retenciones de arrendamientos,
+            se presenta en enero del año siguiente.
+            """),
+    },
+    {
+        "category": "modelo_190",
+        "lang": "gl",
+        "prompt": "Que é o modelo 190 e en que prazo hai que presentalo?",
+        "response": textwrap.dedent("""\
+            ## Modelo 190 — Resumo anual de retencións do traballo e actividades
+
+            O **Modelo 190** é o **resumo anual** das retencións e ingresos a conta
+            do IRPF sobre rendementos do traballo persoal e de actividades económicas
+            declaradas trimestralmente no **Modelo 111**.
+
+            ### Contido
+            - Relación nominalizada de todos os perceptores (empregados, profesionais)
+              con retención practicada durante o exercicio.
+            - Importes brutos abonados e retencións practicadas por cada perceptor.
+            - Clave de percepción (A = traballo, G = actividades profesionais, etc.).
+
+            ### Prazo de presentación
+            - **1–31 de xaneiro** do ano seguinte ao exercicio.
+            - Presentación exclusivamente telemática para obrigados.
+
+            ### Como presentar
+            1. **sede.agenciatributaria.gob.es** → Modelo 190.
+            2. Podes importar o ficheiro de datos xerado polo teu programa de nóminas
+               (formato TXT/BOE) ou cubrilo manualmente.
+
+            ### Utilidade para o traballador
+            Os datos do Modelo 190 son a fonte do **certificado de retencións** que a
+            empresa entrega ao traballador e que a AEAT usa para xerar o borrador da
+            declaración da renda.
+
+            **Modelo equivalente para arrendamentos:** Modelo 180 (resumo anual
+            do Modelo 115).
+            """),
+    },
+
+    # ── Plusvalía municipal (IIVTNU) ──────────────────────────────────────────
+    {
+        "category": "plusvalia_municipal",
+        "lang": "gl",
+        "prompt": "Como funciona a plusvalía municipal ao vender un piso en Galicia?",
+        "response": textwrap.dedent("""\
+            ## Plusvalía municipal (IIVTNU) — Imposto sobre o Incremento de Valor dos
+            ## Terreos de Natureza Urbana
+
+            A **plusvalía municipal** é un tributo local que grava o incremento de valor
+            experimentado polos terreos urbanos desde a adquisición ata a transmisión.
+
+            **Xestiónano os Concellos** (non a Xunta nin a AEAT).
+
+            ### Quen paga
+            - **Compravenda:** o vendedor.
+            - **Herdanza/doazón:** o adquirente (herdeiro/donatario).
+
+            ### Dous métodos de cálculo (tras STC 182/2021)
+            O contribuínte pode escoller o que resulte **menor**:
+
+            **Método obxectivo (coeficientes):**
+            ```
+            Base impoñible = Valor catastral do terreo × Coeficiente (segundo anos)
+            ```
+            Os coeficientes son fixados anualmente por RD (máximos legais) e
+            aprobados polo Concello.
+
+            **Método real (incremento efectivo):**
+            ```
+            Base impoñible = Prezo venda − Prezo compra (proporción terreo)
+            ```
+            Útil cando a ganancia real é inferior ao cálculo obxectivo.
+
+            ### Sen plusvalía
+            - **Non hai feito impoñible** se non houbo incremento real de valor
+              (vendes ao mesmo prezo ou con perda). Debes acreditalo con escrituras.
+
+            ### Prazo de presentación
+            - **30 días hábiles** desde a transmisión (compravenda).
+            - **6 meses** (prorrogables a 1 ano) para herdanzas.
+            - Ante o Concello onde está o inmoble.
+            """),
+    },
+
+    # ── Certificado dixital / Cl@ve ───────────────────────────────────────────
+    {
+        "category": "certificado_dixital",
+        "lang": "gl",
+        "prompt": "Como obteño un certificado dixital para facer trámites online coa administración en Galicia?",
+        "response": textwrap.dedent("""\
+            ## Certificado dixital — Opcións para trámites coa administración
+
+            Existen varias formas de identificarse dixitalmente ante as administracións
+            (AEAT, Xunta, Seguridade Social...):
+
+            ### 1. Certificado FNMT (Fábrica Nacional de Moeda e Timbre)
+            - **Gratuíto.** O máis usado para autónomos e empresas.
+            - **Pasos:**
+              1. Accede a **sede.fnmt.es** → Certificados → Persoa Física → Solicitude.
+              2. Obtén o **código de solicitude** no navegador.
+              3. Acredita a túa identidade **presencialmente** nunha oficina habilitada
+                 (AEAT, SS, Concellos adheridos, Delegacións do Goberno).
+              4. Descarga o certificado no mesmo navegador onde fixeches a solicitude.
+            - Vixencia: **4 anos** (renovable sen acudir presencialmente nos últimos
+              60 días de vixencia).
+
+            ### 2. DNI electrónico (DNIe)
+            - Incorporado no DNI desde 2006. Require lector de tarxetas e software
+              oficial da DXP (dnielectronico.es).
+            - Vixencia ligada ao DNI físico.
+
+            ### 3. Cl@ve PIN / Cl@ve Permanente
+            - Sistema do Goberno central para cidadáns sen certificado.
+            - **Cl@ve PIN:** código de uso único enviado por SMS. Válido para a maioría
+              de trámites estatais.
+            - **Cl@ve Permanente:** contrasinal de uso continuado. Require rexistro
+              previo (presencial ou por carta de invitación).
+            - Rexistro: clave.gob.es
+
+            ### 4. Chave365 (Xunta de Galicia)
+            - Sistema propio da Xunta para a sede electrónica galega (sede.xunta.gal).
+            - Rexistro: chave365.xunta.gal
+
+            ### Para representantes de empresa (persoa xurídica)
+            - Certificado de **representante de persoa xurídica** emitido pola FNMT.
+            - Require escritura de poder notarial e inscrición no Rexistro Mercantil.
+            """),
+    },
+
+    # ── Sucesions — detalle grupos e prezentación ─────────────────────────────
+    {
+        "category": "atriga_sucesions_detalle",
+        "lang": "gl",
+        "prompt": "Cal é o prazo para presentar o Imposto de Sucesións en Galicia e como se tramita na ATRIGA?",
+        "response": textwrap.dedent("""\
+            ## Imposto sobre Sucesións — Prazo e tramitación en Galicia (ATRIGA)
+
+            ### Prazo de presentación
+            - **6 meses** contados desde o día do falecemento.
+            - **Prórroga:** solicítase antes de que vezan os 6 meses iniciais;
+              concédense outros 6 meses máis (total: 12 meses), pero durante a
+              prórroga devénganse **xuros de demora** (tipo vixente ~4,0625%).
+
+            ### Modelos
+            | Modelo | Feito impoñible |
+            |---|---|
+            | **650** | Herdanzas (mortis causa) |
+            | **651** | Doazóns e demais transmisións lucrativas inter vivos |
+
+            ### Presentación
+            1. **Telemática (recomendada):** atriga.gal → Oficina Virtual → Modelo 650.
+               Require certificado dixital ou Cl@ve.
+            2. **Presencial:** calquera oficina territorial de ATRIGA en Galicia
+               (A Coruña, Lugo, Ourense, Pontevedra, Santiago, Vigo, Ferrol).
+
+            ### Documentación necesaria
+            - Certificado de defunción e de últimas vontades.
+            - Copia autorizada do testamento (ou declaración de herdeiros ab intestato).
+            - Inventario de bens e dereitos do causante con valoracións.
+            - DNI/NIE dos herdeiros.
+            - Escrituras de inmobles, certificados bancarios, valores mobiliarios.
+
+            ### Bonificacións principais (Galicia 2024)
+            - Grupos I e II (descendentes, ascendentes, cónxuxe): redución de
+              **1.000.000 €** por herdeiro → cota cero na práctica na maioría dos casos.
+            - Vivenda habitual: redución adicional **95%** (máx. 600.000 €).
+            - Empresa familiar: redución **99%**.
+            - Grupo III (colaterais 2.º e 3.º grao): redución 8.000 € + tarifa normal.
+            - Grupo IV (estranhos): sen reducción específica autonómica.
+
+            ATRIGA: atriga.gal · Tel.: 981 545 555
+            """),
+    },
+
     # ── IVE / IVA ─────────────────────────────────────────────────────────────
     {
         "category": "ive_trimestral",
@@ -796,16 +1356,38 @@ def _augment(templates: list[dict], rng: random.Random, target: int) -> list[dic
     reformulations_gl = [
         ("Como", "De que xeito"),
         ("Que", "Cal é o"),
+        ("Cal é o", "Cales son os"),
         ("hai que", "é necesario"),
         ("podo", "é posible"),
         ("en Galicia", "na Comunidade Autónoma de Galicia"),
+        ("Redacta", "Elabora"),
+        ("Elabora", "Prepara"),
+        ("dunha", "para unha"),
+        ("ao vender", "á hora de vender"),
+        ("ao asinar", "á hora de asinar"),
+        ("Como obteño", "Como consigo"),
+        ("Como solicito", "Como podo solicitar"),
+        ("Como se tramita", "Como funciona o trámite de"),
+        ("Como presento", "Como se presenta"),
+        ("Como funciona", "En que consiste"),
     ]
     reformulations_es = [
         ("¿Cómo", "¿De qué manera"),
         ("¿Qué", "¿Cuál es"),
+        ("¿Cuál es", "¿Qué implica"),
         ("hay que", "es necesario"),
         ("puedo", "es posible"),
         ("en España", "en el territorio nacional"),
+        ("Redacta", "Elabora"),
+        ("Elabora", "Prepara"),
+        ("¿En qué consiste", "¿Qué es"),
+        ("¿Qué es", "¿Cómo funciona"),
+        ("¿Cómo funciona", "¿En qué consiste"),
+        ("¿Cómo se calcula", "¿Cuál es el método de cálculo de"),
+        ("¿Quién está obligado", "¿A quién obliga"),
+        ("al constituir", "cuando se constituye"),
+        ("al vender", "cuando se vende"),
+        ("diferencia entre", "comparativa entre"),
     ]
 
     while len(result) < target:
