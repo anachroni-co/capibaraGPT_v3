@@ -189,6 +189,11 @@ async def health():
     }
 
 
+@app.get("/")
+async def root():
+    return {"name": "cunca-v2", "version": "1.0", "docs": "/docs"}
+
+
 @app.get("/v1/models")
 async def list_models(request: Request):
     _check_auth(request)
