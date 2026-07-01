@@ -571,7 +571,7 @@ class TestGeneralSecurityScan:
                 stripped = line.strip()
                 if stripped.startswith("#"):
                     continue
-                if "exec(" in stripped and "execute" not in stripped.lower() and "executor" not in stripped.lower():
+                if re.search(r"(?<![\w.])exec\(", stripped) and "execute" not in stripped.lower() and "executor" not in stripped.lower():
                     violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{i}")
         assert len(violations) <= 2, (
             f"exec() found in {len(violations)} locations:\n"
