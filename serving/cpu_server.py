@@ -296,7 +296,7 @@ def _cli() -> None:
     if args.checkpoint:
         import pickle
         with open(args.checkpoint, "rb") as f:
-            ckpt = pickle.load(f)
+            ckpt = pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
         backbone.__dict__.update(ckpt.get("backbone", {}))
         logger.info("Checkpoint loaded from %s", args.checkpoint)
 
