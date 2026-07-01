@@ -126,6 +126,7 @@ if JAX_AVAILABLE and FLAX_AVAILABLE:
         dt_rank: int = 32
         activation: str = "swish"
         layer_norm_epsilon: float = 1e-5
+        use_conv_bias: bool = True
 
         @nn.compact
         def __call__(
@@ -152,7 +153,7 @@ if JAX_AVAILABLE and FLAX_AVAILABLE:
             )
             conv_b = self.param(
                 "conv_bias", nn.initializers.zeros, (d_inner,)
-            ) if self.config.use_conv_bias else None
+            ) if self.use_conv_bias else None
 
             x_conv = jax.lax.conv_general_dilated(
                 x_padded,
@@ -321,6 +322,7 @@ class MambaModule(IModule):
             dt_rank=self.config.dt_rank,
             activation=self.config.activation,
             layer_norm_epsilon=self.config.layer_norm_epsilon,
+            use_conv_bias=self.config.use_conv_bias,
         )
         # Initialise Flax params with a minimal dummy input
         dummy = jnp.ones((1, 4, self.config.hidden_size))
