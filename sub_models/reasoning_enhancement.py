@@ -135,12 +135,11 @@ if FLAX_AVAILABLE:
                 qkv_features=self.hidden_size,
                 dropout_rate=self.dropout_rate
             )
-            self.feed_forward = nn.Sequential([
-                nn.Dense(self.hidden_size * 4),
-                nn.gelu,
-                nn.Dropout(rate=self.dropout_rate),
-                nn.Dense(self.hidden_size)
-            ])
+            # Explicit FF layers: nn.Sequential cannot forward the
+            # `deterministic` flag to the inner Dropout.
+            self.ff_dense1 = nn.Dense(self.hidden_size * 4)
+            self.ff_dropout = nn.Dropout(rate=self.dropout_rate)
+            self.ff_dense2 = nn.Dense(self.hidden_size)
             self.layer_norm1 = nn.LayerNorm()
             self.layer_norm2 = nn.LayerNorm()
             self.dropout = nn.Dropout(rate=self.dropout_rate)
@@ -151,7 +150,9 @@ if FLAX_AVAILABLE:
             x = self.layer_norm1(x + self.dropout(attn_output, deterministic=deterministic))
             
             # Feed-forward with residual connection
-            ff_output = self.feed_forward(x)
+            ff_output = self.ff_dense2(
+                self.ff_dropout(nn.gelu(self.ff_dense1(x)), deterministic=deterministic)
+            )
             x = self.layer_norm2(x + self.dropout(ff_output, deterministic=deterministic))
             
             return x
@@ -180,8 +181,11 @@ if FLAX_AVAILABLE:
             # Project inputs to hidden dimension
             x = self.input_projection(inputs)
             
-            # Add reasoning type embedding
-            type_embed = self.reasoning_type_embedding(reasoning_type_id)
+            # Add reasoning type embedding (Embed requires an integer array,
+            # not a Python int)
+            type_embed = self.reasoning_type_embedding(
+                jnp.asarray(reasoning_type_id, dtype=jnp.int32)
+            )
             x = x + type_embed
             
             # Apply reasoning steps
