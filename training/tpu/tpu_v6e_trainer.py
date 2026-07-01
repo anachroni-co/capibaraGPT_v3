@@ -116,6 +116,25 @@ class TPUv6eConfig:
     moe_load_balance_weight: float = 0.01
     moe_num_experts: int = 32
 
+    @classmethod
+    def from_toml(cls, path: str) -> "TPUv6eConfig":
+        """Build a config from a production TOML (config/configs_toml/production/training.toml).
+
+        Only recognised keys override dataclass defaults, so the TOML can hold
+        extra sections (validation, optimization) without breaking."""
+        import toml as _toml
+        data = _toml.load(path)
+        cfg = cls()
+        training = data.get("training", {})
+        distributed = data.get("distributed", {})
+        if "gradient_accumulation_steps" in distributed:
+            cfg.gradient_accumulation_steps = int(distributed["gradient_accumulation_steps"])
+        for section in (training, data.get("optimization", {})):
+            for key, value in section.items():
+                if hasattr(cfg, key):
+                    setattr(cfg, key, value)
+        return cfg
+
 @dataclass
 class CheckpointMetadata:
     """Checkpoint metadata for robust recovery."""
@@ -796,3 +815,35 @@ async def train_robust_tpu_v6e(
     )
 
     logger.info("TRAINING COMPLETED!")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", force=True)
+
+    parser = argparse.ArgumentParser(
+        description="TPU v6e robust trainer — config validation entrypoint."
+    )
+    parser.add_argument(
+        "--config",
+        default="config/configs_toml/production/training.toml",
+        help="Production training TOML to load into TPUv6eConfig.",
+    )
+    parser.add_argument(
+        "--model-scale", default="300M", help="Model scale label (300M, 1B, 3B, 7B)."
+    )
+    args = parser.parse_args()
+
+    resolved = TPUv6eConfig.from_toml(args.config)
+    logger.info("Resolved TPUv6eConfig from %s:", args.config)
+    for field_name, field_value in vars(resolved).items():
+        logger.info("  %s = %s", field_name, field_value)
+    try:
+        devices = jax.devices()
+        logger.info("JAX devices: %d x %s", len(devices), devices[0].platform)
+    except Exception as exc:  # pragma: no cover - depends on host hardware
+        logger.warning("JAX devices unavailable: %s", exc)
+    logger.info(
+        "Config OK. Launch training programmatically with train_robust_tpu_v6e(model, dataset, ...)."
+    )
