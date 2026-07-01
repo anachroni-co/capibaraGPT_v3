@@ -1,13 +1,19 @@
 # Configuración de Training para CapibaraGPT v3
+#
+# CANONICAL: estos valores deben coincidir con config/config.yaml (training:).
+# El trainer TPU puede cargarlos con TPUv6eConfig.from_toml(<este archivo>).
 
 [training]
 batch_size = 32
-learning_rate = 1e-4
-warmup_steps = 1000
+learning_rate = 3e-4        # pico; coseno hasta min_learning_rate
+min_learning_rate = 3e-5    # 10% del pico
+warmup_steps = 2000
 max_steps = 100000
 gradient_clip_norm = 1.0
-weight_decay = 0.01
+weight_decay = 0.1
 use_gradient_checkpointing = true
+dropout = 0.0               # pretraining sin dropout
+use_sequence_packing = true # empaquetar documentos, no pad-to-max
 
 [validation]
 eval_steps = 1000
@@ -25,6 +31,6 @@ use_tpu_profiler = true
 
 [distributed]
 enable_distributed = true
-gradient_accumulation_steps = 8
+gradient_accumulation_steps = 8   # efectivo = 32 x 8 = 256
 num_microbatches = 4
-use_sharding = true 
+use_sharding = true
