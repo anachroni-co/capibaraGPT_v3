@@ -375,7 +375,7 @@ def load_checkpoint(path: str) -> Dict:
     except ImportError:
         import pickle
         with open(path, "rb") as f:
-            return pickle.load(f)
+            return pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
 
 
 __all__ = [
