@@ -1,35 +1,40 @@
 """SSM Ultra-Optimizado for tpu v4-32 with JAX and Flax."""
 
-import jax
-import jax.numpy as jnp
-
 import logging
-
-# Obtiene la path del directory current (scripts) -> /.../scripts
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Sube un level for obtain la raíz del proyecto -> /.../CapibaraGPT v3
-project_root = os.path.dirname(script_dir)
-# Añade la raíz del proyecto a sys.path
-if project_root not in sys.path:
-    pass  # Using proper imports instead of sys.path manipulation
 
 import jax
 import jax.numpy as jnp
 from flax import linen as nn
-from jax.sharding import PartitionSpec as P
+from jax.sharding import Mesh, PartitionSpec as P
 from jax.experimental.shard_map import shard_map
-from jax.experimental.mesh_utils import ng
+from jax.experimental.mesh_utils import create_device_mesh
 from typing import Optional, Tuple, Dict, Any
 from functools import partial
 
-# setup de logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# setup de dispositivo for tpu v4-32
-DEVICE_MESH = create_hybrid_device_mesh(ici_mesh_shape=(32, 1),
-                                       dcn_mesh_shape=(1, 1),
-                                       process_is_granule=True)
+
+def _build_device_mesh() -> Mesh:
+    """Build a (batch, hidden) device mesh from the available devices.
+
+    On TPU v4-32 this yields the full 32x1 mesh; on CPU/GPU it degrades
+    gracefully to whatever devices exist (1x1 on a single host), so the
+    module can be imported and unit-tested anywhere.
+    """
+    n = len(jax.devices())
+    devices = create_device_mesh((n, 1))
+    return Mesh(devices, axis_names=("batch", "hidden"))
+
+
+_DEVICE_MESH: Optional[Mesh] = None
+
+
+def get_device_mesh() -> Mesh:
+    """Lazily create and cache the global device mesh (never at import time)."""
+    global _DEVICE_MESH
+    if _DEVICE_MESH is None:
+        _DEVICE_MESH = _build_device_mesh()
+    return _DEVICE_MESH
 
 @partial(jax.jit, static_argnames=('config', 'training'))
 def ssm_layer(params: Dict[str, Any], x: jnp.ndarray, context: jnp.ndarray, 
@@ -139,7 +144,7 @@ class TPUOptimizedSSM(nn.Module):
             
             final_state, outputs = shard_map(
                 partial(ssm_layer, config=self, training=training),
-                mesh=DEVICE_MESH,
+                mesh=get_device_mesh(),
                 in_specs=(batch_shard, batch_shard),
                 out_specs=(batch_shard, batch_shard),
                 check_rep=False
@@ -197,7 +202,7 @@ def create_sharded_train_step():
     return jax.jit(
         shard_map(
             train_step,
-            mesh=DEVICE_MESH,
+            mesh=get_device_mesh(),
             in_specs=(P('batch', 'hidden'), P('batch'), P('batch')),
             out_specs=(P('batch', 'hidden'), P()),
             check_rep=False
@@ -240,7 +245,7 @@ if __name__ == "__main__":
     # Particionado de data
     sharded_inputs = jax.device_put(
         jnp.zeros(input_shape, dtype=jnp.bfloat16),
-        jax.sharding.NamedSharding(DEVICE_MESH, P('batch', None, 'hidden'))
+        jax.sharding.NamedSharding(get_device_mesh(), P('batch', None, 'hidden'))
     )
 
     # Estado inicial del model
