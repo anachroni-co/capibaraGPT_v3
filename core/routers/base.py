@@ -69,11 +69,11 @@ class RouterProtocol(Protocol):
     def route(self, x: jnp.ndarray, context: Optional[jnp.ndarray] = None) -> jnp.ndarray:
         ...
 
-if JAX_AVAILABLE and nn is not None:
-    _FlaxBase = nn.Module
-else:
-    class _FlaxBase:  # type: ignore[no-redef]
-        pass
+# Routers are plain-Python orchestrators (mutable state, custom __init__),
+# which is incompatible with the flax.linen.Module dataclass lifecycle.
+# jax.nn is only used for stateless functions (softmax), never as a Module base.
+class _FlaxBase:
+    pass
 
 class BaseRouter(_FlaxBase, ABC):  # type: ignore[misc]
     """Abstract base class for all routers"""
