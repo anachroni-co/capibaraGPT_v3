@@ -3,6 +3,8 @@ CapibaraGPT v3.3 - Optimizaciones ARM Axion
 implementation optimizada for procesadores ARM Axion with 64 códigos VQ
 """
 
+from __future__ import annotations
+
 import os
 import logging
 import numpy as np
