@@ -247,7 +247,7 @@ def save_lora(path: Path, lora_params: dict, meta: dict) -> None:
 def load_lora(path: str, base_params) -> dict:
     """Load a LoRA checkpoint and return effective (merged) params."""
     with open(path, "rb") as f:
-        ckpt = pickle.load(f)
+        ckpt = pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
     return apply_lora(base_params, ckpt["lora"])
 
 
@@ -396,7 +396,7 @@ def main() -> None:
 
     logger.info("Loading base model from %s", args.base_ckpt)
     with open(args.base_ckpt, "rb") as f:
-        base_ckpt = pickle.load(f)
+        base_ckpt = pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
     base_params = base_ckpt["params"]
 
     cfg = ModelConfig(

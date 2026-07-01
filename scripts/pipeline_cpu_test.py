@@ -11,7 +11,13 @@ Each step uses the component's actual NumPy/CPU fallback path, not mocks.
 from __future__ import annotations
 
 import logging
+import sys
 import time
+from pathlib import Path
+
+# Allow running as `python scripts/pipeline_cpu_test.py` from anywhere.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
 import numpy as np
 
 logging.basicConfig(

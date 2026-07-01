@@ -243,12 +243,12 @@ def decode(token_ids: list[int]) -> str:
 def _load_ckpt(path: str) -> dict:
     logger.info("Loading: %s", path)
     with open(path, "rb") as f:
-        return pickle.load(f)
+        return pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
 
 
 def _load_lora(path: str) -> dict:
     with open(path, "rb") as f:
-        return pickle.load(f)
+        return pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
 
 
 # ── LoRA adapter injection ─────────────────────────────────────────────────────

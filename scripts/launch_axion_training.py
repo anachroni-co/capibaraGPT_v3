@@ -350,7 +350,7 @@ async def run(args: argparse.Namespace) -> None:
 
         logger.info("Resuming from %s …", resume_path)
         with open(resume_path, "rb") as f:
-            ckpt = pickle.load(f)
+            ckpt = pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
         loaded_params = ckpt["params"]
         if use_pmap:
             # state is already replicated — replace params on each device

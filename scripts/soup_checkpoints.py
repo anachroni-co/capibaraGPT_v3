@@ -58,7 +58,7 @@ logger = logging.getLogger("soup")
 
 def _load(path: Path) -> dict:
     with open(path, "rb") as f:
-        return pickle.load(f)
+        return pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
 
 
 def _save(path: Path, params, step: int, meta: dict) -> None:

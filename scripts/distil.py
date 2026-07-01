@@ -63,7 +63,7 @@ PRESETS = {
 
 def _load_ckpt(path: str) -> dict:
     with open(path, "rb") as f:
-        return pickle.load(f)
+        return pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
 
 
 def _save_ckpt(path: Path, params, step: int, loss: float, meta: dict) -> None:

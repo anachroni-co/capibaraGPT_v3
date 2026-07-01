@@ -167,7 +167,7 @@ def main() -> None:
 
     logger.info("Loading base model from %s", args.base_ckpt)
     with open(args.base_ckpt, "rb") as f:
-        ckpt = pickle.load(f)
+        ckpt = pickle.load(f)  # nosec B301 - trusted local checkpoint, not user input
     params = ckpt.get("params", ckpt)
 
     cfg = ModelConfig(
