@@ -128,10 +128,12 @@ def test_memory_stats_auto_returns_dict():
 
 
 def test_memory_stats_cpu_path():
-    # CPU path should not raise; values default to 0.0 (no GPU/TPU).
+    # CPU path should not raise. With psutil present it reports real RAM
+    # usage; without it, values default to 0.0.
     stats = memory_stats("cpu")
     assert stats["backend"] == "cpu"
-    assert stats["allocated_gb"] == pytest.approx(0.0)
+    assert stats["allocated_gb"] >= 0.0
+    assert stats["total_gb"] >= stats["allocated_gb"]
 
 
 def test_memory_stats_gpu_without_hardware():
