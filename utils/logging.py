@@ -14,7 +14,15 @@ from typing import Optional, Dict, Any, Union
 try:
     import wandb  # type: ignore
 except ImportError:
-    from .wandb_fallback import wandb_fallback as wandb
+    class _WandbStub:
+        """No-op stand-in when wandb is not installed."""
+
+        def __getattr__(self, name):
+            def _noop(*args, **kwargs):
+                return None
+            return _noop
+
+    wandb = _WandbStub()  # type: ignore
 # Optional imports
 try:
     from dotenv import load_dotenv  # type: ignore
@@ -137,6 +145,11 @@ class CapibaraConfig(BaseModel):
         except yaml.YAMLError as e:
             logger.error(f"Error loading CapibaraModel config from {yaml_path}: {e}")
             raise
+
+
+def get_logger(name: str) -> logging.Logger:
+    """Return a namespaced logger (standard accessor used across the project)."""
+    return logging.getLogger(name)
 
 
 def setup_logging(log_level: Optional[str] = None) -> None:
