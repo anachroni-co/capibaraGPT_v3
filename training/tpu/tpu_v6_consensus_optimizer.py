@@ -42,16 +42,16 @@ except ImportError:
 #
 # Previously these imports used a `.meta_consensus_system` / `.optimized_meta_consensus`
 # spec which resolves against `training/tpu/` — where the modules do not exist
-# (they live under `training/consensus/`). That made the module unimportable,
+# (they live under `training/research/consensus/`). That made the module unimportable,
 # which in turn is why the file had never been covered by a real test. We
 # now use the correct `..consensus.*` path and wrap it in `try/except` so the
 # optimizer degrades gracefully if the consensus package is stripped down.
 try:
-    from ..consensus.meta_consensus_system import (
+    from ..research.consensus.meta_consensus_system import (
         MetaConsensusSystem,
         MetaConsensusConfig,
     )
-    from ..consensus.optimized_meta_consensus import (
+    from ..research.consensus.optimized_meta_consensus import (
         OptimizedMetaConsensusSystem,
         OptimizationLevel,
     )
