@@ -272,7 +272,7 @@ if _AVAILABLE:
             x_pad = jnp.pad(x_part, ((0, 0), (self.d_conv - 1, 0), (0, 0)))
             x_conv = lax.conv_general_dilated(
                 x_pad.transpose(0, 2, 1),          # (B, d_inner, L+pad)
-                conv_w.transpose(1, 2, 0),          # (d_inner, 1, d_conv)
+                conv_w.transpose(2, 1, 0),          # (d_inner, 1, d_conv) — O=d_inner, I=1
                 window_strides=(1,),
                 padding="VALID",
                 feature_group_count=d_inner,
