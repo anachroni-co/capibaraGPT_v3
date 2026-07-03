@@ -1,6 +1,6 @@
-"""Integration surface tests for training/consensus (BACKLOG-006).
+"""Integration surface tests for training/research/consensus (BACKLOG-006).
 
-training/consensus is ~13k LOC with heavy optional dependencies (jax,
+training/research/consensus is ~13k LOC with heavy optional dependencies (jax,
 ray, etc.). Rather than importing every module (which would require the
 full ML stack), these tests validate the **public API surface** via AST
 inspection: class names, method names, and async vs sync kind. They are
@@ -16,7 +16,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-CONSENSUS_DIR = REPO_ROOT / "training" / "consensus"
+CONSENSUS_DIR = REPO_ROOT / "training" / "research" / "consensus"
 
 
 def _module_tree(relpath: str) -> ast.Module:
@@ -46,7 +46,7 @@ def _methods(cls: ast.ClassDef) -> dict:
 
 @pytest.mark.parametrize("path", sorted(CONSENSUS_DIR.glob("*.py")))
 def test_consensus_module_parses(path: Path) -> None:
-    """Every training/consensus module must still parse cleanly."""
+    """Every training/research/consensus module must still parse cleanly."""
     ast.parse(path.read_text(encoding="utf-8"))
 
 

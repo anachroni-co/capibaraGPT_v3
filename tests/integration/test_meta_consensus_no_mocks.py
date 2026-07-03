@@ -1,6 +1,6 @@
 """Non-regression tests for BACKLOG ISSUE-002.
 
-These tests verify that the training/consensus meta-consensus code path no
+These tests verify that the training/research/consensus meta-consensus code path no
 longer ships the hard-coded ``mock_response`` / ``mock_metrics`` placeholders
 and that the replacement logic behaves deterministically.
 
@@ -19,9 +19,9 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-META_CONSENSUS = REPO_ROOT / "training" / "consensus" / "meta_consensus_system.py"
+META_CONSENSUS = REPO_ROOT / "training" / "research" / "consensus" / "meta_consensus_system.py"
 ADVANCE_INTEGRATION = (
-    REPO_ROOT / "training" / "consensus" / "advance_meta_consensus_integration.py"
+    REPO_ROOT / "training" / "research" / "consensus" / "advance_meta_consensus_integration.py"
 )
 
 

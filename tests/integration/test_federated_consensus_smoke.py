@@ -35,7 +35,7 @@ async def test_federated_consensus_smoke():
     torch = pytest.importorskip("torch")
     transformers = pytest.importorskip("transformers")
 
-    module_path = Path(__file__).resolve().parents[2] / "training" / "federated_consensus" / "federated_consensus_system.py"
+    module_path = Path(__file__).resolve().parents[2] / "training" / "research" / "federated_consensus" / "federated_consensus_system.py"
     spec = importlib.util.spec_from_file_location("federated_consensus_system", module_path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
