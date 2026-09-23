@@ -9,6 +9,33 @@ All items below have a concrete scope, a clearly stated problem, and verifiable 
 
 ---
 
+## ISSUE-001 — `training`: remove remaining TPU consensus mocks
+
+**Labels:** `training`, `consensus`, `tpu`, `high-priority`
+
+**Scope**
+
+- `training/tpu/tpu_v6_consensus_optimizer.py`
+
+**Problem**
+
+With the default `TPUv6ConsensusConfig`, `query_embedder` and `expert_embedder` are `None`, so query and expert embeddings fall back to `_deterministic_embedding`: a SHA256 fingerprint of the text/expert name that is explicitly **not** a semantic embedding. Expert ranking in the default path is therefore still based on arbitrary fingerprints.
+
+**Progress** (2026-04-22, PR #124, `6a77c3f`)
+
+- Random PRNG mock embeddings replaced by deterministic SHA256 fingerprints; `query_embedder` / `expert_embedder` hooks added to inject a real model.
+- Performance metrics derived from real execution; CPU fallback kept.
+- Integration test: `tests/integration/test_tpu_v6_consensus_optimizer.py`.
+- Since 2026-07 the optimizer imports from `training.research.consensus` (`285200f`).
+
+**Exit criteria**
+
+- [ ] Real embeddings in the main flow: a real embedding model wired by default (or the fingerprint fallback disabled / made an explicit error outside tests).
+- [x] Performance metrics based on real execution.
+- [x] A documented minimal integration test.
+
+---
+
 ## ISSUE-006 — `tests`: expand coverage for `core` and `training`
 
 **Labels:** `tests`, `maintenance`, `medium-priority`
@@ -105,7 +132,7 @@ The 2026-07 pruning (46 files/directories deleted across `core/`, `capibara/` an
 
 - `capibara/__init__.py` still tries `from . import routers` / `from . import optimizations`; both packages were deleted (`e677e60`, `0c19f9c`), so these blocks always fall into the `except` branch.
 - `agent_executor.py` still labels the standard path as `# Use standard n8n execution (simulated)` and the `n8n_service.py` module docstring still says "Some execution paths are simulated", although ISSUE-003 removed the simulation.
-- `training/research/README.md` still lists "Mocks pendientes: BACKLOG ISSUE-001/002" for `consensus/`; both issues are resolved.
+- `training/research/README.md` still lists "Mocks pendientes: BACKLOG ISSUE-001/002" for `consensus/`; ISSUE-002 is resolved and ISSUE-001 now only concerns `training/tpu/` (real embeddings), not `consensus/`.
 
 **Exit criteria**
 
@@ -131,7 +158,6 @@ Context for anyone picking up the backlog. These are delivered features, not pen
 
 - **Sanitize per-folder TODO documentation** — removed all 20 per-folder `TODOs.md`, the two global aggregators (`TODOs.md`, `TODOs_PRIORITIZED.md`) and the generator script `scripts/clean_todos.py`. Pending work now lives only in this file.
 - **Restore `capibara/` directory** — the `capibara/` tree (~14,600 LOC in 43 Python files covering VQ, SSM, `mvp_api`) was restored after being removed by mistake in commit `e164e01`.
-- **ISSUE-001 — `training`: remove remaining TPU consensus mocks** (2026-04-22, PR #124, `6a77c3f`) — random mock embeddings replaced by deterministic SHA256-based embeddings; metrics derived from real execution; CPU fallback kept. Test: `tests/integration/test_tpu_v6_consensus_optimizer.py`. Since 2026-07 the optimizer imports from `training.research.consensus` (`285200f`).
 - **ISSUE-002 — `training`: meta consensus still uses `mock_response`** (2026-04-23/29, PR #128, `4c2bac7`, `d01fc4f`) — `mock_response` / `mock_metrics` replaced by real downstream calls or explicit failure markers; hardcoded model paths moved to `MetaConsensusConfig`; bias and safety scores computed by heuristics instead of constants. Test: `tests/integration/test_meta_consensus_no_mocks.py`. The code now lives in `training/research/consensus/` (research, not canonical path).
 - **ISSUE-003 — `services/automation`: simulated routes in executor** (2026-04-23, PR #129, `22b7146`) — real `set` / `webhook` / `httpRequest` handlers (aiohttp), unknown node types return `status="unsupported"`, n8n service posts to the real `/api/v1/workflows/{id}/execute`. Test: `tests/integration/test_automation_no_simulation.py` (8/8). Leftover comments tracked in ISSUE-008.
 - **ISSUE-004 — `inference`: hybrid/quantized engines with simulated sections** (2026-04-23/29, PR #130, `df8ae03`, `6008114`) — real parameter loading (pickle/msgpack/orbax, `.npz`/`.safetensors`/`.pkl`) with no synthetic fallback; real multinomial sampling via `jax.random.categorical`; fake `asyncio.sleep` delays and hardcoded layer count removed. Test: `tests/integration/test_engines_no_mock_params.py` (8/8).
