@@ -55,6 +55,14 @@ try:
         ScalingRegime,
         ScalingLawPredictor,
         create_scaling_config,
+        TensorNetworkConfig,
+        DecompositionType,
+        CompressionTarget,
+        TensorTrainDecomposition,
+        TuckerDecomposition,
+        LayerCompressor,
+        ModelCompressor,
+        create_tensor_network_config,
     )
 except ImportError as e:
     MODULES_AVAILABLE = False
@@ -385,6 +393,122 @@ class TestScalingLaws:
         assert config.regime == ScalingRegime.INFERENCE_OPTIMAL
 
 
+class TestTensorNetworks:
+    """Tests for tensor network compression."""
+
+    def test_tensor_network_config_defaults(self):
+        """Test default configuration."""
+        config = TensorNetworkConfig()
+
+        assert config.decomposition == DecompositionType.TENSOR_TRAIN
+        assert config.target_compression_ratio == 0.5
+        assert config.max_rank == 256
+        assert CompressionTarget.FFN in config.target_layers
+
+    def test_decomposition_types(self):
+        """Test decomposition type enum."""
+        assert DecompositionType.TENSOR_TRAIN.value == "tt"
+        assert DecompositionType.TUCKER.value == "tucker"
+        assert DecompositionType.LOW_RANK_SPARSE.value == "lrs"
+
+    def test_compression_targets(self):
+        """Test compression target enum."""
+        assert CompressionTarget.ATTENTION.value == "attention"
+        assert CompressionTarget.FFN.value == "ffn"
+        assert CompressionTarget.MOE_EXPERTS.value == "moe"
+
+    def test_tensor_train_init(self):
+        """Test TensorTrain decomposition initialization."""
+        config = TensorNetworkConfig(max_rank=128)
+        tt = TensorTrainDecomposition(config)
+
+        assert tt.config.max_rank == 128
+
+    def test_tensor_train_mock_decompose(self):
+        """Test TT decomposition with mock tensor."""
+        config = TensorNetworkConfig(max_rank=64)
+        tt = TensorTrainDecomposition(config)
+
+        # Mock tensor (no numpy needed)
+        class MockTensor:
+            shape = (4096, 4096)
+
+        cores = tt.decompose(MockTensor())
+
+        assert len(cores) > 0
+        assert tt.original_shape == (4096, 4096)
+
+    def test_tucker_init(self):
+        """Test Tucker decomposition initialization."""
+        config = TensorNetworkConfig(decomposition=DecompositionType.TUCKER)
+        tucker = TuckerDecomposition(config)
+
+        assert tucker.config.decomposition == DecompositionType.TUCKER
+
+    def test_layer_compressor_init(self):
+        """Test layer compressor initialization."""
+        config = TensorNetworkConfig()
+        compressor = LayerCompressor(config)
+
+        assert compressor.tt is not None
+        assert compressor.tucker is not None
+
+    def test_model_compressor_init(self):
+        """Test model compressor initialization."""
+        config = TensorNetworkConfig(
+            target_compression_ratio=0.3,
+            target_layers=[CompressionTarget.ALL]
+        )
+        compressor = ModelCompressor(config)
+
+        assert compressor.config.target_compression_ratio == 0.3
+
+    def test_create_tensor_network_config_factory(self):
+        """Test factory function."""
+        config = create_tensor_network_config(
+            target_compression=0.4,
+            decomposition="tucker",
+            targets=["attention", "ffn"],
+            max_rank=128
+        )
+
+        assert config.target_compression_ratio == 0.4
+        assert config.decomposition == DecompositionType.TUCKER
+        assert config.max_rank == 128
+        assert CompressionTarget.ATTENTION in config.target_layers
+        assert CompressionTarget.FFN in config.target_layers
+
+    def test_tensor_train_compression_ratio(self):
+        """Test compression ratio calculation."""
+        config = TensorNetworkConfig(max_rank=32)
+        tt = TensorTrainDecomposition(config)
+
+        class MockTensor:
+            shape = (4096, 4096)
+
+        tt.decompose(MockTensor())
+        ratio = tt.compression_ratio()
+
+        # With max_rank=32, should achieve significant compression
+        assert ratio < 1.0
+
+    def test_tensor_train_stats(self):
+        """Test getting decomposition stats."""
+        config = TensorNetworkConfig()
+        tt = TensorTrainDecomposition(config)
+
+        class MockTensor:
+            shape = (1024, 1024)
+
+        tt.decompose(MockTensor())
+        stats = tt.get_stats()
+
+        assert "original_shape" in stats
+        assert "tt_shape" in stats
+        assert "ranks" in stats
+        assert "compression_ratio" in stats
+
+
 class TestIntegration:
     """Integration tests for advanced training modules."""
 
@@ -436,6 +560,56 @@ class TestIntegration:
         assert model_config.num_experts == 8
         assert scaling_config.tokens_per_param == 150.0
         assert len(alignment_config.objectives) == 3
+
+    def test_tensor_networks_with_pruning(self):
+        """Test tensor network compression with expert pruning."""
+        # Both can be used together for maximum compression
+        tn_config = create_tensor_network_config(
+            target_compression=0.5,
+            decomposition="tt",
+            targets=["ffn", "moe"]
+        )
+
+        pruning_config = create_pruning_config(
+            target_compression=0.5,
+            strategy="cluster"
+        )
+
+        # Combined compression: 0.5 * 0.5 = 0.25 (75% reduction)
+        combined_ratio = (
+            tn_config.target_compression_ratio *
+            pruning_config.target_expert_ratio
+        )
+
+        assert combined_ratio == 0.25
+        assert tn_config.decomposition == DecompositionType.TENSOR_TRAIN
+        assert pruning_config.strategy == PruningStrategy.CLUSTER_DRIVEN
+
+    def test_full_compression_pipeline(self):
+        """Test creating configs for full compression pipeline."""
+        # Step 1: Expert pruning (reduce experts)
+        pruning_config = create_pruning_config(
+            target_compression=0.5,  # 8 experts -> 4 experts
+            strategy="cluster"
+        )
+
+        # Step 2: Tensor network compression (compress weights)
+        tn_config = create_tensor_network_config(
+            target_compression=0.4,  # 60% weight reduction
+            decomposition="tt",
+            targets=["ffn", "attention"]
+        )
+
+        # Combined: model goes from 7B to ~1.4B effective params
+        # 7B * 0.5 (pruning) * 0.4 (TN) = 1.4B
+        effective_ratio = (
+            pruning_config.target_expert_ratio *
+            tn_config.target_compression_ratio
+        )
+
+        assert effective_ratio == 0.2  # 80% total compression
+        assert CompressionTarget.FFN in tn_config.target_layers
+        assert CompressionTarget.ATTENTION in tn_config.target_layers
 
 
 if __name__ == "__main__":

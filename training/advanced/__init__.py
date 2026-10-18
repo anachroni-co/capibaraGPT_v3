@@ -4,6 +4,7 @@ Advanced Training Techniques for CapibaraGPT.
 Includes:
 - Expert Pruning: Post-training MoE optimization
 - Scaling Laws: Inference-aware scaling configuration
+- Tensor Networks: Quantum-inspired compression
 """
 
 from .expert_pruning import (
@@ -28,6 +29,18 @@ from .scaling_laws import (
     print_scaling_report,
 )
 
+from .tensor_networks import (
+    TensorNetworkConfig,
+    DecompositionType,
+    CompressionTarget,
+    TensorTrainDecomposition,
+    TensorTrainCore,
+    TuckerDecomposition,
+    LayerCompressor,
+    ModelCompressor,
+    create_tensor_network_config,
+)
+
 __all__ = [
     # Expert Pruning
     'PruningConfig',
@@ -47,4 +60,14 @@ __all__ = [
     'InferenceOptimizer',
     'create_scaling_config',
     'print_scaling_report',
+    # Tensor Networks
+    'TensorNetworkConfig',
+    'DecompositionType',
+    'CompressionTarget',
+    'TensorTrainDecomposition',
+    'TensorTrainCore',
+    'TuckerDecomposition',
+    'LayerCompressor',
+    'ModelCompressor',
+    'create_tensor_network_config',
 ]
