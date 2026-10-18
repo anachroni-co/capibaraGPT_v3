@@ -272,18 +272,32 @@ class TensorTrainDecomposition:
         if not self.cores or self.cores[0].data is None:
             return None
 
-        # Contract all cores
-        result = self.cores[0].data
+        # Contract all cores using einsum for correctness
+        # TT format: A[i1,...,id] = sum_r G1[1,i1,r1] * G2[r1,i2,r2] * ... * Gd[rd-1,id,1]
+
+        # Start with first core: shape (1, n1, r1) -> (n1, r1)
+        result = self.cores[0].data.squeeze(0)  # (n1, r1)
 
         for core in self.cores[1:]:
-            # Reshape for matrix multiplication
-            r_left = result.shape[-1]
-            result = result.reshape(-1, r_left)
+            # core shape: (r_prev, n_k, r_k)
+            # result shape: (n1*n2*...*n_{k-1}, r_prev)
+            # Want: (n1*...*n_k, r_k)
 
-            core_mat = core.data.reshape(core.left_rank, -1)
-            result = result @ core_mat
+            r_prev = result.shape[-1]
+            n_k = core.mode_size
+            r_k = core.right_rank
 
-        # Reshape to original
+            # Contract over the rank dimension
+            # result: (..., r_prev), core: (r_prev, n_k, r_k)
+            # -> (..., n_k, r_k) -> (...*n_k, r_k)
+            result = np.tensordot(result, core.data, axes=([-1], [0]))
+            # Flatten all but last dimension
+            result = result.reshape(-1, r_k)
+
+        # Remove final rank dimension (should be 1)
+        result = result.squeeze(-1)
+
+        # Reshape to TT shape then original shape
         result = result.reshape(self.tt_shape)
 
         if self.original_shape != self.tt_shape:
