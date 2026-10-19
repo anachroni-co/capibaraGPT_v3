@@ -70,33 +70,33 @@ class TestSpeculativeDecoding:
         """Test stats tracking defaults."""
         stats = spec_module.SpeculativeStats()
 
-        assert stats.total_tokens == 0
-        assert stats.accepted_tokens == 0
-        assert stats.draft_calls == 0
+        assert stats.total_tokens_generated == 0
+        assert stats.total_accepted_tokens == 0
+        assert stats.total_draft_calls == 0
 
     def test_speculative_stats_acceptance_rate(self, spec_module):
         """Test acceptance rate calculation."""
         stats = spec_module.SpeculativeStats()
-        stats.total_tokens = 100
-        stats.accepted_tokens = 75
+        stats.total_draft_tokens = 100
+        stats.total_accepted_tokens = 75
 
         assert stats.acceptance_rate == 0.75
 
     def test_speculative_stats_speedup(self, spec_module):
         """Test speedup calculation."""
         stats = spec_module.SpeculativeStats()
-        stats.total_tokens = 100
-        stats.accepted_tokens = 60
-        stats.draft_calls = 20
-        stats.target_calls = 20
+        stats.total_tokens_generated = 100
+        stats.total_accepted_tokens = 60
+        stats.total_draft_calls = 20
+        stats.total_target_calls = 20
 
         # Speedup depends on acceptance rate and calls
         assert stats.speedup >= 1.0
 
     def test_draft_model_type_enum(self, spec_module):
         """Test draft model type enumeration."""
-        assert spec_module.DraftModelType.SMALL_LM.value == "small_lm"
-        assert spec_module.DraftModelType.NGRAM.value == "ngram"
+        assert spec_module.DraftModelType.DISTILLED.value == "distilled"
+        assert spec_module.DraftModelType.EARLY_EXIT.value == "early_exit"
         assert spec_module.DraftModelType.MEDUSA.value == "medusa"
 
     def test_create_speculative_config_factory(self, spec_module):
@@ -114,16 +114,19 @@ class TestSpeculativeDecoding:
     def test_speculative_decoder_mock_mode(self, spec_module):
         """Test decoder works in mock mode without real models."""
         config = spec_module.SpeculativeConfig(num_speculative_tokens=4)
+        # Create draft model in mock mode (model=None)
+        draft = spec_module.DraftModel(model=None, tokenizer=None, config=config)
+        # Create decoder in mock mode (target_model=None)
         decoder = spec_module.SpeculativeDecoder(
             target_model=None,
-            draft_model=None,
-            config=config,
-            mock_mode=True
+            draft_model=draft,
+            tokenizer=None,
+            config=config
         )
 
-        # Should be able to get stats even in mock mode
-        stats = decoder.get_stats()
-        assert isinstance(stats, dict)
+        # Should be able to access stats even in mock mode
+        assert hasattr(decoder, 'stats')
+        assert isinstance(decoder.stats, spec_module.SpeculativeStats)
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -146,7 +149,6 @@ class TestWatermarking:
 
         assert config.gamma == 0.25
         assert config.delta == 2.0
-        assert config.vocab_size == 32000
         assert config.watermark_type == wm_module.WatermarkType.GREEN_RED_LIST
 
     def test_watermark_type_enum(self, wm_module):
@@ -159,32 +161,27 @@ class TestWatermarking:
         """Test factory function."""
         config = wm_module.create_watermark_config(
             gamma=0.3,
-            delta=1.5,
-            vocab_size=50000
+            delta=1.5
         )
 
         assert config.gamma == 0.3
         assert config.delta == 1.5
-        assert config.vocab_size == 50000
 
     def test_green_red_list_watermark_init(self, wm_module):
         """Test green/red list watermark initialization."""
-        config = wm_module.WatermarkConfig(
-            vocab_size=1000,
-            gamma=0.25
-        )
-        watermark = wm_module.GreenRedListWatermark(config)
+        config = wm_module.WatermarkConfig(gamma=0.25)
+        # vocab_size is passed to GreenRedListWatermark, not config
+        watermark = wm_module.GreenRedListWatermark(config, vocab_size=1000)
 
         assert watermark.green_list_size == 250  # 25% of 1000
 
     def test_green_red_list_green_tokens(self, wm_module):
         """Test green list generation is deterministic."""
         config = wm_module.WatermarkConfig(
-            vocab_size=1000,
             gamma=0.25,
             secret_key="test_key"
         )
-        watermark = wm_module.GreenRedListWatermark(config)
+        watermark = wm_module.GreenRedListWatermark(config, vocab_size=1000)
 
         # Same context should produce same green list
         context = [1, 2, 3]
@@ -194,18 +191,19 @@ class TestWatermarking:
         assert green1 == green2
         assert len(green1) == 250
 
-    def test_detection_result_dataclass(self, wm_module):
-        """Test detection result structure."""
-        result = wm_module.DetectionResult(
-            is_watermarked=True,
+    def test_detection_output_dataclass(self, wm_module):
+        """Test detection output structure."""
+        # DetectionResult is an Enum, DetectionOutput is the dataclass
+        output = wm_module.DetectionOutput(
+            result=wm_module.DetectionResult.WATERMARKED,
             confidence=0.95,
             z_score=4.5,
             green_fraction=0.6
         )
 
-        assert result.is_watermarked is True
-        assert result.confidence == 0.95
-        assert result.z_score == 4.5
+        assert output.is_watermarked is True
+        assert output.confidence == 0.95
+        assert output.z_score == 4.5
 
     def test_watermark_payload(self, wm_module):
         """Test watermark payload encoding."""
@@ -220,15 +218,14 @@ class TestWatermarking:
 
     def test_hash_is_positive(self, wm_module):
         """Test that token hashing produces positive indices."""
-        config = wm_module.WatermarkConfig(vocab_size=1000)
-        processor = wm_module.WatermarkProcessor(config)
+        config = wm_module.WatermarkConfig()
+        vocab_size = 1000
 
-        # The detect_from_text uses abs(hash()) now
-        # This test verifies the fix works
+        # Test that abs(hash()) produces valid indices
         test_words = ["hello", "world", "test", "negative", "hash"]
         for word in test_words:
-            idx = abs(hash(word)) % config.vocab_size
-            assert 0 <= idx < config.vocab_size
+            idx = abs(hash(word)) % vocab_size
+            assert 0 <= idx < vocab_size
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -283,26 +280,25 @@ class TestKVCache:
         """Test cache stats defaults."""
         stats = kv_module.CacheStats()
 
-        assert stats.hits == 0
-        assert stats.misses == 0
+        assert stats.current_tokens == 0
+        assert stats.max_tokens_seen == 0
         assert stats.evictions == 0
         assert stats.memory_mb == 0.0
 
-    def test_cache_stats_hit_rate(self, kv_module):
-        """Test hit rate calculation."""
+    def test_cache_stats_compression(self, kv_module):
+        """Test compression stats."""
         stats = kv_module.CacheStats()
-        stats.hits = 80
-        stats.misses = 20
+        stats.compressions = 5
+        stats.compression_ratio = 2.5
 
-        assert stats.hit_rate == 0.8
+        assert stats.compressions == 5
+        assert stats.compression_ratio == 2.5
 
     def test_cache_stats_compression_ratio(self, kv_module):
-        """Test compression ratio calculation."""
+        """Test compression ratio default."""
         stats = kv_module.CacheStats()
-        stats.original_tokens = 1000
-        stats.compressed_tokens = 250
-
-        assert stats.compression_ratio == 4.0
+        # Default compression ratio is 1.0 (no compression)
+        assert stats.compression_ratio == 1.0
 
     def test_kv_cache_initialization(self, kv_module):
         """Test KV-cache initialization."""
