@@ -16,153 +16,21 @@ from typing import Optional, List, Tuple, Any, Dict
 from enum import Enum
 import logging
 
+try:
+    from capibara.utils.backends import get_backend
+except ImportError:
+    # Fallback for direct module loading (tests)
+    import sys
+    from pathlib import Path
+    _utils_path = Path(__file__).parent.parent / 'utils'
+    if str(_utils_path) not in sys.path:
+        sys.path.insert(0, str(_utils_path))
+    from backends import get_backend
+
 logger = logging.getLogger(__name__)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Tensor Backend Helper - Avoids repeated try/except numpy/torch blocks
-# ═══════════════════════════════════════════════════════════════════════════════
-
-class TensorBackend:
-    """
-    Unified tensor operations for numpy and torch.
-
-    Detects available backend once and provides consistent interface.
-    """
-
-    _instance = None
-    _np = None
-    _torch = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._init_backends()
-        return cls._instance
-
-    def _init_backends(self):
-        """Initialize available backends."""
-        try:
-            import numpy as np
-            self._np = np
-        except ImportError:
-            self._np = None
-
-        try:
-            import torch
-            self._torch = torch
-        except ImportError:
-            self._torch = None
-
-    @property
-    def has_numpy(self) -> bool:
-        return self._np is not None
-
-    @property
-    def has_torch(self) -> bool:
-        return self._torch is not None
-
-    def is_numpy(self, tensor: Any) -> bool:
-        """Check if tensor is numpy array."""
-        return self._np is not None and isinstance(tensor, self._np.ndarray)
-
-    def is_torch(self, tensor: Any) -> bool:
-        """Check if tensor is torch tensor."""
-        return self._torch is not None and hasattr(tensor, 'is_cuda')
-
-    def concat(self, a: Any, b: Any, dim: int = 2) -> Any:
-        """Concatenate tensors along dimension."""
-        if self.is_numpy(a):
-            return self._np.concatenate([a, b], axis=dim)
-        elif self.is_torch(a):
-            return self._torch.cat([a, b], dim=dim)
-        return b
-
-    def slice(self, tensor: Any, start: int, end: int, dim: int = 2) -> Any:
-        """Slice tensor along dimension."""
-        if tensor is None:
-            return None
-        if self.is_numpy(tensor):
-            if dim == 2:
-                return tensor[:, :, start:end, :]
-            return tensor
-        elif self.is_torch(tensor):
-            if dim == 2:
-                return tensor[:, :, start:end, :]
-            return tensor
-        return tensor
-
-    def index(self, tensor: Any, indices: List[int], dim: int = 2) -> Any:
-        """Index tensor along dimension."""
-        if tensor is None:
-            return None
-        if self.is_numpy(tensor):
-            return tensor[:, :, indices, :]
-        elif self.is_torch(tensor):
-            return tensor[:, :, indices, :]
-        return tensor
-
-    def zeros_like(self, tensor: Any) -> Any:
-        """Create zeros with same shape/type."""
-        if self.is_numpy(tensor):
-            return self._np.zeros_like(tensor)
-        elif self.is_torch(tensor):
-            return self._torch.zeros_like(tensor)
-        return None
-
-    def get_shape(self, tensor: Any, dim: int) -> int:
-        """Get size along dimension."""
-        if tensor is None:
-            return 0
-        if hasattr(tensor, 'shape'):
-            return tensor.shape[dim]
-        return 0
-
-    def average_pool(self, tensor: Any, factor: int, dim: int = 2) -> Any:
-        """Average pool along dimension."""
-        if tensor is None or factor <= 1:
-            return tensor
-
-        if self.is_numpy(tensor):
-            # Pool along sequence dimension
-            seq_len = tensor.shape[dim]
-            new_len = seq_len // factor
-            if new_len == 0:
-                return tensor
-
-            # Reshape and mean
-            shape = list(tensor.shape)
-            shape[dim] = new_len
-            shape.insert(dim + 1, factor)
-            reshaped = tensor[:, :, :new_len * factor, :].reshape(shape)
-            return reshaped.mean(axis=dim + 1)
-
-        elif self.is_torch(tensor):
-            seq_len = tensor.shape[dim]
-            new_len = seq_len // factor
-            if new_len == 0:
-                return tensor
-
-            shape = list(tensor.shape)
-            shape[dim] = new_len
-            shape.insert(dim + 1, factor)
-            reshaped = tensor[:, :, :new_len * factor, :].reshape(shape)
-            return reshaped.mean(dim=dim + 1)
-
-        return tensor
-
-    def percentile(self, array: Any, p: float) -> float:
-        """Compute percentile."""
-        if self.is_numpy(array):
-            return float(self._np.percentile(array, p))
-        elif self.is_torch(array):
-            k = int((1 - p / 100) * len(array))
-            return float(self._torch.kthvalue(array.flatten(), k).values)
-        return 0.0
-
-
-# Global backend instance
-_backend = TensorBackend()
+# Use shared tensor backend
+_backend = get_backend()
 
 
 class CompressionStrategy(Enum):

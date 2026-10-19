@@ -21,45 +21,18 @@ import logging
 import time
 import json
 
+try:
+    from capibara.utils.backends import boost_logits as _boost_logits
+except ImportError:
+    # Fallback for direct module loading (tests)
+    import sys
+    from pathlib import Path
+    _utils_path = Path(__file__).parent.parent / 'utils'
+    if str(_utils_path) not in sys.path:
+        sys.path.insert(0, str(_utils_path))
+    from backends import boost_logits as _boost_logits
+
 logger = logging.getLogger(__name__)
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# Logit Boosting Helper - Shared by Green/Red and Multi-bit watermarks
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def _boost_logits(
-    logits: Any,
-    token_ids: Set[int],
-    delta: float
-) -> Any:
-    """
-    Boost logits for specified token IDs.
-
-    Args:
-        logits: Token logits (1D or 2D array)
-        token_ids: Set of token IDs to boost
-        delta: Amount to add to logits
-
-    Returns:
-        Modified logits with boosted tokens
-    """
-    try:
-        import numpy as np
-
-        modified = logits.copy()
-        is_batched = len(modified.shape) > 1
-
-        for token_id in token_ids:
-            if is_batched:
-                modified[:, token_id] += delta
-            else:
-                modified[token_id] += delta
-
-        return modified
-
-    except ImportError:
-        return logits
 
 
 class WatermarkType(Enum):
