@@ -24,6 +24,44 @@ import json
 logger = logging.getLogger(__name__)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Logit Boosting Helper - Shared by Green/Red and Multi-bit watermarks
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _boost_logits(
+    logits: Any,
+    token_ids: Set[int],
+    delta: float
+) -> Any:
+    """
+    Boost logits for specified token IDs.
+
+    Args:
+        logits: Token logits (1D or 2D array)
+        token_ids: Set of token IDs to boost
+        delta: Amount to add to logits
+
+    Returns:
+        Modified logits with boosted tokens
+    """
+    try:
+        import numpy as np
+
+        modified = logits.copy()
+        is_batched = len(modified.shape) > 1
+
+        for token_id in token_ids:
+            if is_batched:
+                modified[:, token_id] += delta
+            else:
+                modified[token_id] += delta
+
+        return modified
+
+    except ImportError:
+        return logits
+
+
 class WatermarkType(Enum):
     """Types of watermarking schemes."""
     GREEN_RED_LIST = "green_red"      # Token biasing (Kirchenbauer)
@@ -231,25 +269,7 @@ class GreenRedListWatermark:
             Modified logits with green tokens boosted
         """
         green_list = self._get_green_list(context_tokens)
-
-        try:
-            import numpy as np
-
-            # Handle batched or unbatched
-            if len(logits.shape) == 1:
-                modified = logits.copy()
-                for token_id in green_list:
-                    modified[token_id] += self.config.delta
-            else:
-                modified = logits.copy()
-                for token_id in green_list:
-                    modified[:, token_id] += self.config.delta
-
-            return modified
-
-        except ImportError:
-            # Return unmodified if numpy not available
-            return logits
+        return _boost_logits(logits, green_list, self.config.delta)
 
     def detect(
         self,
@@ -386,30 +406,13 @@ class MultiBitWatermark:
         # Get green list
         green_list = self.base_watermark._get_green_list(context_tokens)
 
-        try:
-            import numpy as np
-
-            modified = logits.copy()
-
-            # Bit 0: boost green, Bit 1: boost red (inverted)
-            if bit == 0:
-                for token_id in green_list:
-                    if len(modified.shape) == 1:
-                        modified[token_id] += self.config.delta
-                    else:
-                        modified[:, token_id] += self.config.delta
-            else:
-                for token_id in range(self.vocab_size):
-                    if token_id not in green_list:
-                        if len(modified.shape) == 1:
-                            modified[token_id] += self.config.delta
-                        else:
-                            modified[:, token_id] += self.config.delta
-
-            return modified
-
-        except ImportError:
-            return logits
+        # Bit 0: boost green, Bit 1: boost red (inverted)
+        if bit == 0:
+            return _boost_logits(logits, green_list, self.config.delta)
+        else:
+            # Red list = all tokens not in green list
+            red_list = {i for i in range(self.vocab_size) if i not in green_list}
+            return _boost_logits(logits, red_list, self.config.delta)
 
     def detect_and_extract(
         self,

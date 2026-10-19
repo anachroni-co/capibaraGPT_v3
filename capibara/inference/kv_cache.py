@@ -19,6 +19,152 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Tensor Backend Helper - Avoids repeated try/except numpy/torch blocks
+# ═══════════════════════════════════════════════════════════════════════════════
+
+class TensorBackend:
+    """
+    Unified tensor operations for numpy and torch.
+
+    Detects available backend once and provides consistent interface.
+    """
+
+    _instance = None
+    _np = None
+    _torch = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance._init_backends()
+        return cls._instance
+
+    def _init_backends(self):
+        """Initialize available backends."""
+        try:
+            import numpy as np
+            self._np = np
+        except ImportError:
+            self._np = None
+
+        try:
+            import torch
+            self._torch = torch
+        except ImportError:
+            self._torch = None
+
+    @property
+    def has_numpy(self) -> bool:
+        return self._np is not None
+
+    @property
+    def has_torch(self) -> bool:
+        return self._torch is not None
+
+    def is_numpy(self, tensor: Any) -> bool:
+        """Check if tensor is numpy array."""
+        return self._np is not None and isinstance(tensor, self._np.ndarray)
+
+    def is_torch(self, tensor: Any) -> bool:
+        """Check if tensor is torch tensor."""
+        return self._torch is not None and hasattr(tensor, 'is_cuda')
+
+    def concat(self, a: Any, b: Any, dim: int = 2) -> Any:
+        """Concatenate tensors along dimension."""
+        if self.is_numpy(a):
+            return self._np.concatenate([a, b], axis=dim)
+        elif self.is_torch(a):
+            return self._torch.cat([a, b], dim=dim)
+        return b
+
+    def slice(self, tensor: Any, start: int, end: int, dim: int = 2) -> Any:
+        """Slice tensor along dimension."""
+        if tensor is None:
+            return None
+        if self.is_numpy(tensor):
+            if dim == 2:
+                return tensor[:, :, start:end, :]
+            return tensor
+        elif self.is_torch(tensor):
+            if dim == 2:
+                return tensor[:, :, start:end, :]
+            return tensor
+        return tensor
+
+    def index(self, tensor: Any, indices: List[int], dim: int = 2) -> Any:
+        """Index tensor along dimension."""
+        if tensor is None:
+            return None
+        if self.is_numpy(tensor):
+            return tensor[:, :, indices, :]
+        elif self.is_torch(tensor):
+            return tensor[:, :, indices, :]
+        return tensor
+
+    def zeros_like(self, tensor: Any) -> Any:
+        """Create zeros with same shape/type."""
+        if self.is_numpy(tensor):
+            return self._np.zeros_like(tensor)
+        elif self.is_torch(tensor):
+            return self._torch.zeros_like(tensor)
+        return None
+
+    def get_shape(self, tensor: Any, dim: int) -> int:
+        """Get size along dimension."""
+        if tensor is None:
+            return 0
+        if hasattr(tensor, 'shape'):
+            return tensor.shape[dim]
+        return 0
+
+    def average_pool(self, tensor: Any, factor: int, dim: int = 2) -> Any:
+        """Average pool along dimension."""
+        if tensor is None or factor <= 1:
+            return tensor
+
+        if self.is_numpy(tensor):
+            # Pool along sequence dimension
+            seq_len = tensor.shape[dim]
+            new_len = seq_len // factor
+            if new_len == 0:
+                return tensor
+
+            # Reshape and mean
+            shape = list(tensor.shape)
+            shape[dim] = new_len
+            shape.insert(dim + 1, factor)
+            reshaped = tensor[:, :, :new_len * factor, :].reshape(shape)
+            return reshaped.mean(axis=dim + 1)
+
+        elif self.is_torch(tensor):
+            seq_len = tensor.shape[dim]
+            new_len = seq_len // factor
+            if new_len == 0:
+                return tensor
+
+            shape = list(tensor.shape)
+            shape[dim] = new_len
+            shape.insert(dim + 1, factor)
+            reshaped = tensor[:, :, :new_len * factor, :].reshape(shape)
+            return reshaped.mean(dim=dim + 1)
+
+        return tensor
+
+    def percentile(self, array: Any, p: float) -> float:
+        """Compute percentile."""
+        if self.is_numpy(array):
+            return float(self._np.percentile(array, p))
+        elif self.is_torch(array):
+            k = int((1 - p / 100) * len(array))
+            return float(self._torch.kthvalue(array.flatten(), k).values)
+        return 0.0
+
+
+# Global backend instance
+_backend = TensorBackend()
+
+
 class CompressionStrategy(Enum):
     """KV-cache compression strategies."""
     NONE = "none"                      # No compression
@@ -206,30 +352,11 @@ class KVCache:
 
     def _concat(self, cached: Any, new: Any) -> Any:
         """Concatenate cached and new tensors."""
-        try:
-            import numpy as np
-            if isinstance(cached, np.ndarray):
-                return np.concatenate([cached, new], axis=2)
-        except ImportError:
-            pass
-
-        try:
-            import torch
-            if isinstance(cached, torch.Tensor):
-                return torch.cat([cached, new], dim=2)
-        except ImportError:
-            pass
-
-        return new
+        return _backend.concat(cached, new, dim=2)
 
     def _get_cache_len(self, layer_idx: int) -> int:
         """Get current cache length."""
-        if self.keys[layer_idx] is None:
-            return 0
-
-        if hasattr(self.keys[layer_idx], 'shape'):
-            return self.keys[layer_idx].shape[2]
-        return 0
+        return _backend.get_shape(self.keys[layer_idx], dim=2)
 
     def _compress_cache(self, layer_idx: int) -> None:
         """Apply compression strategy to cache."""
@@ -295,48 +422,45 @@ class KVCache:
         evicting tokens that are rarely attended to.
         """
         if self.attention_scores[layer_idx] is None:
-            # Fallback to sliding window
             self._apply_sliding_window(layer_idx)
             return
 
-        try:
-            import numpy as np
-
-            scores = self.attention_scores[layer_idx]
-            cache_len = self._get_cache_len(layer_idx)
-
-            # Number of tokens to keep
-            keep_count = int(cache_len * self.config.heavy_hitter_ratio)
-            keep_count = max(keep_count, self.config.num_sink_tokens + self.config.window_size // 2)
-
-            # Always keep sinks
-            sinks = self.config.num_sink_tokens
-
-            # Find heavy hitters (excluding sinks and recent)
-            recent = min(self.config.window_size // 2, cache_len // 4)
-            middle_scores = scores[sinks:-recent] if cache_len > sinks + recent else scores[sinks:]
-
-            if len(middle_scores) > 0:
-                threshold = np.percentile(middle_scores, 100 - self.config.heavy_hitter_ratio * 100)
-                heavy_hitter_mask = middle_scores >= threshold
-
-                # Build keep indices
-                keep_indices = list(range(sinks))  # Sinks
-                keep_indices.extend([i + sinks for i, keep in enumerate(heavy_hitter_mask) if keep])
-                keep_indices.extend(range(cache_len - recent, cache_len))  # Recent
-                keep_indices = sorted(set(keep_indices))
-
-                # Apply mask
-                self.keys[layer_idx] = self._index_cache(self.keys[layer_idx], keep_indices)
-                self.values[layer_idx] = self._index_cache(self.values[layer_idx], keep_indices)
-                self.attention_scores[layer_idx] = scores[keep_indices]
-
-                self.stats.heavy_hitters = len(keep_indices)
-
-            self.stats.evictions += 1
-
-        except ImportError:
+        if not _backend.has_numpy and not _backend.has_torch:
             self._apply_sliding_window(layer_idx)
+            return
+
+        scores = self.attention_scores[layer_idx]
+        cache_len = self._get_cache_len(layer_idx)
+
+        # Number of tokens to keep
+        keep_count = int(cache_len * self.config.heavy_hitter_ratio)
+        keep_count = max(keep_count, self.config.num_sink_tokens + self.config.window_size // 2)
+
+        # Always keep sinks
+        sinks = self.config.num_sink_tokens
+
+        # Find heavy hitters (excluding sinks and recent)
+        recent = min(self.config.window_size // 2, cache_len // 4)
+        middle_scores = scores[sinks:-recent] if cache_len > sinks + recent else scores[sinks:]
+
+        if len(middle_scores) > 0:
+            threshold = _backend.percentile(middle_scores, 100 - self.config.heavy_hitter_ratio * 100)
+            heavy_hitter_mask = middle_scores >= threshold
+
+            # Build keep indices
+            keep_indices = list(range(sinks))  # Sinks
+            keep_indices.extend([i + sinks for i, keep in enumerate(heavy_hitter_mask) if keep])
+            keep_indices.extend(range(cache_len - recent, cache_len))  # Recent
+            keep_indices = sorted(set(keep_indices))
+
+            # Apply mask
+            self.keys[layer_idx] = self._index_cache(self.keys[layer_idx], keep_indices)
+            self.values[layer_idx] = self._index_cache(self.values[layer_idx], keep_indices)
+            self.attention_scores[layer_idx] = scores[keep_indices]
+
+            self.stats.heavy_hitters = len(keep_indices)
+
+        self.stats.evictions += 1
 
     def _apply_pyramid(self, layer_idx: int) -> None:
         """
@@ -345,43 +469,43 @@ class KVCache:
         Recent tokens: full resolution
         Older tokens: averaged/compressed representations
         """
-        try:
-            import numpy as np
-
-            cache_len = self._get_cache_len(layer_idx)
-            levels = self.config.pyramid_levels
-            ratio = self.config.pyramid_ratio
-
-            # Divide cache into levels
-            level_size = cache_len // levels
-
-            new_keys = []
-            new_values = []
-
-            for level in range(levels):
-                start = level * level_size
-                end = (level + 1) * level_size if level < levels - 1 else cache_len
-
-                level_keys = self._slice_cache(self.keys[layer_idx], start, end)
-                level_values = self._slice_cache(self.values[layer_idx], start, end)
-
-                # Compress older levels more
-                compression = int(1 / (ratio ** (levels - level - 1)))
-                if compression > 1 and level < levels - 1:
-                    level_keys = self._average_pool(level_keys, compression)
-                    level_values = self._average_pool(level_values, compression)
-
-                new_keys.append(level_keys)
-                new_values.append(level_values)
-
-            # Concatenate all levels
-            self.keys[layer_idx] = self._concat_list(new_keys)
-            self.values[layer_idx] = self._concat_list(new_values)
-
-            self.stats.compressions += 1
-
-        except ImportError:
+        if not _backend.has_numpy and not _backend.has_torch:
             self._apply_sliding_window(layer_idx)
+            return
+
+        cache_len = self._get_cache_len(layer_idx)
+        levels = self.config.pyramid_levels
+        ratio = self.config.pyramid_ratio
+
+        # Divide cache into levels
+        level_size = cache_len // levels
+        if level_size == 0:
+            return
+
+        new_keys = []
+        new_values = []
+
+        for level in range(levels):
+            start = level * level_size
+            end = (level + 1) * level_size if level < levels - 1 else cache_len
+
+            level_keys = self._slice_cache(self.keys[layer_idx], start, end)
+            level_values = self._slice_cache(self.values[layer_idx], start, end)
+
+            # Compress older levels more
+            compression = int(1 / (ratio ** (levels - level - 1)))
+            if compression > 1 and level < levels - 1:
+                level_keys = self._average_pool(level_keys, compression)
+                level_values = self._average_pool(level_values, compression)
+
+            new_keys.append(level_keys)
+            new_values.append(level_values)
+
+        # Concatenate all levels
+        self.keys[layer_idx] = self._concat_list(new_keys)
+        self.values[layer_idx] = self._concat_list(new_values)
+
+        self.stats.compressions += 1
 
     def _apply_dynamic(self, layer_idx: int) -> None:
         """
@@ -443,60 +567,17 @@ class KVCache:
         end: Optional[int] = None
     ) -> Any:
         """Slice cache along sequence dimension."""
-        try:
-            import numpy as np
-            if isinstance(cache, np.ndarray):
-                if end is None:
-                    return cache[:, :, start:, :]
-                return cache[:, :, start:end, :]
-        except ImportError:
-            pass
-
-        try:
-            import torch
-            if isinstance(cache, torch.Tensor):
-                if end is None:
-                    return cache[:, :, start:, :]
-                return cache[:, :, start:end, :]
-        except ImportError:
-            pass
-
-        return cache
+        if end is None:
+            end = _backend.get_shape(cache, dim=2)
+        return _backend.slice(cache, start, end, dim=2)
 
     def _index_cache(self, cache: Any, indices: List[int]) -> Any:
         """Index cache with specific positions."""
-        try:
-            import numpy as np
-            if isinstance(cache, np.ndarray):
-                return cache[:, :, indices, :]
-        except ImportError:
-            pass
-
-        try:
-            import torch
-            if isinstance(cache, torch.Tensor):
-                return cache[:, :, indices, :]
-        except ImportError:
-            pass
-
-        return cache
+        return _backend.index(cache, indices, dim=2)
 
     def _average_pool(self, cache: Any, factor: int) -> Any:
         """Average pool cache to compress."""
-        try:
-            import numpy as np
-            if isinstance(cache, np.ndarray):
-                # [batch, heads, seq, dim]
-                seq_len = cache.shape[2]
-                new_len = seq_len // factor
-                reshaped = cache[:, :, :new_len * factor, :].reshape(
-                    cache.shape[0], cache.shape[1], new_len, factor, cache.shape[3]
-                )
-                return reshaped.mean(axis=3)
-        except ImportError:
-            pass
-
-        return cache
+        return _backend.average_pool(cache, factor, dim=2)
 
     def _concat_list(self, caches: List[Any]) -> Any:
         """Concatenate list of caches."""
