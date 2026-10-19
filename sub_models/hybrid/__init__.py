@@ -1,5 +1,5 @@
 """
-Hybrid Attention Module for CapibaraGPT-v2.
+Hybrid Attention Module for CapibaraGPT v3.
 
 Módulo híbrido inteligente que selecciona automáticamente entre:
 - Transformer (O(n²)) para secuencias cortas (mejor precisión)

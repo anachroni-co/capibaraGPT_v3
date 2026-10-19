@@ -16,6 +16,10 @@ import json
 import time
 from dataclasses import dataclass, asdict
 
+from .web_scraper import WebScrapingDownloader
+from .api_downloader import APIDownloader
+from .direct_downloader import DirectDownloader
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -64,6 +68,11 @@ class DownloadOrchestrator:
         self.active_downloads: Dict[str, DownloadTask] = {}
         self.completed_downloads: List[DownloadTask] = []
         self.failed_downloads: List[DownloadTask] = []
+
+        download_cfg = config.get("download", {})
+        self.web_scraper = WebScrapingDownloader(download_cfg.get("web", {}))
+        self.api_downloader = APIDownloader(download_cfg.get("api", {}))
+        self.direct_downloader = DirectDownloader(download_cfg.get("direct", {}))
         
         # Performance tracking
         self.stats = DownloadStats()
@@ -84,26 +93,32 @@ class DownloadOrchestrator:
     
     def add_spanish_news_tasks(self) -> List[str]:
         """Add Spanish news scraping tasks."""
+        download_cfg = self.config.get("download", {})
+        source_urls = download_cfg.get("spanish_news", {}).get("source_urls", {})
         news_sources = [
             {
                 "name": "elpais",
                 "estimated_size": 2.0,
-                "priority": 1
+                "priority": 1,
+                "urls": source_urls.get("elpais", ["https://elpais.com/"]),
             },
             {
                 "name": "elmundo", 
                 "estimated_size": 1.8,
-                "priority": 1
+                "priority": 1,
+                "urls": source_urls.get("elmundo", ["https://www.elmundo.es/"]),
             },
             {
                 "name": "abc",
                 "estimated_size": 1.5,
-                "priority": 1
+                "priority": 1,
+                "urls": source_urls.get("abc", ["https://www.abc.es/"]),
             },
             {
                 "name": "lavanguardia",
                 "estimated_size": 1.2,
-                "priority": 2
+                "priority": 2,
+                "urls": source_urls.get("lavanguardia", ["https://www.lavanguardia.com/"]),
             }
         ]
         
@@ -117,6 +132,7 @@ class DownloadOrchestrator:
                 priority=source["priority"],
                 estimated_size_gb=source["estimated_size"],
                 metadata={
+                    "seed_urls": source["urls"],
                     "categories": ["politica", "economia", "tecnologia", "cultura", "sociedad"],
                     "max_articles_per_category": 1000,
                     "date_range_days": 30
@@ -130,21 +146,26 @@ class DownloadOrchestrator:
     
     def add_academic_tasks(self) -> List[str]:
         """Add Spanish academic repository tasks."""
+        download_cfg = self.config.get("download", {})
+        source_urls = download_cfg.get("spanish_academic", {}).get("source_urls", {})
         academic_sources = [
             {
                 "name": "dialnet",
                 "estimated_size": 3.5,
-                "priority": 1
+                "priority": 1,
+                "urls": source_urls.get("dialnet", ["https://dialnet.unirioja.es/"]),
             },
             {
                 "name": "redalyc",
                 "estimated_size": 2.8,
-                "priority": 1
+                "priority": 1,
+                "urls": source_urls.get("redalyc", ["https://www.redalyc.org/"]),
             },
             {
                 "name": "scielo_es",
                 "estimated_size": 2.2,
-                "priority": 2
+                "priority": 2,
+                "urls": source_urls.get("scielo_es", ["https://scielo.isciii.es/"]),
             }
         ]
         
@@ -158,6 +179,7 @@ class DownloadOrchestrator:
                 priority=source["priority"],
                 estimated_size_gb=source["estimated_size"],
                 metadata={
+                    "seed_urls": source["urls"],
                     "fields": ["computer_science", "mathematics", "physics", "engineering"],
                     "max_papers_per_field": 5000,
                     "include_abstracts": True,
@@ -172,21 +194,35 @@ class DownloadOrchestrator:
     
     def add_api_tasks(self) -> List[str]:
         """Add API-based download tasks."""
+        download_cfg = self.config.get("download", {})
+        api_urls = download_cfg.get("api_data", {}).get("endpoints", {})
         api_sources = [
             {
                 "name": "boe_legal",
                 "estimated_size": 1.0,
-                "priority": 1
+                "priority": 1,
+                "endpoint": api_urls.get(
+                    "boe_legal",
+                    "https://www.boe.es/datosabiertos/api/boe/sumario/20240101",
+                ),
             },
             {
                 "name": "huggingface_spanish",
                 "estimated_size": 5.0,
-                "priority": 1
+                "priority": 1,
+                "endpoint": api_urls.get(
+                    "huggingface_spanish",
+                    "https://huggingface.co/api/datasets?limit=50",
+                ),
             },
             {
                 "name": "wikipedia_es_dumps",
                 "estimated_size": 8.0,
-                "priority": 2
+                "priority": 2,
+                "endpoint": api_urls.get(
+                    "wikipedia_es_dumps",
+                    "https://dumps.wikimedia.org/eswiki/latest/",
+                ),
             }
         ]
         
@@ -200,6 +236,7 @@ class DownloadOrchestrator:
                 priority=source["priority"],
                 estimated_size_gb=source["estimated_size"],
                 metadata={
+                    "endpoint": source["endpoint"],
                     "update_frequency": "daily" if "boe" in source["name"] else "weekly",
                     "incremental": True
                 }
@@ -212,16 +249,26 @@ class DownloadOrchestrator:
     
     def add_direct_download_tasks(self) -> List[str]:
         """Add direct download tasks."""
+        download_cfg = self.config.get("download", {})
+        direct_urls = download_cfg.get("direct_downloads", {}).get("urls", {})
         direct_sources = [
             {
                 "name": "opensubs_spanish",
                 "estimated_size": 12.0,
-                "priority": 3
+                "priority": 3,
+                "url": direct_urls.get(
+                    "opensubs_spanish",
+                    "https://opus.nlpl.eu/download.php?f=OpenSubtitles/v2018/moses/es.txt.zip",
+                ),
             },
             {
                 "name": "common_crawl_es",
                 "estimated_size": 25.0,
-                "priority": 3
+                "priority": 3,
+                "url": direct_urls.get(
+                    "common_crawl_es",
+                    "https://data.commoncrawl.org/crawl-data/CC-MAIN-2023-06/warc.paths.gz",
+                ),
             }
         ]
         
@@ -235,6 +282,7 @@ class DownloadOrchestrator:
                 priority=source["priority"],
                 estimated_size_gb=source["estimated_size"],
                 metadata={
+                    "url": source["url"],
                     "compression": "gzip",
                     "chunk_size_mb": 100
                 }
@@ -297,7 +345,7 @@ class DownloadOrchestrator:
             logger.info(f" Starting download: {task.source_name} ({task.source_type})")
             
             try:
-                # Simulate download based on source type
+                # Execute download based on source type
                 if task.source_type == "web_scraping":
                     success = await self._execute_web_scraping(task)
                 elif task.source_type == "api":
@@ -339,59 +387,83 @@ class DownloadOrchestrator:
     
     async def _execute_web_scraping(self, task: DownloadTask) -> bool:
         """Execute web scraping download."""
-        # Simulate web scraping with realistic timing
-        scraping_time = task.estimated_size_gb * 2.0  # 2 seconds per GB simulation
-        await asyncio.sleep(min(scraping_time, 10.0))  # Cap simulation time
-        
-        # Create target directory
+        urls = task.metadata.get("seed_urls") if task.metadata else None
+        if not urls:
+            raise ValueError(f"No seed URLs provided for {task.source_name}")
+
+        results = await self.web_scraper.scrape_bulk(
+            urls=urls,
+            selectors=task.metadata.get("selectors") if task.metadata else None,
+            max_concurrent=self.max_concurrent_downloads,
+        )
+
         Path(task.target_path).mkdir(parents=True, exist_ok=True)
-        
-        # Simulate scraped data file
         data_file = Path(task.target_path) / f"{task.source_name}_scraped.jsonl"
-        with open(data_file, 'w', encoding='utf-8') as f:
-            f.write(f'{{"source": "{task.source_name}", "data": "simulated_scraped_content", "timestamp": "{datetime.now().isoformat()}"}}\n')
-        
-        logger.info(f"️ Web scraping completed: {task.source_name}")
+        with open(data_file, "w", encoding="utf-8") as f:
+            for item in results:
+                item["source"] = task.source_name
+                item["timestamp"] = datetime.now().isoformat()
+                f.write(json.dumps(item, ensure_ascii=False) + "\n")
+
+        logger.info(f" Web scraping completed: {task.source_name}")
         return True
+
     
     async def _execute_api_download(self, task: DownloadTask) -> bool:
         """Execute API download."""
-        # Simulate API download
-        api_time = task.estimated_size_gb * 1.0  # 1 second per GB simulation
-        await asyncio.sleep(min(api_time, 5.0))  # Cap simulation time
-        
-        # Create target directory
+        if not task.metadata or not task.metadata.get("endpoint"):
+            raise ValueError(f"No API endpoint configured for {task.source_name}")
+
+        endpoint = task.metadata["endpoint"]
+        if task.metadata.get("paginated"):
+            data = await self.api_downloader.download_paginated(
+                endpoint=endpoint,
+                page_param=task.metadata.get("page_param", "page"),
+                per_page=task.metadata.get("per_page", 100),
+                max_pages=task.metadata.get("max_pages"),
+            )
+        else:
+            data = await self.api_downloader.download(endpoint)
+
         Path(task.target_path).mkdir(parents=True, exist_ok=True)
-        
-        # Simulate downloaded data file
         data_file = Path(task.target_path) / f"{task.source_name}_api_data.json"
-        with open(data_file, 'w', encoding='utf-8') as f:
-            json.dump({
-                "source": task.source_name,
-                "data": "simulated_api_content", 
-                "timestamp": datetime.now().isoformat(),
-                "size_gb": task.estimated_size_gb
-            }, f, indent=2)
-        
+        with open(data_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "source": task.source_name,
+                    "timestamp": datetime.now().isoformat(),
+                    "data": data,
+                },
+                f,
+                indent=2,
+                ensure_ascii=False,
+            )
+
         logger.info(f" API download completed: {task.source_name}")
         return True
+
     
     async def _execute_direct_download(self, task: DownloadTask) -> bool:
         """Execute direct download."""
-        # Simulate direct download
-        download_time = task.estimated_size_gb * 0.5  # 0.5 seconds per GB simulation
-        await asyncio.sleep(min(download_time, 8.0))  # Cap simulation time
-        
-        # Create target directory  
-        Path(task.target_path).mkdir(parents=True, exist_ok=True)
-        
-        # Simulate downloaded file
-        data_file = Path(task.target_path) / f"{task.source_name}_download.tar.gz"
-        with open(data_file, 'w', encoding='utf-8') as f:
-            f.write(f"Simulated download content for {task.source_name}")
-        
+        if not task.metadata or not task.metadata.get("url"):
+            raise ValueError(f"No download URL configured for {task.source_name}")
+
+        url = task.metadata["url"]
+        filename = task.metadata.get("filename")
+        if filename:
+            destination = Path(task.target_path) / filename
+        else:
+            destination = Path(task.target_path) / Path(url).name
+
+        await self.direct_downloader.download(
+            url=url,
+            destination=str(destination),
+            checksum=task.metadata.get("checksum"),
+        )
+
         logger.info(f" Direct download completed: {task.source_name}")
         return True
+
     
     def update_stats(self):
         """Update download statistics."""

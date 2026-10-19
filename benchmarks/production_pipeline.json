@@ -1,0 +1,45 @@
+{
+  "step1_kv_cache": {
+    "cached_tok_per_s": 33626.4,
+    "naive_tok_per_s": 27733.1,
+    "speedup": 1.21,
+    "new_tokens": 512,
+    "prompt_len": 512
+  },
+  "step2_int8": {
+    "max_abs_err": 1.879206657409668,
+    "mean_rel_err": 0.1493549644947052,
+    "greedy_match_pct": 100.0,
+    "fp32_ms": 0.474,
+    "int8_ms": 34.329,
+    "speedup": 0.01,
+    "memory_ratio": 4.0
+  },
+  "step3_gate": {
+    "total_responses": 64,
+    "gate_train_steps": 4,
+    "avg_reward": 0.4731,
+    "avg_gate_loss": 0.7813
+  },
+  "step4_server": {
+    "status": "ok",
+    "routes": [
+      "/openapi.json",
+      "/docs",
+      "/docs/oauth2-redirect",
+      "/redoc",
+      "/generate",
+      "/health",
+      "/metrics"
+    ]
+  },
+  "step5_eval": {
+    "n_tasks": 8,
+    "exact_match_pct": 0.0,
+    "prefix_match_pct": 0.0,
+    "pass_at_k_pct": 0.0,
+    "ntp_loss": 4.7786,
+    "token_accuracy_pct": 21.85,
+    "elapsed_s": 0.3
+  }
+}

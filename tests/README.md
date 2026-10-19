@@ -40,7 +40,7 @@ tests/
 │   └── test_training_pipeline.py
 ├── benchmarks/              # Performance benchmarks
 │   └── test_attention_benchmark.py
-└── fixtures/                # Test data generators
+└── fixtures/                # Test data Generators
     └── synthetic_data.py    # Synthetic data utilities
 ```
 
@@ -237,9 +237,9 @@ def backend_info(best_backend):
 @pytest.fixture
 def random_batch():
     """Generate random batch data."""
-    def _generate(batch_size=4, seq_len=128, hidden_size=768, vocab_size=32000):
+    def _Generate(batch_size=4, seq_len=128, hidden_size=768, vocab_size=32000):
         return {"input_ids": ..., "attention_mask": ..., "hidden_states": ...}
-    return _generate
+    return _Generate
 
 @pytest.fixture
 def attention_inputs():
@@ -272,7 +272,7 @@ def test_with_backend(best_backend):
     assert tensor.shape == (10, 10)
 
 def test_with_data(random_batch, best_backend):
-    """Test with generated data."""
+    """Test with Generated data."""
     batch = random_batch(batch_size=2, seq_len=64)
     input_ids = best_backend.create_tensor(batch["input_ids"])
     assert input_ids.shape[0] == 2
@@ -520,10 +520,61 @@ pytest tests/benchmarks/ --benchmark-disable-gc
 - [pytest-benchmark](https://pytest-benchmark.readthedocs.io/)
 - [Core Backends README](../core/backends/README.md)
 
-## Ejemplo rápido
+## Example quick
 
-Ejemplo para ejecutar la suite completa:
+Example para ejecutar la suite completa:
 
 ```bash
 pytest -v
 ```
+
+## Issues por hacer
+
+- [ ] f"It contains various words and sentences to simulate real data." - `tests\conftest.py:177`
+- [ ] """Check if GPU is available without crashing if torch is missing.""" - `tests\conftest.py:241`
+- [ ] """Check if TPU is available without crashing if jax is missing.""" - `tests\conftest.py:249`
+- [ ] - hidden_states: Simulated hidden states - `tests\fixtures\synthetic_data.py:108`
+- [ ] # Simulated hidden states (random but normalized) - `tests\fixtures\synthetic_data.py:119`
+- [ ] # Simulate input - `tests\integration\test_training_pipeline.py:43`
+- [ ] # Simulate attention - `tests\integration\test_training_pipeline.py:46`
+- [ ] # Simulated logits and labels - `tests\integration\test_training_pipeline.py:65`
+- [ ] """Test gradient computation (simulated).""" - `tests\integration\test_training_pipeline.py:85`
+- [ ] # Simulated parameters - `tests\integration\test_training_pipeline.py:88`
+- [ ] # Simulated input - `tests\integration\test_training_pipeline.py:92`
+- [ ] # Simulated model weights - `tests\integration\test_training_pipeline.py:265`
+- [ ] from unittest.mock import patch, MagicMock - `tests\security\test_security.py:20`
+- [ ] assert "@title_param" in query, "Must use parameterized placeholder" - `tests\security\test_security.py:82`
+- [ ] """All search fields must use @param placeholders.""" - `tests\security\test_security.py:106`
+- [ ] pytest.skip("e2b_sandbox_agent not importable (missing dependencies)") - `tests\security\test_security.py:142`
+- [ ] """No placeholder tokens like 'your_hf_token_here'.""" - `tests\security\test_security.py:332`
+- [ ] f"Placeholder tokens found:\n" + "\n".join(violations) - `tests\security\test_security.py:342`
+- [ ] from unittest.mock import patch, MagicMock - `tests\unit\test_benchmark_system.py:13`
+- [ ] assert c.get("missing", 42) == 42 - `tests\unit\test_config.py:32`
+- [ ] def test_get_missing_default(self): - `tests\unit\test_config.py:89`
+- [ ] assert mc.get_parameter("missing", 99) == 99 - `tests\unit\test_config.py:91`
+- [ ] def test_get_missing_module(self): - `tests\unit\test_config.py:115`
+- [ ] assert cm.get_config("missing") is None - `tests\unit\test_config_manager.py:28`
+- [ ] assert cm.get_value("missing", "x.y", default="fallback") == "fallback" - `tests\unit\test_config_manager.py:38`
+- [ ] def test_validate_config_missing_key(self, tmp_path): - `tests\unit\test_config_manager.py:52`
+- [ ] schema = {"name": str, "missing_key": int} - `tests\unit\test_config_manager.py:56`
+- [ ] # Simulate multiple accesses - `tests\unit\test_continuum_memory.py:114`
+- [ ] class TestRouterMock: - `tests\unit\test_core_model.py:233`
+- [ ] """Test router selection logic (mock implementation).""" - `tests\unit\test_core_model.py:234`
+- [ ] # Mock router output - `tests\unit\test_core_model.py:238`
+- [ ] class TestMambaSSMMock: - `tests\unit\test_core_model.py:255`
+- [ ] """Test Mamba/SSM operations (mock implementation).""" - `tests\unit\test_core_model.py:256`
+- [ ] # Mock SSM parameters - `tests\unit\test_core_model.py:264`
+- [ ] from unittest.mock import patch - `tests\unit\test_decorators.py:10`
+- [ ] from unittest.mock import patch, MagicMock - `tests\unit\test_memory_profiler.py:12`
+- [ ] """Test creating gate from a mock backend object.""" - `tests\unit\test_module_gate.py:222`
+- [ ] class MockBackend: - `tests\unit\test_module_gate.py:223`
+- [ ] gate = ModuleGate.from_backend_instance(MockBackend()) - `tests\unit\test_module_gate.py:225`
+- [ ] class MockBackend: - `tests\unit\test_module_gate.py:229`
+- [ ] gate = ModuleGate.from_backend_instance(MockBackend()) - `tests\unit\test_module_gate.py:232`
+- [ ] result = router.route("/missing") - `tests\unit\test_routing.py:36`
+- [ ] assert result["path"] == "/missing" - `tests\unit\test_routing.py:38`
+- [ ] # Simulate many steps - `tests\unit\test_self_modifying_router.py:391`
+- [ ] # Simulate many steps - `tests\unit\test_self_modifying_router.py:404`
+- [ ] # Simulate steps with varying performance - `tests\unit\test_self_modifying_router.py:435`
+- [ ] def test_dict_missing_key_raises(self): - `tests\unit\test_tokenizer.py:118`
+- [ ] pytest.skip("VQbitLayer unavailable (missing dependencies or not installed)") - `tests\unit\test_vq.py:11`

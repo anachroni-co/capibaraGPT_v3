@@ -1,7 +1,7 @@
 """
-CapibaraGPT v3.3 Services
+CapibaraGPT v3 services.
 
-Servicios especializados como TTS, audio, n8n automation, etc.
+Servicios especializados como TTS, automation y MCP (opcionales).
 """
 
 from .tts import CapibaraTextToSpeech, CapibaraTTSService

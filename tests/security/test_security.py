@@ -21,6 +21,27 @@ from unittest.mock import patch, MagicMock
 
 # Project root for file scanning
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+EXCLUDED_DIRS = {
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "capibaragpt.egg-info",
+}
+
+
+def _should_skip(path: Path) -> bool:
+    return any(part in EXCLUDED_DIRS for part in path.parts)
+
+
+def _iter_py_files(root: Path = PROJECT_ROOT):
+    for py_file in root.rglob("*.py"):
+        if _should_skip(py_file):
+            continue
+        yield py_file
 
 
 # ============================================================================
@@ -273,6 +294,8 @@ class TestNoHardcodedCredentials:
             if not dir_path.exists():
                 continue
             for py_file in dir_path.rglob("*.py"):
+                if _should_skip(py_file):
+                    continue
                 with open(py_file, "r", errors="ignore") as f:
                     for i, line in enumerate(f, 1):
                         yield py_file, i, line
@@ -339,7 +362,7 @@ class TestSafeDeserialization:
     def test_no_bare_pickle_load(self):
         """All pickle.load calls must have nosec or warning annotation."""
         violations = []
-        for py_file in PROJECT_ROOT.rglob("*.py"):
+        for py_file in _iter_py_files():
             if "/test" in str(py_file) or "test_" in py_file.name:
                 continue
             try:
@@ -362,7 +385,7 @@ class TestSafeDeserialization:
     def test_no_bare_pickle_loads(self):
         """All pickle.loads calls must have nosec annotation."""
         violations = []
-        for py_file in PROJECT_ROOT.rglob("*.py"):
+        for py_file in _iter_py_files():
             if "/test" in str(py_file) or "test_" in py_file.name:
                 continue
             try:
@@ -449,7 +472,7 @@ class TestSecureRandomness:
         for filepath in security_files:
             if not filepath.exists():
                 continue
-            content = filepath.read_text()
+            content = filepath.read_text(errors="ignore")
             lines = content.splitlines()
             for i, line in enumerate(lines, 1):
                 stripped = line.strip()
@@ -511,7 +534,7 @@ class TestGeneralSecurityScan:
         # Known safe eval() uses (JAX shim expression parser, inference engines)
         _EVAL_ALLOWED_FILES = {"core.py", "arm_optimized_inference.py", "hybrid_inference_engine.py"}
         violations = []
-        for py_file in PROJECT_ROOT.rglob("*.py"):
+        for py_file in _iter_py_files():
             if "/test" in str(py_file) or "test_" in py_file.name:
                 continue
             if py_file.name in _EVAL_ALLOWED_FILES:
@@ -534,7 +557,7 @@ class TestGeneralSecurityScan:
     def test_no_exec_in_production_code(self):
         """No exec() calls in production code."""
         violations = []
-        for py_file in PROJECT_ROOT.rglob("*.py"):
+        for py_file in _iter_py_files():
             if "/test" in str(py_file) or "test_" in py_file.name:
                 continue
             # Skip sandbox agent (exec is its purpose)
@@ -548,7 +571,7 @@ class TestGeneralSecurityScan:
                 stripped = line.strip()
                 if stripped.startswith("#"):
                     continue
-                if "exec(" in stripped and "execute" not in stripped.lower() and "executor" not in stripped.lower():
+                if re.search(r"(?<![\w.])exec\(", stripped) and "execute" not in stripped.lower() and "executor" not in stripped.lower():
                     violations.append(f"{py_file.relative_to(PROJECT_ROOT)}:{i}")
         assert len(violations) <= 2, (
             f"exec() found in {len(violations)} locations:\n"
@@ -558,7 +581,7 @@ class TestGeneralSecurityScan:
     def test_no_shell_true_subprocess(self):
         """No subprocess calls with shell=True."""
         violations = []
-        for py_file in PROJECT_ROOT.rglob("*.py"):
+        for py_file in _iter_py_files():
             if "/test" in str(py_file) or "test_" in py_file.name:
                 continue
             try:
@@ -578,7 +601,7 @@ class TestGeneralSecurityScan:
     def test_yaml_safe_load(self):
         """yaml.load must use SafeLoader or yaml.safe_load."""
         violations = []
-        for py_file in PROJECT_ROOT.rglob("*.py"):
+        for py_file in _iter_py_files():
             if "/test" in str(py_file) or "test_" in py_file.name:
                 continue
             try:

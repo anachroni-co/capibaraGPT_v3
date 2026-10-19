@@ -11,6 +11,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import pytest
+import subprocess
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -26,6 +27,62 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "slow: Slow tests")
     config.addinivalue_line("markers", "tpu: Tests requiring TPU")
     config.addinivalue_line("markers", "gpu: Tests requiring GPU")
+
+
+def _torch_import_works() -> bool:
+    """
+    Check if importing torch works without crashing the interpreter.
+
+    We use a subprocess to avoid hard crashes (e.g., Windows DLL issues) that
+    can terminate the pytest process during collection.
+    """
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import torch"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+# ==================== Optional Benchmark Fixture ====================
+
+try:
+    import pytest_benchmark  # noqa: F401
+    _HAS_PYTEST_BENCHMARK = True
+except Exception:
+    _HAS_PYTEST_BENCHMARK = False
+
+    @pytest.fixture
+    def benchmark():
+        """Skip benchmark tests if pytest-benchmark is not installed."""
+        pytest.skip("pytest-benchmark not installed")
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Skip tests that require torch/transformers when torch cannot import,
+    and benchmark tests if pytest-benchmark is not installed.
+    """
+    skip_marker = None
+    if not _torch_import_works():
+        skip_marker = pytest.mark.skip(
+            reason="Skipping tests that import torch/transformers (torch import fails on this system)."
+        )
+
+    skip_bench = None
+    if not _HAS_PYTEST_BENCHMARK:
+        skip_bench = pytest.mark.skip(reason="pytest-benchmark not installed")
+
+    for item in items:
+        nodeid = item.nodeid.lower()
+        if skip_marker and any(key in nodeid for key in ("tokenizer", "inference", "transformers", "hf_model")):
+            item.add_marker(skip_marker)
+        if skip_bench and item.get_closest_marker("benchmark") is not None:
+            item.add_marker(skip_bench)
 
 
 # ==================== Backend Fixtures ====================
@@ -222,7 +279,7 @@ def has_gpu():
     try:
         import torch
         return torch.cuda.is_available()
-    except ImportError:
+    except Exception:
         return False
 
 
@@ -242,7 +299,7 @@ def _check_gpu_available():
     try:
         import torch
         return torch.cuda.is_available()
-    except ImportError:
+    except Exception:
         return False
 
 def _check_tpu_available():

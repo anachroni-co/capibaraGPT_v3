@@ -1,5 +1,5 @@
 """
-Data processor for CapibaraGPT-v2.
+Data processor for CapibaraGPT v3.
 """
 
 import numpy as np

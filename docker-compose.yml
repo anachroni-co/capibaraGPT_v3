@@ -1,0 +1,41 @@
+services:
+  capibara-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: capibara-api
+    ports:
+      - "8000:8000"
+    environment:
+      CAPIBARA_STRICT_RUNTIME: "1"
+      CAPIBARA_ENV: "staging"
+      CAPIBARA_SERVICE_NAME: "capibara-api"
+      CAPIBARA_SERVICE_VERSION: "1.0.0"
+      CAPIBARA_BACKEND: "cpu"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  capibara-api-fake:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: capibara-api-fake
+    ports:
+      - "8001:8000"
+    environment:
+      CAPIBARA_STRICT_RUNTIME: "1"
+      CAPIBARA_ENV: "staging"
+      CAPIBARA_SERVICE_NAME: "capibara-api"
+      CAPIBARA_SERVICE_VERSION: "1.0.0"
+      CAPIBARA_BACKEND: "cpu"
+      CAPIBARA_FAKE_BACKEND: "1"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health/live"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

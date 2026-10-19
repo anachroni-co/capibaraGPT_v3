@@ -53,9 +53,9 @@ print(f"Load balancing loss: {outputs.load_balancing_loss}")
 ```python
 # Automatic specialization configuration
 expert_specializations = {
-    "general_experts": {
+    "Generatel_experts": {
         "count": 8,
-        "description": "General knowledge and common tasks",
+        "description": "Generatel knowledge and common tasks",
         "activation_threshold": 0.1
     },
     "reasoning_experts": {
@@ -66,7 +66,7 @@ expert_specializations = {
     },
     "creative_experts": {
         "count": 4,
-        "description": "Creative and artistic generation",
+        "description": "Creative and artistic Generation",
         "domains": ["creative_writing", "storytelling", "poetry"],
         "temperature": 1.2
     },
@@ -245,7 +245,7 @@ for expert_id in range(32):
 # Expert specialization analysis
 specialization_analysis = moe_system.analyze_expert_specialization(
     analysis_window=10000,  # Last 10k queries
-    domains=["mathematics", "science", "literature", "coding", "general"],
+    domains=["mathematics", "science", "literature", "coding", "Generatel"],
     include_evolution_tracking=True
 )
 
@@ -309,7 +309,7 @@ adaptation_config = {
         "enabled": True,
         "learning_rate": 1e-5,
         "adaptation_frequency": 1000,  # every 1000 samples
-        "adaptation_scope": ["routing_weights", "expert_parameters"]
+        "adaptation_Scope": ["routing_weights", "expert_parameters"]
     },
 
     "expert_evolution": {
@@ -435,7 +435,7 @@ memory_guided_output = memory_enhanced_moe.forward_with_memory(
 ```python
 # Optimized configuration for different workloads
 hyperparameters = {
-    "general_purpose": {
+    "Generatel_purpose": {
         "num_experts": 32,
         "num_active_experts": 4,
         "routing_temperature": 1.0,

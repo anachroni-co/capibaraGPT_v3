@@ -17,7 +17,7 @@ The **inference** module provides optimized engines for production inference, in
 
 ##  Overview
 
-The capibaraGPT-v2 inference system is optimized for low latency and high throughput in production:
+The CapibaraGPT v3 inference system is optimized for low latency and high throughput in production:
 
 ### Key Features
 
@@ -26,7 +26,7 @@ The capibaraGPT-v2 inference system is optimized for low latency and high throug
 -  **Quantization**: INT8/INT4 reduces model size 4-8x
 -  **ARM Optimized**: SVE, NEON, Kleidi optimizations
 -  **Hybrid Engine**: Automatic Mamba + Transformer routing
--  **KV-Cache**: Efficient caching for generation
+-  **KV-Cache**: Efficient caching for Generation
 -  **Batching**: Dynamic batching for better utilization
 
 ### Components
@@ -65,14 +65,14 @@ config = InferenceConfig(
 engine = HybridInferenceEngine(config)
 
 # Single inference
-output = engine.generate(
+output = engine.Generate(
     prompt="What is the capital of France?",
     max_new_tokens=100,
     temperature=0.7
 )
 
 # Batch inference
-outputs = engine.generate_batch(
+outputs = engine.Generate_batch(
     prompts=[
         "Explain photosynthesis",
         "What is machine learning?",
@@ -221,7 +221,7 @@ engine = ARMOptimizedInference(
 )
 
 # Optimized inference
-output = engine.generate(
+output = engine.Generate(
     prompt="Explain quantum computing",
     max_new_tokens=200
 )
@@ -255,7 +255,7 @@ from capibara.inference import InferenceEngine
 engine = InferenceEngine.from_pretrained("capibara-v2-base")
 
 # Generate text
-response = engine.generate(
+response = engine.Generate(
     "What is the capital of Spain?",
     max_length=50
 )
@@ -275,7 +275,7 @@ engine = QuantizedInferenceEngine.from_pretrained(
 )
 
 # Inference (4x faster, same result)
-response = engine.generate(
+response = engine.Generate(
     "Explain the theory of relativity",
     max_length=200,
     temperature=0.7
@@ -292,7 +292,7 @@ prompts = [
     "Explain climate change"
 ]
 
-responses = engine.generate_batch(
+responses = engine.Generate_batch(
     prompts,
     max_length=100,
     batch_size=8
@@ -318,9 +318,9 @@ app = FastAPI()
 # Load model at startup
 engine = HybridInferenceEngine.from_pretrained("capibara-v2-int8")
 
-@app.post("/generate")
-async def generate(prompt: str, max_length: int = 100):
-    response = engine.generate(
+@app.post("/Generate")
+async def Generate(prompt: str, max_length: int = 100):
+    response = engine.Generate(
         prompt=prompt,
         max_new_tokens=max_length
     )
@@ -341,7 +341,7 @@ class InferenceServicer:
         self.engine = InferenceEngine.from_pretrained("capibara-v2-int8")
 
     def Generate(self, request, context):
-        response = self.engine.generate(request.prompt)
+        response = self.engine.Generate(request.prompt)
         return GenerateResponse(text=response)
 
 # Create server
@@ -366,7 +366,7 @@ engine = QuantizedInferenceEngine.from_pretrained(
 
 def lambda_handler(event, context):
     prompt = event['prompt']
-    response = engine.generate(prompt, max_new_tokens=100)
+    response = engine.Generate(prompt, max_new_tokens=100)
 
     return {
         'statusCode': 200,
@@ -426,14 +426,14 @@ engine = BatchingEngine(
 ### 2. KV-Cache Optimization
 
 ```python
-# Enable KV-cache for fast generation
+# Enable KV-cache for fast Generation
 engine = HybridInferenceEngine(
     use_kv_cache=True,
     kv_cache_dtype="int8"  # Use INT8 to save memory
 )
 
-# First generation: ~100ms
-# Subsequent generations: ~10ms (10x faster)
+# First Generation: ~100ms
+# Subsequent Generations: ~10ms (10x faster)
 ```
 
 ### 3. Compiled Models (TorchScript/ONNX)
@@ -520,7 +520,7 @@ setup_inference_logging(
 # - Request ID
 # - Prompt (truncated)
 # - Latency
-# - Tokens generated
+# - Tokens Generated
 # - Model routing decision
 ```
 
@@ -532,7 +532,7 @@ from capibara.inference import InferenceEngine, InferenceError
 engine = InferenceEngine.from_pretrained("capibara-v2-int8")
 
 try:
-    response = engine.generate(
+    response = engine.Generate(
         prompt=user_input,
         max_new_tokens=200,
         timeout=30  # 30 seconds timeout
@@ -563,7 +563,7 @@ ab_engine = ABTestEngine(
 )
 
 # Engine automatically selects model
-response, model_used = ab_engine.generate_with_tracking(
+response, model_used = ab_engine.Generate_with_tracking(
     prompt=prompt,
     user_id=user_id
 )
@@ -684,12 +684,40 @@ config.use_gradient_checkpointing = True
 ---
 
 **Last updated**: 2025-11-16
-**System version**: v2.0.0
+**System version**: v3.0.0
 
-## Ejemplo rápido
+## Example quick
 
-Ejemplo (pseudo-comando) para ejecutar inferencia:
+Example (pseudo-command) para ejecutar inferencia:
 
 ```bash
 capibara-inference --config config/configs_toml/inference.toml
 ```
+
+## Issues por hacer
+
+- [ ] # For now, we simulate the structure - `inference\hybrid_inference_engine.py:160`
+- [ ] # Create mock parameters for demo - `inference\hybrid_inference_engine.py:167`
+- [ ] logger.warning("Using mock parameters for demo") - `inference\hybrid_inference_engine.py:168`
+- [ ] # For now, we simulate with chunks - `inference\hybrid_inference_engine.py:243`
+- [ ] await asyncio.sleep(0.05)  # Simulate Generation speed - `inference\hybrid_inference_engine.py:249`
+- [ ] # Fallback: Generate complete and simulate streaming - `inference\hybrid_inference_engine.py:461`
+- [ ] # Load model parameters (mock implementation) - `inference\engines\advanced_quantized_engine.py:95`
+- [ ] # Mock implementation - in real scenario, load from checkpoint - `inference\engines\advanced_quantized_engine.py:178`
+- [ ] # Simulate loading different layer types - `inference\engines\advanced_quantized_engine.py:181`
+- [ ] await asyncio.sleep(0.1)  # Simulate I/O delay - `inference\engines\advanced_quantized_engine.py:207`
+- [ ] await asyncio.sleep(0.1)  # Simulate processing delay - `inference\engines\advanced_quantized_engine.py:222`
+- [ ] await asyncio.sleep(0.1)  # Simulate optimization time - `inference\engines\advanced_quantized_engine.py:450`
+- [ ] await asyncio.sleep(0.1)  # Simulate optimization time - `inference\engines\advanced_quantized_engine.py:461`
+- [ ] # Mock implementation - in real scenario, measure actual memory usage - `inference\engines\advanced_quantized_engine.py:475`
+- [ ] # Simulate token Generation - `inference\engines\quantized_engine.py:399`
+- [ ] # Mock next token prediction - `inference\engines\quantized_engine.py:401`
+- [ ] # Simulate KV-cache updates - `inference\engines\quantized_engine.py:406`
+- [ ] # Mock K,V tensors - `inference\engines\quantized_engine.py:408`
+- [ ] k_mock = np.random.randn(seq_len, num_heads, head_dim).astype(np.float16) - `inference\engines\quantized_engine.py:410`
+- [ ] v_mock = np.random.randn(seq_len, num_heads, head_dim).astype(np.float16) - `inference\engines\quantized_engine.py:411`
+- [ ] self.kv_cache.add_kv_to_cache(0, k_mock, v_mock)  # Layer 0 - `inference\engines\quantized_engine.py:413`
+- [ ] # Mock fallback implementation - `inference\engines\quantized_engine.py:432`
+- [ ] # Placeholder implementation - `inference\quantization\calibration.py:274`
+- [ ] # Simulate quantization and dequantization - `inference\quantization\calibration.py:533`
+- [ ] validation_results['issues'].append(f'Block {block_id} missing from cache') - `inference\quantization\kv_cache_int8.py:604`

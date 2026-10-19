@@ -8,7 +8,7 @@ instances of the CoT module.
 from typing import Any, Callable, Dict, Optional
 
 from .module import EnhancedChainOfThoughtModule
-from capibara.config import (
+from config import (
     CoreConfig,
     RoutingConfig,
     ProcessingConfig,

@@ -1,7 +1,7 @@
 __pycache__/
 *.py[cod]
 *$py.class
-
+install.sh
 # Environment variables and secrets
 .env
 .env.*
@@ -11,7 +11,7 @@ __pycache__/
 credentials.json
 secrets.json
 api_keys.txt
-
+COCOMO_II/
 # IDE
 .vscode/
 .idea/
@@ -31,6 +31,7 @@ logs/
 *.cache
 .cache/
 .pytest_cache/
+calibration_cache/
 
 # Data and models
 *.db
@@ -56,6 +57,16 @@ training/cython_kernels/*.c
 
 # Generated files
 _version.py
-
+# .github/ was previously ignored which silently dropped workflows,
+# dependabot config and issue templates. Tracked again.
 # Benchmark outputs
 benchmark_results/
+
+# AstroJS UI (lives on cunca-hybrid branch)
+ui/
+
+.coverage
+htmlcov/
+.coverage.*
+*.gguf
+models/*.gguf

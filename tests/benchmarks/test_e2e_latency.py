@@ -14,6 +14,7 @@ Run with:
     pytest tests/benchmarks/test_e2e_latency.py::TestManualLatencyReport -s
 """
 
+import os
 import time
 import statistics
 import pytest
@@ -22,6 +23,9 @@ from typing import Dict, List
 
 import logging
 logger = logging.getLogger(__name__)
+
+pytestmark = pytest.mark.slow
+_RUN_LATENCY_REPORTS = os.getenv("CAPIBARA_RUN_LATENCY_REPORTS") == "1"
 
 
 # ---------------------------------------------------------------------------
@@ -121,7 +125,10 @@ class TestMoELatency:
         """Import MoE modules, skip test if unavailable."""
         try:
             from core.moe.dynamic_moe import MoEConfig, DynamicRouter, DynamicMoELayer
-            from capibara.jax import numpy as jnp
+            from jax import numpy as jnp
+            from layers.jax_compat import JAX_AVAILABLE
+            if not JAX_AVAILABLE:
+                pytest.skip("MoE modules require JAX/Flax")
             return MoEConfig, DynamicRouter, DynamicMoELayer, jnp
         except ImportError:
             pytest.skip("MoE modules require JAX (circular import in this env)")
@@ -211,7 +218,10 @@ class TestSparseAttentionLatency:
     def _get_sparse_imports(self):
         try:
             import jax
+            from layers.jax_compat import JAX_AVAILABLE
             from layers.sparsity.sparse_capibara import SparseCapibara
+            if not JAX_AVAILABLE:
+                pytest.skip("SparseCapibara requires JAX/Flax")
             return jax, SparseCapibara
         except ImportError:
             pytest.skip("SparseCapibara requires JAX/Flax")
@@ -258,8 +268,8 @@ class TestVQLatency:
     def test_vqbit_encode(self, backend, benchmark):
         """VQbit encode: batch=32, dim=64."""
         try:
-            from capibara.jax import numpy as jnp
-            from vq.vqbit_layer import VQbitLayer, VQbitConfig
+            from jax import numpy as jnp
+            from capibara.vq.vqbit_layer import VQbitLayer, VQbitConfig
         except ImportError:
             pytest.skip("VQ modules not available")
 
@@ -415,6 +425,10 @@ class TestManualLatencyReport:
     Run: pytest -s tests/benchmarks/test_e2e_latency.py::TestManualLatencyReport
     """
 
+    @pytest.mark.skipif(
+        not _RUN_LATENCY_REPORTS,
+        reason="Set CAPIBARA_RUN_LATENCY_REPORTS=1 to run latency reports.",
+    )
     def test_attention_latency_report(self, backend):
         """Detailed attention latency report."""
         configs = [
@@ -438,6 +452,10 @@ class TestManualLatencyReport:
             )
             _print_latency(f"{name} (b={bs}, h={nh}, s={sl}, d={hd})", stats)
 
+    @pytest.mark.skipif(
+        not _RUN_LATENCY_REPORTS,
+        reason="Set CAPIBARA_RUN_LATENCY_REPORTS=1 to run latency reports.",
+    )
     def test_pipeline_latency_report(self, backend):
         """Detailed inference pipeline latency report."""
         logger.info("\n" + "=" * 60)
@@ -480,6 +498,10 @@ class TestManualLatencyReport:
             stats = _measure_latency(run)
             _print_latency(f"{name} (b={bs}, s={sl}, h={hd})", stats)
 
+    @pytest.mark.skipif(
+        not _RUN_LATENCY_REPORTS,
+        reason="Set CAPIBARA_RUN_LATENCY_REPORTS=1 to run latency reports.",
+    )
     def test_scaling_latency_report(self, backend):
         """Detailed scaling report: attention vs sequence length."""
         logger.info("\n" + "=" * 60)

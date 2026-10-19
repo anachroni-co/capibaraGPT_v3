@@ -1,0 +1,10 @@
+{
+  "n_tasks": 8,
+  "exact_match_pct": 0.0,
+  "prefix_match_pct": 0.0,
+  "pass_at_k_pct": 0.0,
+  "ntp_loss": 0.0,
+  "token_accuracy_pct": 0.0,
+  "elapsed_s": 1.0,
+  "backbone": "LlamaCpp(tiny_test.gguf)"
+}

@@ -1,5 +1,5 @@
 """
-Communication and Monitoring Behaviors - CapibaraGPT v2024
+Communication and Monitoring Behaviors - CapibaraGPT v3024
 ==========================================================
 
 Specialized behaviors for communication and monitoring:
@@ -11,7 +11,15 @@ Specialized behaviors for communication and monitoring:
 import time
 import json
 import logging
+import tracemalloc
 from typing import Dict, Any, List, Optional, Tuple, Deque
+
+try:
+    import psutil  # type: ignore
+    _HAS_PSUTIL = True
+except Exception:
+    psutil = None
+    _HAS_PSUTIL = False
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
@@ -28,7 +36,7 @@ except ImportError:
     # Fallback imports
     from abc import ABC, abstractmethod
     from enum import Enum
-    from dataclasses import dataclass
+    from dataclasses import dataclass, field
     
     class AgentBehaviorType(str, Enum):
         COMMUNICATION = "communication"
@@ -53,6 +61,8 @@ except ImportError:
         result: Any
         execution_time_ms: float
         confidence: float = 0.0
+        metadata: Dict[str, Any] = field(default_factory=dict)
+        error: Optional[str] = None
     
     class BaseBehavior:
         def __init__(self, config=None):
@@ -622,6 +632,8 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
             "anomalies_detected": 0,
             "monitoring_uptime": time.time()
         }
+        self._process = psutil.Process() if _HAS_PSUTIL else None
+        self._tracemalloc_started = False
     
     def execute_behavior(self, context: AgentContext, agent: IAgent) -> AgentResult:
         """Execute monitoring behavior."""
@@ -689,6 +701,32 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
             "confidence": 0.95,
             "monitoring_quality": self._assess_monitoring_quality()
         }
+
+    def _get_process_metrics(self) -> Dict[str, Any]:
+        """Get real process CPU/memory metrics."""
+        if _HAS_PSUTIL and self._process:
+            try:
+                cpu_percent = self._process.cpu_percent(interval=None)
+                memory_percent = self._process.memory_percent()
+                rss_bytes = self._process.memory_info().rss
+                return {
+                    "cpu_percent": cpu_percent,
+                    "memory_percent": memory_percent,
+                    "rss_bytes": rss_bytes
+                }
+            except Exception:
+                pass
+
+        if not self._tracemalloc_started:
+            tracemalloc.start()
+            self._tracemalloc_started = True
+        current, peak = tracemalloc.get_traced_memory()
+        return {
+            "cpu_percent": 0.0,
+            "memory_percent": 0.0,
+            "rss_bytes": current,
+            "peak_bytes": peak
+        }
     
     def _collect_performance_metrics(self, agent: IAgent) -> List[Dict[str, Any]]:
         """Collect performance metrics."""
@@ -720,14 +758,20 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
     def _collect_agent_metrics(self, agent: IAgent, timestamp: float) -> List[Dict[str, Any]]:
         """Collect specific agent metrics."""
         metrics = []
-        
-        # Simulate agent metrics
-        base_performance = getattr(self, 'success_count', 0) / max(1, getattr(self, 'execution_count', 1))
-        
+        base_performance = getattr(agent, "success_rate", None)
+        if base_performance is None:
+            base_performance = getattr(self, 'success_count', 0) / max(1, getattr(self, 'execution_count', 1))
+
+        response_time = getattr(agent, "last_execution_time_ms", 0.0)
+        task_count = getattr(agent, "tasks_completed", 0) + getattr(agent, "tasks_failed", 0)
+
+        proc = self._get_process_metrics()
+        memory_percent = proc.get("memory_percent", 0.0)
+
         metrics.extend([
             {
                 "name": "agent_response_time_ms",
-                "value": 50.0 + (hash(agent.agent_id) % 100),  # Simulado
+                "value": response_time,
                 "type": "gauge",
                 "tags": {"agent_type": str(agent.agent_type)}
             },
@@ -739,13 +783,13 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
             },
             {
                 "name": "agent_task_count",
-                "value": getattr(self, 'execution_count', 0),
+                "value": task_count,
                 "type": "counter",
                 "tags": {"agent_type": str(agent.agent_type)}
             },
             {
                 "name": "agent_memory_usage",
-                "value": 0.3 + (hash(agent.agent_id) % 50) / 100,  # Simulado
+                "value": memory_percent / 100.0 if memory_percent > 1 else memory_percent,
                 "type": "gauge",
                 "tags": {"agent_type": str(agent.agent_type)}
             }
@@ -756,10 +800,17 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
     def _collect_system_metrics(self, timestamp: float) -> List[Dict[str, Any]]:
         """Collect overall system metrics."""
         metrics = []
-        
-        # Simulate system metrics
         uptime = time.time() - self.monitoring_stats["monitoring_uptime"]
-        
+        cpu_usage = None
+        memory_usage = None
+        if _HAS_PSUTIL:
+            try:
+                cpu_usage = psutil.cpu_percent(interval=None)
+                memory_usage = psutil.virtual_memory().percent
+            except Exception:
+                cpu_usage = None
+                memory_usage = None
+
         metrics.extend([
             {
                 "name": "system_uptime_seconds",
@@ -779,13 +830,22 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
                 "type": "counter",
                 "tags": {"component": "monitoring"}
             },
-            {
+        ])
+
+        if cpu_usage is not None:
+            metrics.append({
                 "name": "system_cpu_usage",
-                "value": 0.2 + (int(timestamp) % 30) / 100,  # Simulado
+                "value": cpu_usage / 100.0,
                 "type": "gauge",
                 "tags": {"component": "system"}
-            }
-        ])
+            })
+        if memory_usage is not None:
+            metrics.append({
+                "name": "system_memory_usage",
+                "value": memory_usage / 100.0,
+                "type": "gauge",
+                "tags": {"component": "system"}
+            })
         
         return metrics
     
@@ -793,16 +853,19 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
         """Verify agent health."""
         agent_id = agent.agent_id
         current_time = time.time()
-        
+        total_tasks = getattr(agent, "tasks_completed", 0) + getattr(agent, "tasks_failed", 0)
+        error_rate = getattr(agent, "tasks_failed", 0) / max(1, total_tasks)
+        response_time = getattr(agent, "last_execution_time_ms", 0.0)
+
         # Get current health state
         health_data = {
             "agent_id": agent_id,
             "status": "healthy",
             "last_check": current_time,
-            "response_time_ms": 45.0,  # Simulado
-            "error_count": 0,
+            "response_time_ms": response_time,
+            "error_count": getattr(agent, "tasks_failed", 0),
             "warnings": [],
-            "performance_score": 0.9
+            "performance_score": max(0.0, 1.0 - error_rate)
         }
         
         # Specific verifications
@@ -816,11 +879,16 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
     
     def _perform_health_checks(self, agent: IAgent) -> Dict[str, Any]:
         """Perform specific health checks."""
+        total_tasks = getattr(agent, "tasks_completed", 0) + getattr(agent, "tasks_failed", 0)
+        error_rate = getattr(agent, "tasks_failed", 0) / max(1, total_tasks)
+        response_time = getattr(agent, "last_execution_time_ms", 0.0)
+
         checks = {
             "connectivity": "ok",
             "resource_usage": "normal",
             "response_quality": "good",
-            "error_rate": 0.01  # Simulado
+            "error_rate": error_rate,
+            "response_time_ms": response_time,
         }
         
         warnings = []
@@ -831,8 +899,8 @@ class MonitoringBehavior(BaseBehavior, IAgentMonitoring):
             checks["status"] = "warning"
         
         # Verify response time
-        response_time = checks.get("response_time_ms", 50)
-        if response_time > self.alert_thresholds.get("response_time_ms", 1000):
+        response_time_ms = checks.get("response_time_ms", 0.0)
+        if response_time_ms > self.alert_thresholds.get("response_time_ms", 1000):
             warnings.append("High response time detected")
             checks["status"] = "warning"
         

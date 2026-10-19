@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Physics Datasets
+CapibaraGPT v3 Physics Datasets
 
 Specialized datasets in theoretical and experimental physics for training
 in scientific reasoning and physical modeling.

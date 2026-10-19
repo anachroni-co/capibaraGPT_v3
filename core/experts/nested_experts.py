@@ -115,7 +115,7 @@ class Expert:
         self.config = config
         self.state = ExpertState()
 
-        # Simulated parameters (in real implementation, these would be neural network weights)
+        # Lightweight real parameters (vector weights + bias)
         self.parameters = self._initialize_parameters()
 
         # Children experts
@@ -127,12 +127,35 @@ class Expert:
 
     def _initialize_parameters(self) -> Dict[str, Any]:
         """Initialize expert parameters."""
-        # In real implementation, this would initialize neural network weights
+        rng = np.random.default_rng(self.config.expert_id)
+        weights = rng.normal(0.0, 0.02, size=(self.config.hidden_size,))
+        bias = np.zeros((self.config.hidden_size,), dtype=float)
         return {
-            'weights': [0.5] * self.config.hidden_size,
-            'bias': [0.0] * self.config.hidden_size,
+            'weights': weights,
+            'bias': bias,
             'specialization_weights': {},
         }
+
+    def _to_vector(self, inputs: Any) -> "np.ndarray":
+        """Convert inputs to a fixed-size vector."""
+        if hasattr(inputs, "shape"):
+            vec = np.asarray(inputs).reshape(-1)
+        elif isinstance(inputs, (list, tuple)):
+            vec = np.asarray(inputs, dtype=float).reshape(-1)
+        elif isinstance(inputs, str):
+            seed = abs(hash(inputs)) % (2 ** 32)
+            rng = np.random.default_rng(seed)
+            vec = rng.normal(0.0, 1.0, size=(self.config.hidden_size,))
+        else:
+            vec = np.asarray([float(inputs)], dtype=float)
+
+        if vec.size < self.config.hidden_size:
+            padded = np.zeros((self.config.hidden_size,), dtype=float)
+            padded[:vec.size] = vec
+            return padded
+        if vec.size > self.config.hidden_size:
+            return vec[:self.config.hidden_size]
+        return vec.astype(float)
 
     def should_update(self, current_step: int) -> bool:
         """Check if expert should update at current step."""
@@ -157,12 +180,20 @@ class Expert:
         if parent_context:
             self.state.parent_context = parent_context
 
-        # Simulate forward pass (in real implementation, this would be neural network forward)
+        input_vec = self._to_vector(inputs)
+        if parent_context and "embedding" in parent_context:
+            parent_vec = self._to_vector(parent_context["embedding"])
+            input_vec = 0.7 * input_vec + 0.3 * parent_vec
+
+        weights = self.parameters["weights"]
+        bias = self.parameters["bias"]
+        output_vec = input_vec * weights + bias
+
         output = {
             'expert_id': self.config.expert_id,
             'expert_type': self.config.expert_type,
             'specialization': self.config.specialization,
-            'output': inputs,  # Simplified
+            'output': output_vec,
             'confidence': 0.5 + self.state.specialization_score * 0.5,
             'used_parent_context': parent_context is not None,
         }
@@ -192,9 +223,18 @@ class Expert:
 
         lr = learning_rate or self.config.learning_rate
 
-        # Simulate parameter update (in real implementation, this would be gradient descent)
-        # Update parameters based on loss
-        # self.parameters['weights'] = [w - lr * grad for w, grad in ...]
+        input_vec = self._to_vector(inputs)
+        weights = self.parameters["weights"]
+        bias = self.parameters["bias"]
+
+        # Simple autoencoding objective: output should match input
+        output_vec = input_vec * weights + bias
+        diff = output_vec - input_vec
+        grad_w = (2.0 / self.config.hidden_size) * diff * input_vec
+        grad_b = (2.0 / self.config.hidden_size) * diff
+
+        self.parameters["weights"] = weights - lr * grad_w
+        self.parameters["bias"] = bias - lr * grad_b
 
         # Track state
         self.state.total_loss += loss
@@ -247,7 +287,11 @@ class Expert:
             'expert_id': self.config.expert_id,
             'specialization': self.config.specialization,
             'specialization_score': self.state.specialization_score,
-            'parameters': self.parameters.copy(),  # In real impl, would be embeddings
+            'parameters': {
+                "weights": self.parameters["weights"].copy(),
+                "bias": self.parameters["bias"].copy()
+            },
+            'embedding': self.parameters["weights"],
         }
 
     def get_statistics(self) -> Dict[str, Any]:
@@ -923,10 +967,10 @@ def main():
     # Print visualization
     logger.info(hierarchy.get_hierarchy_visualization())
 
-    # Simulate some forward passes
-    logger.info("\nSimulating forward passes...")
+    # Run a short forward/update loop
+    logger.info("\nRunning forward passes...")
     for step in range(50):
-        # Simulate input
+        # Example input
         inputs = f"input_{step}"
 
         # Forward pass

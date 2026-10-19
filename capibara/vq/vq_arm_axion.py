@@ -316,6 +316,11 @@ def create_arm_axion_optimizer(
     return ARMAxionOptimizer(config)
 
 
+class VQArmAxion(ARMAxionOptimizer):
+    """Backward-compatible alias for ARM Axion VQ optimizer."""
+    pass
+
+
 # Global optimizer instance
 _global_optimizer: Optional[ARMAxionOptimizer] = None
 

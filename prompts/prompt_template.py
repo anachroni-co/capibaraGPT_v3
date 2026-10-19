@@ -10,8 +10,8 @@ from typing import Dict, Any, Optional, Tuple, List
 
 # Import JAX with fallback
 try:
-    import capibara.jax as jax
-    import capibara.jax.numpy as jnp
+    import jax as jax
+    import jax.numpy as jnp
 except ImportError:
     import jax
     import jax.numpy as jnp

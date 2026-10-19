@@ -17,10 +17,13 @@ try:
 except ImportError:
     BENCHMARK_AVAILABLE = False
 
-pytestmark = pytest.mark.skipif(
-    not BENCHMARK_AVAILABLE,
-    reason="pytest-benchmark not installed",
-)
+pytestmark = [
+    pytest.mark.slow,
+    pytest.mark.skipif(
+        not BENCHMARK_AVAILABLE,
+        reason="pytest-benchmark not installed",
+    ),
+]
 
 
 class TestAttentionBenchmarks:

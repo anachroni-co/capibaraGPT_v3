@@ -29,7 +29,7 @@ This directory contains utility scripts for common development tasks including t
 
 ### train_synthetic.py
 
-Train models on synthetically generated data for testing and development.
+Train models on synthetically Generated data for testing and development.
 
 ```bash
 # Basic training
@@ -318,10 +318,26 @@ CAPIBARA_LOG_LEVEL=DEBUG python scripts/train_synthetic.py
 - [Tests](../tests/README.md)
 - [Configuration](../config/README.md)
 
-## Ejemplo rápido
+## Example quick
 
-Ejemplo (pseudo-comando) para ejecutar un script utilitario:
+Example (pseudo-command) para ejecutar un script utilitario:
 
 ```bash
 python scripts/inspect_model.py --config config/configs_toml/model.toml
 ```
+
+## Issues por hacer
+
+- [ ] "--cov-report=term-missing", - `scripts\run_tests.py:103`
+- [ ] class MockModel: - `scripts\train_synthetic.py:78`
+- [ ] Mock model for synthetic training validation. - `scripts\train_synthetic.py:80`
+- [ ] Simulates forward pass and loss computation without actual model. - `scripts\train_synthetic.py:82`
+- [ ] # Initialize mock weights - `scripts\train_synthetic.py:89`
+- [ ] # Embedding lookup (simulated) - `scripts\train_synthetic.py:117`
+- [ ] # Create mock model - `scripts\train_synthetic.py:257`
+- [ ] model = MockModel(config, backend) - `scripts\train_synthetic.py:258`
+- [ ] return False, f"Missing {description}: {path}" - `scripts\validate_project.py:28`
+- [ ] results.append((cpu_path.exists(), f"Backend CPU: {'file exists' if cpu_path.exists() else 'missing'}")) - `scripts\validate_project.py:63`
+- [ ] results.append((gpu_path.exists(), f"Backend GPU: {'file exists' if gpu_path.exists() else 'missing'}")) - `scripts\validate_project.py:66`
+- [ ] results.append((tpu_path.exists(), f"Backend TPU: {'file exists' if tpu_path.exists() else 'missing'}")) - `scripts\validate_project.py:69`
+- [ ] results.append((False, f"Missing tests directory: {subdir}/")) - `scripts\validate_project.py:111`

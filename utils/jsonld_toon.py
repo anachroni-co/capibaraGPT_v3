@@ -1,3 +1,19 @@
+"""
+JSON-LD TOON Module - JSON-LD normalization for RAG contexts.
+
+This module provides JSON-LD (Linked Data) normalization utilities for
+structuring documents and chunks in RAG (Retrieval-Augmented Generation)
+contexts. It implements the TOON (Text Object Ontology Notation) format.
+
+Key Components:
+    - JsonLdConfig: Configuration dataclass for JSON-LD settings
+    - normalize_document_jsonld: Normalize documents to JSON-LD format
+    - normalize_chunk_jsonld: Normalize text chunks to JSON-LD format
+    - build_rag_jsonld_context: Build complete RAG context in JSON-LD
+
+Author: Skydesk International Dev Team.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

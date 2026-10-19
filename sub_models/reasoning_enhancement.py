@@ -5,46 +5,83 @@ This module provides advanced reasoning capabilities for the CapibaraGPT system,
 including logical inference, multi-step reasoning, and analytical problem solving.
 """
 
-import os
-import sys
 import logging
 from typing import Any, Dict, List, Optional, Tuple, Union
-from dataclasses import dataclass, field
+from dataclasses import field
 from enum import Enum
 import asyncio
 from functools import partial
+import numpy as np
 
-# Path setup
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
-
-# Core imports
-from capibara.jax import jax
-from capibara.jax import numpy as jnp
-from flax import linen as nn
-from pydantic import BaseModel, Field, validator
+# Core imports (optional JAX/Flax)
+JAX_AVAILABLE = False
+FLAX_AVAILABLE = False
+try:
+    import jax
+    from jax import numpy as jnp
+    from flax import linen as nn
+    JAX_AVAILABLE = True
+    FLAX_AVAILABLE = True
+except Exception:
+    jax = None  # type: ignore
+    jnp = np  # type: ignore
+    nn = None  # type: ignore
+try:
+    from pydantic import BaseModel, Field, field_validator
+    PYDANTIC_AVAILABLE = True
+except ImportError:
+    class BaseModel:  # type: ignore[no-redef]
+        def __init__(self, **kwargs: object) -> None:
+            for k, v in kwargs.items():
+                setattr(self, k, v)
+    def Field(*args: object, **kwargs: object) -> object:  # type: ignore[no-redef]
+        return kwargs.get("default", None)
+    def field_validator(*args: object, **kwargs: object):  # type: ignore[no-redef]
+        return lambda f: f
+    PYDANTIC_AVAILABLE = False
 
 # Interface imports
 try:
-    from capibara.interfaces.isub_models import (
+    from interfaces.isub_models import (
         ISubModelExpert, 
         ExpertContext, 
         ExpertResult,
         PrecisionMode,
         ExpertActivationMode
     )
-except ImportError:
+except Exception:
     # Fallback definitions if interfaces not available
     from abc import ABC, abstractmethod
-    
+    class PrecisionMode(str, Enum):
+        FLOAT32 = "float32"
+        BFLOAT16 = "bfloat16"
+        FLOAT16 = "float16"
+    class ExpertActivationMode(str, Enum):
+        AUTOMATIC = "automatic"
+        MANUAL = "manual"
+        CONDITIONAL = "conditional"
+        THRESHOLD_BASED = "threshold_based"
     class ISubModelExpert(ABC):
         @abstractmethod
         async def process(self, context): pass
-        
         @abstractmethod
         def supports(self, context): pass
+    class ExpertContext:  # type: ignore
+        def __init__(self, text: str, task_hint: str = "general", constraints=None, flags=None, metadata=None):
+            self.text = text
+            self.task_hint = task_hint
+            self.constraints = constraints or {}
+            self.flags = flags or {}
+            self.metadata = metadata or {}
+    class ExpertResult:  # type: ignore
+        def __init__(self, success, output, confidence, processing_time, expert_name, metadata=None, error_message=None):
+            self.success = success
+            self.output = output
+            self.confidence = confidence
+            self.processing_time = processing_time
+            self.expert_name = expert_name
+            self.metadata = metadata or {}
+            self.error_message = error_message
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +103,6 @@ class ReasoningComplexity(str, Enum):
     COMPLEX = "complex"
     EXPERT = "expert"
 
-@dataclass
 class ReasoningConfig(BaseModel):
     """Configurestion for the Reasoning Enhancement model"""
     hidden_size: int = Field(default=512, gt=0, description="Hidden dimension size")
@@ -80,81 +116,116 @@ class ReasoningConfig(BaseModel):
     confidence_threshold: float = Field(default=0.7, ge=0, le=1, description="Confidence threshold")
     precision_mode: PrecisionMode = Field(default=PrecisionMode.BFLOAT16)
     
-    @validator('hidden_size')
+    @field_validator('hidden_size')
     def validate_hidden_size(cls, v):
         if v % 64 != 0:
             raise ValueError("hidden_size must be divisible by 64 for optimal performance")
         return v
 
-class ReasoningStep(nn.Module):
-    """Individual reasoning step module"""
-    hidden_size: int
-    num_heads: int
-    dropout_rate: float = 0.1
-    
-    def setup(self):
-        self.attention = nn.MultiHeadDotProductAttention(
-            num_heads=self.num_heads,
-            qkv_features=self.hidden_size,
-            dropout_rate=self.dropout_rate
-        )
-        self.feed_forward = nn.Sequential([
-            nn.Dense(self.hidden_size * 4),
-            nn.gelu,
-            nn.Dropout(rate=self.dropout_rate),
-            nn.Dense(self.hidden_size)
-        ])
-        self.layer_norm1 = nn.LayerNorm()
-        self.layer_norm2 = nn.LayerNorm()
-        self.dropout = nn.Dropout(rate=self.dropout_rate)
-    
-    def __call__(self, x, mask=None, deterministic=True):
-        # Self-attention with residual connection
-        attn_output = self.attention(x, mask=mask, deterministic=deterministic)
-        x = self.layer_norm1(x + self.dropout(attn_output, deterministic=deterministic))
+if FLAX_AVAILABLE:
+    class ReasoningStep(nn.Module):
+        """Individual reasoning step module"""
+        hidden_size: int
+        num_heads: int
+        dropout_rate: float = 0.1
         
-        # Feed-forward with residual connection
-        ff_output = self.feed_forward(x)
-        x = self.layer_norm2(x + self.dropout(ff_output, deterministic=deterministic))
+        def setup(self):
+            self.attention = nn.MultiHeadDotProductAttention(
+                num_heads=self.num_heads,
+                qkv_features=self.hidden_size,
+                dropout_rate=self.dropout_rate
+            )
+            # Explicit FF layers: nn.Sequential cannot forward the
+            # `deterministic` flag to the inner Dropout.
+            self.ff_dense1 = nn.Dense(self.hidden_size * 4)
+            self.ff_dropout = nn.Dropout(rate=self.dropout_rate)
+            self.ff_dense2 = nn.Dense(self.hidden_size)
+            self.layer_norm1 = nn.LayerNorm()
+            self.layer_norm2 = nn.LayerNorm()
+            self.dropout = nn.Dropout(rate=self.dropout_rate)
         
-        return x
+        def __call__(self, x, mask=None, deterministic=True):
+            # Self-attention with residual connection
+            attn_output = self.attention(x, mask=mask, deterministic=deterministic)
+            x = self.layer_norm1(x + self.dropout(attn_output, deterministic=deterministic))
+            
+            # Feed-forward with residual connection
+            ff_output = self.ff_dense2(
+                self.ff_dropout(nn.gelu(self.ff_dense1(x)), deterministic=deterministic)
+            )
+            x = self.layer_norm2(x + self.dropout(ff_output, deterministic=deterministic))
+            
+            return x
 
-class ReasoningCore(nn.Module):
-    """Core reasoning module with multiple reasoning steps"""
-    config: ReasoningConfig
-    
-    def setup(self):
-        self.reasoning_steps = [
-            ReasoningStep(
-                hidden_size=self.config.hidden_size,
-                num_heads=self.config.num_heads,
-                dropout_rate=self.config.dropout_rate
-            ) for _ in range(self.config.num_reasoning_layers)
-        ]
+    class ReasoningCore(nn.Module):
+        """Core reasoning module with multiple reasoning steps"""
+        config: ReasoningConfig
         
-        self.input_projection = nn.Dense(self.config.hidden_size)
-        self.output_projection = nn.Dense(self.config.hidden_size)
-        self.reasoning_type_embedding = nn.Embed(
-            num_embeddings=len(ReasoningType),
-            features=self.config.hidden_size
-        )
-        
-    def __call__(self, inputs, reasoning_type_id=0, mask=None, deterministic=True):
-        # Project inputs to hidden dimension
-        x = self.input_projection(inputs)
-        
-        # Add reasoning type embedding
-        type_embed = self.reasoning_type_embedding(reasoning_type_id)
-        x = x + type_embed
-        
-        # Apply reasoning steps
-        for step in self.reasoning_steps:
-            x = step(x, mask=mask, deterministic=deterministic)
-        
-        # Final projection
-        output = self.output_projection(x)
-        
-        return output
+        def setup(self):
+            self.reasoning_steps = [
+                ReasoningStep(
+                    hidden_size=self.config.hidden_size,
+                    num_heads=self.config.num_heads,
+                    dropout_rate=self.config.dropout_rate
+                ) for _ in range(self.config.num_reasoning_layers)
+            ]
+            
+            self.input_projection = nn.Dense(self.config.hidden_size)
+            self.output_projection = nn.Dense(self.config.hidden_size)
+            self.reasoning_type_embedding = nn.Embed(
+                num_embeddings=len(ReasoningType),
+                features=self.config.hidden_size
+            )
+            
+        def __call__(self, inputs, reasoning_type_id=0, mask=None, deterministic=True):
+            # Project inputs to hidden dimension
+            x = self.input_projection(inputs)
+            
+            # Add reasoning type embedding (Embed requires an integer array,
+            # not a Python int)
+            type_embed = self.reasoning_type_embedding(
+                jnp.asarray(reasoning_type_id, dtype=jnp.int32)
+            )
+            x = x + type_embed
+            
+            # Apply reasoning steps
+            for step in self.reasoning_steps:
+                x = step(x, mask=mask, deterministic=deterministic)
+            
+            # Final projection
+            output = self.output_projection(x)
+            
+            return output
+else:
+    class ReasoningCore:
+        """CPU fallback reasoning core (NumPy)."""
+        def __init__(self, config: ReasoningConfig):
+            self.config = config
+            self._initialized = False
+            self._rng = np.random.default_rng(0)
+            self._W_in = None
+            self._W_out = None
+
+        def _init_weights(self, input_dim: int) -> None:
+            h = self.config.hidden_size
+            self._W_in = self._rng.standard_normal((input_dim, h)).astype(np.float32) * 0.02
+            self._W_out = self._rng.standard_normal((h, h)).astype(np.float32) * 0.02
+            self._initialized = True
+
+        def __call__(self, inputs, reasoning_type_id=0, mask=None, deterministic=True):
+            x = np.asarray(inputs, dtype=np.float32)
+            if not self._initialized:
+                self._init_weights(x.shape[-1])
+            x = np.tanh(x @ self._W_in)
+            x = x @ self._W_out
+            return x
+
+        # Flax compatibility shims
+        def init(self, *args, **kwargs):
+            return {}
+
+        def apply(self, params, inputs, **kwargs):
+            return self.__call__(inputs, **kwargs)
 
 class ReasoningEnhancementExpert(ISubModelExpert):
     """Expert system for reasoning enhancement"""
@@ -219,10 +290,14 @@ class ReasoningEnhancementExpert(ISubModelExpert):
             # Initialize model
             self.model = ReasoningCore(config=self.config)
             
-            # Initialize parameters with dummy data
-            key = jax.random.PRNGKey(42)
+            # Initialize parameters with dummy data when JAX is available
             dummy_input = jnp.ones((1, 10, self.config.hidden_size))
-            self.params = self.model.init(key, dummy_input)
+            if JAX_AVAILABLE:
+                key = jax.random.PRNGKey(42)
+                self.params = self.model.init(key, dummy_input)
+            else:
+                # CPU fallback uses internal NumPy weights
+                self.params = {}
             
             self._initialized = True
             logger.info(f"Reasoning Enhancement Expert initialized successfully")
@@ -290,7 +365,7 @@ class ReasoningEnhancementExpert(ISubModelExpert):
                 metadata={
                     "reasoning_type": reasoning_type.value,
                     "num_steps": len(reasoning_steps),
-                    "model_config": self.config.dict()
+                    "model_config": self.config.model_dump()
                 }
             )
             

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CapibaraGPT-v2 Complete Data Pipeline
+CapibaraGPT v3 Complete Data Pipeline
 
 Integrated pipeline from data download/scraping to model training.
 
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Pipeline version and metadata
 PIPELINE_VERSION = "2.0.0"
-PIPELINE_NAME = "CapibaraGPT-v2-DataPipeline"
+PIPELINE_NAME = "CapibaraGPT v3-DataPipeline"
 
 # Default configurations
 DEFAULT_CONFIG = {

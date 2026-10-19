@@ -22,17 +22,17 @@ import os
 # Esto añade la folder raíz del proyecto a la path de búsqueda de Python
 # Obtiene la path del directory current (scripts) -> /.../scripts
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Sube un level for obtain la raíz del proyecto -> /.../capibaraGPT-v2
+# Sube un level for obtain la raíz del proyecto -> /.../CapibaraGPT v3
 project_root = os.path.dirname(script_dir)
 # Añade la raíz del proyecto a sys.path
 if project_root not in sys.path:
     pass  # Using proper imports instead of sys.path manipulation
 
 from typing import Dict, Any, Optional
-from capibara.jax import jax  # type: ignore
+import jax
 from flax import linen as nn  # type: ignore
 from pydantic import BaseModel, Field # type: ignore
-from capibara.jax import numpy as jnp  # type: ignore
+from jax import numpy as jnp  # type: ignore
 
 from capibara.interfaces.isub_models import ISubModel
 
@@ -97,7 +97,7 @@ class Liquid(nn.Module, IExperimentalModel):
         }
         
     def get_config(self) -> Dict[str, Any]:
-        return self.config.dict()
+        return self.config.model_dump()
         
     def get_metrics(self) -> Dict[str, Any]:
         return {

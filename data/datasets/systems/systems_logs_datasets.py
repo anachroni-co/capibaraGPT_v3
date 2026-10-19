@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Systems & Logs Datasets Manager - CapibaraGPT-v2
+Systems & Logs Datasets Manager - CapibaraGPT v3
 Specialized datasets for computational systems, logs, security and performance.
 
 This module manages world-class datasets from authoritative sources such as:
@@ -388,7 +388,7 @@ class SystemsLogsDataManager:
 
         return categories
 
-# Utility functions for integration with CapibaraGPT-v2
+# Utility functions for integration with CapibaraGPT v3
 
 def create_systems_datasets_manager(base_dir: Optional[str] = None) -> SystemsLogsDataManager:
     """Factory function to create the systems datasets manager."""
@@ -504,7 +504,7 @@ if __name__ == "__main__":
     # Functionality demo
     manager = create_systems_datasets_manager()
 
-    logger.info("Systems & Logs Datasets Manager - CapibaraGPT-v2")
+    logger.info("Systems & Logs Datasets Manager - CapibaraGPT v3")
     logger.info("=" * 60)
 
     # Show available datasets

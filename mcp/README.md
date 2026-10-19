@@ -430,9 +430,9 @@ mcp:
 - [Inference Module](../inference/README.md)
 - [Training Module](../training/README.md)
 
-## Ejemplo rápido
+## Example quick
 
-Ejemplo (pseudo-comando) para iniciar un servicio MCP:
+Example (pseudo-command) para iniciar un servicio MCP:
 
 ```bash
 python -m mcp.server --config config/configs_toml/mcp.toml

@@ -1,10 +1,23 @@
+"""
+Web UI for CapibaraGPT v3 N8N Automation Service.
+
+This module provides a user-friendly web interface for creating and
+managing automation workflows. Built with FastAPI, it allows users
+to create workflows using natural language without technical knowledge.
+
+Key Components:
+    - CapibaraAutomationWebUI: Main class for the web interface
+
+Features:
+    - Natural language workflow creation
+    - Workflow templates and presets
+    - Real-time execution monitoring
+    - Agent configuration interface
+
+Author: Skydesk International Dev Team.
+"""
+
 import sys
-"""
-Web UI for Capibara6 N8N Automation Service
-
-# This module provides functionality for web_ui.
-"""
-
 import os
 
 import logging
@@ -33,7 +46,7 @@ from .models import AutomationRequest, ExecutionMode, AgentType
 
 class CapibaraAutomationWebUI:
     """
-    Web UI for the Capibara6 N8N Automation Service.
+    Web UI for the CapibaraGPT v3 N8N Automation Service.
     
     Provides a simple, user-friendly interface for creating and managing
     automation workflows without technical knowledge.
@@ -51,7 +64,7 @@ class CapibaraAutomationWebUI:
         
         self.automation_service = automation_service
         self.app = FastAPI(
-            title="Capibara6 Automation Studio",
+            title="CapibaraGPT v3 Automation Studio",
             description="Create workflows with natural language",
             version="1.0.0"
         )
@@ -83,7 +96,7 @@ class CapibaraAutomationWebUI:
             """Home page with workflow creation form."""
             return self.templates.TemplateResponse("home.html", {
                 "request": request,
-                "title": "Capibara6 Automation Studio"
+                "title": "CapibaraGPT v3 Automation Studio"
             })
         
         @self.app.post("/create", response_class=HTMLResponse)
@@ -276,7 +289,7 @@ class CapibaraAutomationWebUI:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ title }} - Capibara6 Automation</title>
+    <title>{{ title }} - CapibaraGPT v3 Automation</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -289,7 +302,7 @@ class CapibaraAutomationWebUI:
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark capibara-header">
         <div class="container">
-            <a class="navbar-brand" href="/"><i class="fas fa-robot"></i> Capibara6 Automation</a>
+            <a class="navbar-brand" href="/"><i class="fas fa-robot"></i> CapibaraGPT v3 Automation</a>
             <div class="navbar-nav ms-auto">
                 <a class="nav-link" href="/"><i class="fas fa-home"></i> Home</a>
                 <a class="nav-link" href="/templates"><i class="fas fa-th-large"></i> Templates</a>

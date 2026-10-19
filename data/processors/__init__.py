@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Data Processors
+CapibaraGPT v3 Data Processors
 Module for processing and transformation of data
 """
 

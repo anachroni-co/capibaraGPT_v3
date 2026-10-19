@@ -32,7 +32,10 @@ Reference:
 """
 
 import logging
-from typing import Dict, List, Optional, Any, Tuple, Callable
+import argparse
+import json
+from pathlib import Path
+from typing import Dict, List, Optional, Any, Tuple, Callable, Iterable
 from dataclasses import dataclass, field
 from collections import defaultdict, deque
 from datetime import datetime
@@ -141,10 +144,18 @@ class RoutingPolicy:
     def __init__(self, config: RoutingPolicyConfig):
         self.config = config
 
-        # Simulated routing network parameters
-        # In real implementation, these would be neural network weights
-        self.route_weights = [1.0 / config.num_routes] * config.num_routes
-        self.route_biases = [0.0] * config.num_routes
+        # Lightweight routing parameters (deterministic init)
+        rng = np.random.default_rng(0) if hasattr(np, "random") else None
+        if rng is not None:
+            raw = rng.normal(0.0, 1.0, size=config.num_routes)
+            weights = np.clip(raw, 0.01, None)
+            weights = weights / float(np.sum(weights))
+            self.route_weights = list(weights)
+            self.route_biases = list(rng.normal(0.0, 0.01, size=config.num_routes))
+        else:
+            # Fallback for minimal numpy shim
+            self.route_weights = [1.0 / config.num_routes] * config.num_routes
+            self.route_biases = [0.0] * config.num_routes
 
         # Performance tracking per route
         self.route_performance = defaultdict(list)
@@ -706,29 +717,46 @@ def get_global_self_modifying_router() -> SelfModifyingRouter:
 def main():
     """Test the self-modifying router."""
     logging.basicConfig(level=logging.INFO)
-    logger.info(" Self-Modifying Router - Testing Mode")
+    logger.info(" Self-Modifying Router - Metrics Mode")
 
-    # Create router
+    parser = argparse.ArgumentParser(description="Self-Modifying Router runner (real metrics).")
+    parser.add_argument(
+        "--metrics",
+        type=str,
+        required=True,
+        help="Path to JSONL file with {'input': ..., 'performance': float, 'context': {...}} per line.",
+    )
+    args = parser.parse_args()
+
+    metrics_path = Path(args.metrics)
+    if not metrics_path.exists():
+        raise FileNotFoundError(f"Metrics file not found: {metrics_path}")
+
     router = create_self_modifying_router()
 
-    # Simulate routing with varying performance
-    for step in range(500):
-        # Simulate input
-        inputs = f"input_{step}"
+    def _iter_metrics(path: Path) -> Iterable[Tuple[Any, float, Optional[Dict[str, Any]]]]:
+        with path.open("r", encoding="utf-8") as handle:
+            for line_no, line in enumerate(handle, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    payload = json.loads(line)
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid JSON at line {line_no}: {exc}") from exc
 
-        # Route
-        selected_routes, metadata = router.route(inputs)
+                if "input" not in payload or "performance" not in payload:
+                    raise ValueError(
+                        f"Line {line_no} missing required keys ('input', 'performance')."
+                    )
+                performance = float(payload["performance"])
+                context = payload.get("context")
+                yield payload["input"], performance, context
 
-        # Simulate performance feedback
-        # Performance improves over time but with noise
-        base_performance = 0.3 + step * 0.001
-        noise = (hash(str(step)) % 20 - 10) / 100
-        performance = np.clip(base_performance + noise, 0, 1)
-
-        # Update with feedback
+    for step, (inputs, performance, context) in enumerate(_iter_metrics(metrics_path), 1):
+        selected_routes, _ = router.route(inputs, context)
         router.update_with_feedback(selected_routes, performance, step)
 
-        # Log progress
         if step % 100 == 0:
             stats = router.get_statistics()
             logger.info(f"\nStep {step}:")
@@ -738,13 +766,11 @@ def main():
             logger.info(f"  Top-k: {stats['level1_routing_policy']['top_k']}")
             logger.info(f"  Exploration: {stats['level1_routing_policy']['exploration_rate']:.3f}")
 
-    # Final statistics
     final_stats = router.get_statistics()
     logger.info(f"\n Final Statistics:")
     logger.info(f"  Total routing decisions: {final_stats['total_routing_decisions']}")
     logger.info(f"  Total meta-updates: {final_stats['meta_updates_performed']}")
 
-    # Modification history
     modifications = router.get_modification_history()
     logger.info(f"\n Modification History ({len(modifications)} modifications):")
     for mod in modifications[-5:]:

@@ -9,7 +9,7 @@ import logging
 
 # Get the current directory path (scripts) -> /.../scripts
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Go up one level to obtain the project root -> /.../capibaraGPT-v2
+# Go up one level to obtain the project root -> /.../CapibaraGPT v3
 project_root = os.path.dirname(script_dir)
 # Add the project root to sys.path
 if project_root not in sys.path:
@@ -17,28 +17,28 @@ if project_root not in sys.path:
 
 from pathlib import Path
 import shutil
-from capibara.jax import jax
+import jax
 import numpy as np #type: ignore
 from .config_types import CapibaraConfig
-from capibara.jax.experimental import mesh_utils 
+from jax.experimental import mesh_utils 
 from typing import Dict, Any, List, Optional, Union
 from pydantic import validator, ValidationError #type: ignore
 
 # Importaciones de tpu v4-32
-from capibara.jax.tpu_v4.backend import (
+from capibara.jax_ext.tpu_v4.backend import (
     TpuV4LinalgOps,
     TpuV4SparseOps,
     TpuV4NeuralOps,
     TpuV4RandomOps,
     TpuV4PerformanceUtils,
 )
-from capibara.jax.tpu_v4.optimizations import (
+from capibara.jax_ext.tpu_v4.optimizations import (
     create_tpu_mesh,
     TpuMemoryMonitor,
     tpu_optimized_gemm,
     create_jitted_forward,
 )
-from capibara.jax.tpu_v4.profiling import (
+from capibara.jax_ext.tpu_v4.profiling import (
     TpuProfiler,
     _uniform_fallback_weights,
     _expert_weights_with_cache,

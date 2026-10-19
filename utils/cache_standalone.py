@@ -11,8 +11,8 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Union, TypeVar, Generic, Callable, Protocol
 
-from capibara.jax import jax
-from capibara.jax import numpy as jnp
+import jax
+from jax import numpy as jnp
 from capibara.core.config import CheckpointConfig
 
 # TypeVar for Generic
@@ -382,8 +382,8 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Union, TypeVar, Generic, Callable, Protocol, runtime_checkable
 
-from capibara.jax import jax
-from capibara.jax import numpy as jnp
+import jax
+from jax import numpy as jnp
 from capibara.core.config import CheckpointConfig
 from capibara.utils.checkpoint_manager import CheckpointManager
 

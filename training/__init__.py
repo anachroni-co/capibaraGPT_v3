@@ -5,7 +5,6 @@ Meta-consensus training system with HuggingFace integration:
 - unified_consensus: Base consensus coordination
 - enhanced_hf_consensus_strategy: HuggingFace-optimized consensus
 - hybrid_expert_router: Multi-tier expert routing
-- btx_training_system: Branch-Train-MiX training
 - meta_consensus_system: Higher-order consensus coordination
 """
 
@@ -31,25 +30,6 @@ except ImportError:
     EnhancedHFConsensusStrategy = None
     ServerlessExpertConfig = None
 
-# Hybrid expert router
-try:
-    from .hybrid_expert_router import HybridExpertRouter, ExpertTier, RoutingStrategy
-    HYBRID_ROUTER_AVAILABLE = True
-except ImportError:
-    HYBRID_ROUTER_AVAILABLE = False
-    HybridExpertRouter = None
-    ExpertTier = None
-    RoutingStrategy = None
-
-# BTX training system
-try:
-    from .btx_training_system import BTXTrainingSystem, BTXExpertConfig
-    BTX_AVAILABLE = True
-except ImportError:
-    BTX_AVAILABLE = False
-    BTXTrainingSystem = None
-    BTXExpertConfig = None
-
 # Meta-consensus system
 try:
     from .meta_consensus_system import MetaConsensusSystem, MetaConsensusConfig, create_meta_consensus_system
@@ -69,12 +49,7 @@ __all__ = [
     "EnhancedHFConsensusStrategy",
     "ServerlessExpertConfig",
     # Hybrid router
-    "HybridExpertRouter",
-    "ExpertTier",
-    "RoutingStrategy",
     # BTX training
-    "BTXTrainingSystem",
-    "BTXExpertConfig",
     # Meta-consensus
     "MetaConsensusSystem",
     "MetaConsensusConfig",
@@ -82,7 +57,5 @@ __all__ = [
     # Availability flags
     "UNIFIED_AVAILABLE",
     "HF_CONSENSUS_AVAILABLE",
-    "HYBRID_ROUTER_AVAILABLE",
-    "BTX_AVAILABLE",
     "META_CONSENSUS_AVAILABLE",
 ]

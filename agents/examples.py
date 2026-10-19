@@ -1,5 +1,5 @@
 """
-Factory and Strategy Pattern Examples - CapibaraGPT v2024
+Factory and Strategy Pattern Examples - CapibaraGPT v3024
 =========================================================
 
 Ejemplos completos demostrando el uso de los patrones Factory y Strategy

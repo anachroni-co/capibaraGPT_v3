@@ -4,28 +4,48 @@ Uses JAX native implementations directly with TPU v4-32 optimizations.
 """
 
 import os
-import psutil
 import logging
 import time
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import Optional, Dict, Any, Protocol, runtime_checkable, List, Tuple
 
-from capibara.jax import nn
-from capibara.jax import numpy as jnp
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None  # type: ignore
+    PSUTIL_AVAILABLE = False
 
-from capibara.utils.monitoring import MemoryMonitor
-from capibara.core.config import RouterConfig, ModularModelConfig
+try:
+    from jax import nn
+    from jax import numpy as jnp
+    JAX_AVAILABLE = True
+except ImportError:
+    import numpy as jnp  # type: ignore
+    nn = None  # type: ignore
+    JAX_AVAILABLE = False
+
+try:
+    from capibara.utils.monitoring import MemoryMonitor
+except ImportError:
+    MemoryMonitor = None  # type: ignore
+
+try:
+    from capibara.core.config import RouterConfig, ModularModelConfig
+except ImportError:
+    RouterConfig = None  # type: ignore
+    ModularModelConfig = None  # type: ignore
 
 # Direct imports of native implementations
 try:
-    from capibara.jax.tpu_v4.backend import (
+    from capibara.jax_ext.tpu_v4.backend import (
         TpuV4LinalgOps,
         TpuV4SparseOps,
         TpuV4NeuralOps,
         TPU_V4_AVAILABLE,
     )   
-    from capibara.jax.tpu_v4.optimizations import tpu_optimized_gemm
+    from capibara.jax_ext.tpu_v4.optimizations import tpu_optimized_gemm
     NATIVE_TPU_AVAILABLE = True
 except ImportError:
     NATIVE_TPU_AVAILABLE = False
@@ -49,7 +69,13 @@ class RouterProtocol(Protocol):
     def route(self, x: jnp.ndarray, context: Optional[jnp.ndarray] = None) -> jnp.ndarray:
         ...
 
-class BaseRouter(nn.Module, ABC):
+# Routers are plain-Python orchestrators (mutable state, custom __init__),
+# which is incompatible with the flax.linen.Module dataclass lifecycle.
+# jax.nn is only used for stateless functions (softmax), never as a Module base.
+class _FlaxBase:
+    pass
+
+class BaseRouter(_FlaxBase, ABC):  # type: ignore[misc]
     """Abstract base class for all routers"""
     config: RouterConfig
     
@@ -193,7 +219,11 @@ class BaseRouter(nn.Module, ABC):
             scores = jnp.where(mask[:, None, None, :], scores, float('-inf'))
         
         # Use less memory in softmax
-        weights = nn.softmax(scores, axis=-1)
+        if JAX_AVAILABLE and nn is not None:
+            weights = nn.softmax(scores, axis=-1)
+        else:
+            _e = jnp.exp(scores - jnp.max(scores, axis=-1, keepdims=True))
+            weights = _e / jnp.sum(_e, axis=-1, keepdims=True)
         del scores  # Free memory
         
         output = self._optimized_matmul(weights, value)
@@ -216,21 +246,33 @@ class BaseRouter(nn.Module, ABC):
         pass
 
     def combine_outputs(self, outputs: Dict[str, Any]) -> Any:
-        """Base method to combine outputs. Must be implemented by subclasses."""
-        raise NotImplementedError("The combine_outputs method must be implemented by subclasses")
+        """Combine outputs from routed experts with a safe default."""
+        if not isinstance(outputs, dict) or not outputs:
+            return outputs
+
+        values = list(outputs.values())
+        try:
+            shapes = [getattr(v, "shape", None) for v in values]
+            if shapes and all(shape == shapes[0] for shape in shapes):
+                stacked = jnp.stack(values, axis=0)
+                return jnp.mean(stacked, axis=0)
+        except Exception:
+            pass
+
+        return outputs
 
 class BaseRouterV2(BaseRouter):
     """Base router version 2 with extended functionality."""
     
-    def __init__(self):
+    def __init__(self, config: Optional[RouterConfig] = None):
         """Initializes the router."""
-        super().__init__()
-        self.memory_monitor = None
+        super().__init__(config or RouterConfig())
+        self.memory_monitor = MemoryMonitor()
     
     def route(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """Implementation base of routing."""
         return inputs
         
     def combine_outputs(self, outputs: Dict[str, Any]) -> Any:
-        """Base method to combine outputs. Must be implemented by subclasses."""
-        raise NotImplementedError("The combine_outputs method must be implemented by subclasses.") 
+        """Default combine behavior for v2 routers."""
+        return super().combine_outputs(outputs)

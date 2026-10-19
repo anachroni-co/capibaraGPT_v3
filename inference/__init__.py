@@ -15,20 +15,30 @@ Components:
 import logging
 from typing import Dict, Any, Optional
 
-from .quantization import (
-    WeightQuantizer,
-    KVCacheCalibrator,
-    QuantizedInferenceEngine,
-    create_weight_quantizer,
-    create_kv_calibrator,
-    quantize_model_for_deployment,
-    calibrate_kv_cache
-)
+try:
+    from .quantization import (
+        WeightQuantizer,
+        KVCacheCalibrator,
+        QuantizedInferenceEngine,
+        create_weight_quantizer,
+        create_kv_calibrator,
+        quantize_model_for_deployment,
+        calibrate_kv_cache,
+    )
+except ImportError:
+    WeightQuantizer = None  # type: ignore[assignment,misc]
+    KVCacheCalibrator = None  # type: ignore[assignment,misc]
+    QuantizedInferenceEngine = None  # type: ignore[assignment,misc]
+    create_weight_quantizer = None  # type: ignore[assignment]
+    create_kv_calibrator = None  # type: ignore[assignment]
+    quantize_model_for_deployment = None  # type: ignore[assignment]
+    calibrate_kv_cache = None  # type: ignore[assignment]
 
 
 logger = logging.getLogger(__name__)
 
 # Component availability flags
+ARM_INFERENCE_AVAILABLE = False
 QUANTIZED_INFERENCE_AVAILABLE = False
 QUANTIZATION_SYSTEM_AVAILABLE = False
 

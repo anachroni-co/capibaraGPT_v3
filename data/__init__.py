@@ -13,6 +13,15 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
+# Sequence packing (pretraining stream packing + SFT example packing)
+from .packing import (
+    pack_token_streams,
+    pack_examples,
+    PackedExample,
+    PackedDataset,
+    packing_efficiency,
+)
+
 # Core dataset registry functions
 from .dataset_registry import (
     load_registry,

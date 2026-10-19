@@ -1,5 +1,17 @@
-"""Utility modules for CapibaraGPT."""
+"""
+CapibaraGPT v3 utils package shim.
 
-from capibara.utils.backends import TensorBackend, get_backend, boost_logits
+Aliases the top-level `utils` package so that both `utils.*` and
+`capibara.utils.*` imports work.
+"""
 
-__all__ = ["TensorBackend", "get_backend", "boost_logits"]
+from __future__ import annotations
+
+import importlib
+import sys
+
+
+_mod = importlib.import_module("utils")
+
+# Expose as capibara.utils
+sys.modules[__name__] = _mod

@@ -6,8 +6,14 @@ Configuration types for CapibaraModel using Pydantic for validation.
 import logging
 # from pathlib import nore  # Fixed: removed incorrect import
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional, Dict, Any, List
-from pydantic import BaseModel, Field, validator # type: ignore
+from pydantic import BaseModel, Field, field_validator, ValidationInfo # type: ignore
+
+try:
+    import yaml  # type: ignore
+except ImportError:
+    yaml = None
 
 logger = logging.getLogger(__name__)
 
@@ -44,17 +50,18 @@ class ModelConfig(BaseModel):
     quant_min: float = Field(default=0.0, description="Minimum value for quantization")
     quant_max: float = Field(default=255.0, description="Maximum value for quantization")
 
-    @validator('num_heads')
-    def validate_num_heads(cls, v, values):
+    @field_validator('num_heads')
+    def validate_num_heads(cls, v, info: ValidationInfo):
         """Validate that num_heads divides hidden_size."""
-        if 'hidden_size' in values and values['hidden_size'] % v != 0:
-            raise ValueError(f"num_heads ({v}) must divide hidden_size ({values['hidden_size']})")
+        hidden_size = info.data.get('hidden_size')
+        if hidden_size is not None and hidden_size % v != 0:
+            raise ValueError(f"num_heads ({v}) must divide hidden_size ({hidden_size})")
         return v
 
-    @validator('bit_width')
-    def validate_bit_width(cls, v, values):
+    @field_validator('bit_width')
+    def validate_bit_width(cls, v, info: ValidationInfo):
         """Validate bit_width when quantization is used."""
-        if values.get('use_bitnet_quantizer', False) and v not in [4, 8, 16]:
+        if info.data.get('use_bitnet_quantizer', False) and v not in [4, 8, 16]:
             raise ValueError("bit_width must be 4, 8, or 16 for quantization")
         return v
 
@@ -70,7 +77,7 @@ class TrainingConfig(BaseModel):
     num_epochs: int = Field(default=10, gt=0, description="Number of epochs")
     vocab_size: int = Field(default=32000, gt=0, description="Vocabulary size")
 
-    @validator('train_data_path', 'val_data_path')
+    @field_validator('train_data_path', 'val_data_path')
     def validate_data_paths(cls, v):
         """Validate that data paths exist."""
         path = Path(v)
@@ -101,7 +108,7 @@ class PathsConfig(BaseModel):
     logs: str = Field(default="logs", description="Path for logs")
     data: str = Field(default="data", description="Path for data")
 
-    @validator('checkpoints', 'logs', 'data')
+    @field_validator('checkpoints', 'logs', 'data')
     def validate_paths(cls, v):
         """Validate and create paths if they don't exist."""
         path = Path(v)
@@ -122,7 +129,7 @@ class CapibaraConfig(BaseModel):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
-        return self.dict()
+        return self.model_dump()
 
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'CapibaraConfig':
@@ -133,6 +140,8 @@ class CapibaraConfig(BaseModel):
     def from_yaml(cls, yaml_path: str | Path) -> 'CapibaraConfig':
         """Load config from YAML file."""
         path = Path(yaml_path)
+        if yaml is None:
+            raise ImportError("PyYAML is required to load YAML config files.")
         with path.open() as f:
             config_dict = yaml.safe_load(f)
         return cls.from_dict(config_dict)
@@ -144,7 +153,7 @@ class CapibaraConfig(BaseModel):
         # Validate required memory
         try:
             from .config_validators import estimate_model_memory
-            model_mem = estimate_model_memory(self.dict())
+            model_mem = estimate_model_memory(self.model_dump())
             logger.info(f"Estimated model memory: {model_mem/1e9:.2f}GB")
         except Exception as e:
             warnings.append(f"Error estimating memory: {str(e)}")

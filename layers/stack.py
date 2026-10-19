@@ -1,30 +1,44 @@
-import os
-import sys
-import logging
-# Obtiene la path del directory current (scripts) -> /.../scripts
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Sube un level for obtain la raíz del proyecto -> /.../capibaraGPT-v2
-project_root = os.path.dirname(script_dir)
-# Añade la raíz del proyecto a sys.path
-if project_root not in sys.path:
-    # Fixed: Using proper imports instead of sys.path manipulation
-    pass
+"""
+Layer stack utilities for CapibaraGPT v3.
+"""
 
-import flax.linen as nn # type: ignore
-from capibara.jax import jax # type: ignore
-from capibara.jax import numpy as jnp # type: ignore
-from typing import Optional, Tuple, List, Union, Dict, Any
-from capibara.interfaces.ilayer import ILayer as BaseLayer
-from capibara.config.model_config import NeuroAdaptiveConfig
-from capibara.layers.sparsity.sparse_capibara import SparseCapibara
-from capibara.layers.sparsity.affine_quantizer import AffineQuantizer
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from typing import Sequence
+
+from layers.jax_compat import jnp, nn, JAX_AVAILABLE
 
 logger = logging.getLogger(__name__)
 
-def main():
-    # Main function for this module.
+
+@dataclass
+class LayerStackConfig:
+    """Configuration for a simple stacked layer block."""
+    num_layers: int = 2
+
+
+class LayerStack(nn.Module):
+    """Apply a sequence of layers to an input."""
+    layers: Sequence[nn.Module]
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, training: bool = False) -> jnp.ndarray:
+        for layer in self.layers:
+            try:
+                x = layer(x, training=training)
+            except TypeError:
+                x = layer(x)
+        return x
+
+
+def main() -> bool:
     logger.info("Module stack.py starting")
+    if not JAX_AVAILABLE:
+        logger.warning("JAX/Flax not available; LayerStack will not be usable.")
     return True
+
 
 if __name__ == "__main__":
     main()

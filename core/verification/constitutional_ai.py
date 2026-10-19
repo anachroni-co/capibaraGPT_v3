@@ -1,3 +1,28 @@
+"""
+Constitutional AI Module - Safety and alignment verification system.
+
+This module provides a lightweight Constitutional AI-inspired verification
+system for ensuring model outputs align with safety guidelines and ethical
+principles. It implements deterministic checks and correction mechanisms.
+
+Key Components:
+    - AlignmentConfig: Configuration dataclass for verification parameters
+    - ComprehensiveVerificationSystem: Main verification class with scoring
+
+Features:
+    - Bias detection and prevention
+    - Harm prevention mechanisms
+    - Real-time verification of inputs and outputs
+    - Self-correction capabilities
+
+Example:
+    >>> from core.verification.constitutional_ai import ComprehensiveVerificationSystem
+    >>> verifier = ComprehensiveVerificationSystem()
+    >>> result = verifier.verify("Generated text content")
+
+Author: Skydesk International Dev Team.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field, asdict
@@ -6,7 +31,7 @@ import time
 
 try:
     # Prefer the project's JAX shim
-    from capibara.jax.numpy import jnp  # type: ignore
+    import jax.numpy as jnp
     JAX_AVAILABLE = True
 except Exception:
     try:

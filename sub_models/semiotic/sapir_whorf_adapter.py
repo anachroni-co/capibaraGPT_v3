@@ -9,7 +9,7 @@ from typing import Dict, Optional
 
 # Native imports from Capibara project with fallbacks
 try:
-    from capibara.jax import numpy as jnp
+    from jax import numpy as jnp
     JAX_AVAILABLE = True
 except ImportError:
     # Fallback to standard numpy if available
@@ -39,7 +39,7 @@ except ImportError:
         JAX_AVAILABLE = False
 
 try:
-    from capibara.jax.nn.layers import Embedding
+    from jax.nn.layers import Embedding
     LAYERS_AVAILABLE = True
 except ImportError:
     Embedding = None

@@ -1,10 +1,31 @@
+"""
+Mnemosyne Semio Module - Semiotic and cultural analysis module.
+
+This module provides specialized analysis for visual and literary art,
+inspired by Mario Praz's approach. It automatically activates during
+inference when art-related requests are detected.
+
+Key Components:
+    - MnemosyneSemioModule: Main class for semiotic analysis
+    - Integration with SparseCapibara for sparse processing
+    - MetaBAMDP integration for advanced meta-learning
+
+Features:
+    - Artwork and photography analysis
+    - Symbolic interpretation of visual content
+    - Literary corpus integration
+    - Style and iconography recognition
+
+Author: Skydesk International Dev Team.
+"""
+
 import os
 import re
 import logging
 import numpy as np
 from flax import linen as nn
 from functools import lru_cache
-from capibara.jax.numpy import jnp
+import jax.numpy as jnp
 from flax.training import train_state
 try:
     from transformers import FlaxBlipProcessor

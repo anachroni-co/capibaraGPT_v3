@@ -1,5 +1,5 @@
 """
-DataLoader for CapibaraGPT-v2.
+DataLoader for CapibaraGPT v3.
 """
 
 from typing import Any, Iterator, List, Optional

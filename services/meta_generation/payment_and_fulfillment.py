@@ -214,7 +214,7 @@ class StripePaymentProcessor:
                     'enabled': True,
                 },
                 metadata=metadata,
-                description=f"Capibara5 Manufacturing Order - {order.project_name}",
+                description=f"CapibaraGPT v3 Manufacturing Order - {order.project_name}",
                 shipping=order.shipping_address.to_stripe_format() if order.shipping_address else None,
                 receipt_email=None  # Se puede añadir si tenemos email del cliente
             )

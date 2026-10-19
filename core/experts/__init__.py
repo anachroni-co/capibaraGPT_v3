@@ -19,6 +19,7 @@ from .nested_experts import (
 __all__ = [
     "MoEControlAPI",
     "MoETrainingSystem",
+    "MoETraining",
     "NestedExpertHierarchy",
     "NestedExpertConfig",
     "Expert",
@@ -29,3 +30,6 @@ __all__ = [
     "create_nested_expert_hierarchy",
     "get_global_nested_experts",
 ]
+
+# Backwards-compatible alias
+MoETraining = MoETrainingSystem

@@ -1,5 +1,5 @@
 """
-Google Patents Datasets Manager for CapibaraGPT v2
+Google Patents Datasets Manager for CapibaraGPT v3
 
 Specialized manager for Google Patents Public Datasets including:
 - 90+ million patent publications from 17+ countries
@@ -533,3 +533,7 @@ class GooglePatentsDatasets:
 def get_google_patents_datasets() -> GooglePatentsDatasets:
     """Get Google Patents datasets manager."""
     return GooglePatentsDatasets()
+
+
+class GooglePatentsDataset(GooglePatentsDatasets):
+    """Backward-compatible alias for GooglePatentsDatasets."""

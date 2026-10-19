@@ -72,21 +72,28 @@ except Exception as e:
     BaseLayer = None
     LayerConfig = None
 
-# Core layers (moved from root)
+# Core layers (root)
 try:
-    from .self_attention import TpuAttentionCache
-    from .embedding import main as embedding_main
-    from .conv1d_block import main as conv1d_main
-    from .stack import main as stack_main
-    from .neuro_adaptive import main as neuro_adaptive_main
-    from .neurogenesis import main as neurogenesis_main
-    from .meta_la import main as meta_la_main
-    from .smb_layer import main as smb_layer_main
+    from .self_attention import SelfAttention, SelfAttentionConfig, TpuAttentionCache
+    from .embedding import EmbeddingLayer, EmbeddingConfig
+    from .conv1d_block import Conv1DBlock, Conv1DBlockConfig
+    from .stack import LayerStack, LayerStackConfig
+    from .smb_layer import SMBLayer, SMBLayerConfig
     CORE_LAYERS_AVAILABLE = True
 except Exception as e:
     logger.debug(f"Core layers not available: {e}")
     CORE_LAYERS_AVAILABLE = False
+    SelfAttention = None
+    SelfAttentionConfig = None
     TpuAttentionCache = None
+    EmbeddingLayer = None
+    EmbeddingConfig = None
+    Conv1DBlock = None
+    Conv1DBlockConfig = None
+    LayerStack = None
+    LayerStackConfig = None
+    SMBLayer = None
+    SMBLayerConfig = None
 
 # SSM/Hybrid layers (moved from root)
 try:
@@ -118,7 +125,17 @@ __all__ = [
     # Base layers
     "BaseLayer",
     "LayerConfig",
+    "SelfAttention",
+    "SelfAttentionConfig",
     "TpuAttentionCache",
+    "EmbeddingLayer",
+    "EmbeddingConfig",
+    "Conv1DBlock",
+    "Conv1DBlockConfig",
+    "LayerStack",
+    "LayerStackConfig",
+    "SMBLayer",
+    "SMBLayerConfig",
     # Availability flags
     "SSM_LAYERS_AVAILABLE",
     "SSM_COMPONENTS_AVAILABLE",

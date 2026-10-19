@@ -86,8 +86,8 @@ except ImportError:
     nn = _DummyNN()
 
 # Import interfaces and modules
-from capibara.interfaces.imodules import IModule
-from ..mamba.mamba_module import MambaModule, MambaConfig
+from interfaces.imodules import IModule
+from sub_models.mamba.mamba_module import MambaModule, MambaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -502,6 +502,31 @@ class HybridAttentionModule(IModule):
                 },
                 "success": False
             }
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Return module metrics for IModule compatibility."""
+        return {
+            "module_type": "HybridAttentionModule",
+            "decision_stats": self.decision_stats,
+            "jax_available": JAX_AVAILABLE,
+            "flax_available": FLAX_AVAILABLE,
+            "mamba_threshold": self.config.mamba_threshold,
+        }
+
+    def get_config(self) -> Dict[str, Any]:
+        """Return module configuration for IModule compatibility."""
+        return {
+            "hidden_size": self.config.hidden_size,
+            "num_heads": self.config.num_heads,
+            "intermediate_size": self.config.intermediate_size,
+            "mamba_threshold": self.config.mamba_threshold,
+            "transformer_max_length": self.config.transformer_max_length,
+            "dropout_rate": self.config.dropout_rate,
+            "layer_norm_eps": self.config.layer_norm_eps,
+            "use_tpu_optimizations": self.config.use_tpu_optimizations,
+            "use_mixed_precision": self.config.use_mixed_precision,
+            "enable_caching": self.config.enable_caching,
+        }
     
     def get_decision_statistics(self) -> Dict[str, Any]:
         """Get routing decision statistics."""

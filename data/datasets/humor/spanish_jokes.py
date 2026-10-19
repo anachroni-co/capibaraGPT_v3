@@ -1,5 +1,5 @@
 """
-Spanish Jokes Datasets for CapibaraGPT-v2
+Spanish Jokes Datasets for CapibaraGPT v3
 ==========================================
 
 Specialized datasets for jokes and humor in Spanish.

@@ -1,5 +1,5 @@
 """
-Specialized Research Datasets Module for CapibaraGPT v2
+Specialized Research Datasets Module for CapibaraGPT v3
 
 This module provides access to specialized research datasets from multiple domains,
 including archaeology, computer science bibliography, and other academic fields.

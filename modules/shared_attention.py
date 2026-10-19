@@ -3,27 +3,16 @@ Shared Attention Module - Optimized for TPU v4-32
 Efficient multi-head attention with fused operations.
 """
 
-import os
-import sys
 import math
-
 import logging
-logger = logging.getLogger(__name__)
 
-# Get the path of the current directory (scripts) -> /.../scripts
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Go up one level to obtain the project root -> /.../capibaraGPT-v2
-project_root = os.path.dirname(script_dir)
-# Add the project root to sys.path
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-from capibara.jax import jax
+import jax
 from flax import linen as nn
 from functools import partial
-from capibara.jax import numpy as jnp
+import jax.numpy as jnp
 from typing import Optional, Dict, Any, Tuple
-from capibara.modules.shared_attention import create_shared_attention
+
+logger = logging.getLogger(__name__)
 
 class OptimizedSharedAttention(nn.Module):
     """

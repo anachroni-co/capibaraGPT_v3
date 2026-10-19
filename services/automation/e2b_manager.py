@@ -1,5 +1,5 @@
 """
-E2b Sandbox Manager for Capibara5 N8N Integration
+E2b Sandbox Manager for CapibaraGPT v3 N8N Integration
 ================================================
 
 Manages E2b sandbox environments for secure code execution within workflows.

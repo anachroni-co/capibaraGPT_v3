@@ -1,5 +1,5 @@
 """
-Ultra Modules System Comprehensive Demonstration - CapibaraGPT v2024
+Ultra Modules System Comprehensive Demonstration - CapibaraGPT v3
 ===================================================================
 
 Demostración comprehensiva de todas las capacidades ultra-avanzadas:
@@ -14,20 +14,12 @@ Demostración comprehensiva de todas las capacidades ultra-avanzadas:
 Este file demuestra el poder del ecosistema ultra-advanced de módulos.
 """
 
-import os
-import sys
 import time
 import logging
 from typing import Dict, Any, Optional, List, Tuple
 
-# Path setup
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-if project_root not in sys.path:
-    pass  # Using proper imports instead of sys.path manipulation
-
-from capibara.jax import jax
-from capibara.jax import numpy as jnp
+import jax
+import jax.numpy as jnp
 
 logger = logging.getLogger(__name__)
 

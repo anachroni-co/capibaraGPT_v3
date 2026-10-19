@@ -1,5 +1,5 @@
 """
-Dataset base class for CapibaraGPT-v2.
+Dataset base class for CapibaraGPT v3.
 """
 
 from typing import Any, Dict, Iterator, List, Optional, Union

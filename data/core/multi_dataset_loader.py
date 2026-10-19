@@ -1,5 +1,5 @@
 """
-Loader for multiple datasets in CapibaraGPT-v2.
+Loader for multiple datasets in CapibaraGPT v3.
 """
 
 import numpy as np

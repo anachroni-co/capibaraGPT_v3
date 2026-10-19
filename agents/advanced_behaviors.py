@@ -1,5 +1,5 @@
 """
-Advanced Agent Behaviors - Extended Strategy Pattern - CapibaraGPT v2024
+Advanced Agent Behaviors - Extended Strategy Pattern - CapibaraGPT v3024
 ========================================================================
 
 Additional advanced behaviors for the Strategy pattern:
@@ -13,8 +13,12 @@ Additional advanced behaviors for the Strategy pattern:
 import time
 import json
 import logging
+import os
+import urllib.parse
+import urllib.request
 from typing import Dict, Any, List, Optional, Tuple
 from collections import defaultdict, deque
+from pathlib import Path
 
 # Safe imports
 try:
@@ -246,7 +250,7 @@ class ResearchBehavior(BaseBehavior):
         """Gather information from multiple sources."""
         gathered_data = []
 
-        # Simulate gathering from different source types
+        # Gather from configured source types and keep deterministic limits.
         for source_type in research_plan["source_types"]:
             source_data = self._gather_from_source_type(source_type, research_plan)
             gathered_data.extend(source_data)
@@ -255,8 +259,132 @@ class ResearchBehavior(BaseBehavior):
     
     def _gather_from_source_type(self, source_type: str, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Gather information from a specific source type."""
+        if source_type == "web":
+            return self._gather_web_sources(plan)
+        if source_type == "documentation":
+            return self._gather_local_documentation_sources(plan)
+        if source_type == "academic":
+            return self._gather_academic_sources(plan)
+
+        return []
+
+    def _gather_web_sources(self, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Gather web sources from Wikipedia search API."""
+        query = " ".join(plan.get("keywords", [])[:4]).strip()
+        if not query:
+            return []
+
+        encoded = urllib.parse.quote(query)
+        api_url = (
+            "https://en.wikipedia.org/w/api.php"
+            f"?action=query&list=search&srsearch={encoded}&utf8=&format=json&srlimit=3"
+        )
+
+        try:
+            with urllib.request.urlopen(api_url, timeout=3) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            logger.warning("Web gathering failed for query '%s': %s", query, exc)
+            return []
+
+        results = []
+        for item in payload.get("query", {}).get("search", []):
+            title = item.get("title", "")
+            snippet = item.get("snippet", "")
+            if not title:
+                continue
+            results.append(
+                {
+                    "type": "web",
+                    "url": f"https://en.wikipedia.org/wiki/{urllib.parse.quote(title.replace(' ', '_'))}",
+                    "title": title,
+                    "content": snippet,
+                    "quality_indicators": {"authority": 0.8, "relevance": 0.8, "freshness": 0.6},
+                }
+            )
+        return results
+
+    def _gather_local_documentation_sources(self, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Gather documentation sources from local repository markdown/text files."""
+        workspace_root = Path(os.getcwd())
+        keywords = [k.lower() for k in plan.get("keywords", [])[:6]]
+        if not keywords:
+            return []
+
+        candidates = []
+        for file_path in workspace_root.rglob("*"):
+            if file_path.suffix.lower() not in {".md", ".txt", ".rst"}:
+                continue
+            if any(part.startswith(".") for part in file_path.parts):
+                continue
+            candidates.append(file_path)
+            if len(candidates) >= 200:
+                break
+
+        results = []
+        for path in candidates:
+            try:
+                content = path.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            low = content.lower()
+            match_count = sum(1 for kw in keywords if kw in low)
+            if match_count == 0:
+                continue
+
+            rel_path = str(path.relative_to(workspace_root))
+            excerpt = content[:500]
+            relevance = min(1.0, 0.3 + (match_count / max(1, len(keywords))))
+            results.append(
+                {
+                    "type": "documentation",
+                    "source": rel_path,
+                    "content": excerpt,
+                    "quality_indicators": {"authority": 0.75, "relevance": relevance, "freshness": 0.7},
+                }
+            )
+
+        results.sort(key=lambda s: s["quality_indicators"]["relevance"], reverse=True)
+        return results[:5]
+
+    def _gather_academic_sources(self, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Gather academic references from Crossref API."""
+        query = " ".join(plan.get("keywords", [])[:4]).strip()
+        if not query:
+            return []
+
+        encoded = urllib.parse.quote(query)
+        api_url = f"https://api.crossref.org/works?query={encoded}&rows=2"
+        try:
+            with urllib.request.urlopen(api_url, timeout=3) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except Exception as exc:
+            logger.warning("Academic gathering failed for query '%s': %s", query, exc)
+            return []
+
+        results = []
+        items = payload.get("message", {}).get("items", [])
+        for item in items:
+            title_list = item.get("title", [])
+            title = title_list[0] if title_list else "Untitled"
+            authors = []
+            for a in item.get("author", [])[:3]:
+                authors.append(f"{a.get('given', '').strip()} {a.get('family', '').strip()}".strip())
+            results.append(
+                {
+                    "type": "academic",
+                    "title": title,
+                    "authors": [a for a in authors if a],
+                    "content": item.get("abstract", "")[:500],
+                    "quality_indicators": {"authority": 0.9, "relevance": 0.8, "freshness": 0.5},
+                }
+            )
+        return results
+
+    def _gather_from_source_type_legacy(self, source_type: str, plan: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Legacy simulated source gathering retained for compatibility reference."""
         sources = []
-        
+
         if source_type == "web":
             sources.extend([
                 {

@@ -1,0 +1,4 @@
+# Ignore large trained/downloaded GGUF models — too big for git
+*.gguf
+# Keep the tiny synthetic test model used for CI/integration tests
+!tiny_test.gguf

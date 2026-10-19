@@ -1,5 +1,5 @@
 """
-Distributed Attention Layer for CapibaraGPT-v2.
+Distributed Attention Layer for CapibaraGPT v3.
 
 Implements multi-head attention with optional cross-attention for
 multi-expert distributed processing in the PASIVE framework.

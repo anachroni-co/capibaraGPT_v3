@@ -30,7 +30,7 @@ Factory and Strategy design patterns have been successfully implemented in the `
 
 #### `advanced_behaviors.py` - Strategy Pattern Extended
 - **ResearchBehavior**: Research and information gathering
-- **CodingBehavior**: Code generation and development
+- **CodingBehavior**: Code Generation and development
 
 #### `communication_behaviors.py` - Strategy Pattern Advanced
 - **CommunicationBehavior**: Inter-agent communication
@@ -161,7 +161,7 @@ result = strategy.coordinate_execution(execution_plan, agents)
    - Configuration: max_sources, quality_threshold, use_data_integration
 
 5. **CodingAgent**: Software development
-   - Capabilities: code_generation, code_debugging, testing_framework
+   - Capabilities: code_Generation, code_debugging, testing_framework
    - Configuration: languages, include_tests, include_docs
 
 6. **CommunicationAgent**: Inter-agent coordination
@@ -180,7 +180,7 @@ result = strategy.coordinate_execution(execution_plan, agents)
 - **coding_developer**: Full-stack developer
 - **communication_coordinator**: Communication coordinator
 - **system_monitor**: System monitor
-- **general_assistant**: General purpose assistant
+- **Generatel_assistant**: Generatel purpose assistant
 
 ## Advanced Features
 

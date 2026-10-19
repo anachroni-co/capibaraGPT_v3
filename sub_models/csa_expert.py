@@ -14,17 +14,20 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional, NamedTuple
 from enum import Enum
+import numpy as np
 
 try:
     import jax
     import jax.numpy as jnp
-    from capibara.jax import nn
+    from jax import nn
     JAX_AVAILABLE = True
-except ImportError:
+except Exception:
     JAX_AVAILABLE = False
-    logging.warning("JAX not available for CSA Expert")
+    jax = None  # type: ignore
+    jnp = np  # type: ignore
+    logging.warning("JAX not available for CSA Expert; using NumPy fallback")
 
-from capibara.interfaces.isub_models import (
+from interfaces.isub_models import (
     ICounterfactualExpert, 
     ExpertContext, 
     ExpertResult,
@@ -900,9 +903,8 @@ class CSAExpert(ICounterfactualExpert):
             # If we have valid hypotheses, return a modified version of inputs
             if hypotheses and hasattr(original_inputs, 'shape'):
                 # Apply a simple transformation based on the number of hypotheses
-                import jax.numpy as jnp
                 modification_factor = 1.0 + len(hypotheses) * 0.01  # Small modification
-                return original_inputs * modification_factor
+                return jnp.asarray(original_inputs) * modification_factor
             else:
                 return original_inputs
                 
@@ -917,9 +919,8 @@ class CSAExpert(ICounterfactualExpert):
             
         try:
             # Apply confidence-based modification to inputs
-            import jax.numpy as jnp
             confidence_factor = 1.0 + result.confidence * 0.1
-            return original_inputs * confidence_factor
+            return jnp.asarray(original_inputs) * confidence_factor
         except Exception:
             return original_inputs
 

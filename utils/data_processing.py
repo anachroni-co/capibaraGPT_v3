@@ -9,7 +9,7 @@ from .error_handling import DataProcessingError, handle_error
 
 # Importación lazy de jax for evitar circularidad
 def get_jnp():
-    from capibara.jax import numpy as jnp
+    from jax import numpy as jnp
     return jnp
 
 @handle_error(DataProcessingError)

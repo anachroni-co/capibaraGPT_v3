@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Systems Datasets
+CapibaraGPT v3 Systems Datasets
 Systems, logs and Linux infrastructure datasets
 """
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CapibaraGPT-v2 Complete Pipeline Executor
+CapibaraGPT v3 Complete Pipeline Executor
 =========================================
 
 Main execution script for the complete data-to-training pipeline.
@@ -116,7 +116,7 @@ def load_config(config_path: str = None) -> dict:
     """Load pipeline configuration."""
     default_config = {
         "pipeline": {
-            "name": "CapibaraGPT-v2-Complete-Pipeline",
+            "name": "CapibaraGPT v3-Complete-Pipeline",
             "version": "2.0.0",
             "description": "Complete data-to-training pipeline for Spanish language model"
         },
@@ -204,7 +204,7 @@ def print_pipeline_banner():
     """Print pipeline banner."""
     banner = """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║                     CapibaraGPT-v2 Complete Pipeline                     ║
+║                     CapibaraGPT v3 Complete Pipeline                     ║
 ║                                                                              ║
 ║   Data Acquisition →  Processing →  Dataset Prep →  Training Ready   ║
 ║                                                                              ║
@@ -332,7 +332,7 @@ async def run_pipeline_with_monitoring(config: dict, stage: str = None, dry_run:
 def main():
     """Main execution function."""
     parser = argparse.ArgumentParser(
-        description="CapibaraGPT-v2 Complete Data-to-Training Pipeline",
+        description="CapibaraGPT v3 Complete Data-to-Training Pipeline",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

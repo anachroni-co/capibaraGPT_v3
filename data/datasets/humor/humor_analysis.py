@@ -1,5 +1,5 @@
 """
-Humor Analysis Tools for CapibaraGPT-v2
+Humor Analysis Tools for CapibaraGPT v3
 =======================================
 
 Tools for analyzing and categorizing humor in Spanish.

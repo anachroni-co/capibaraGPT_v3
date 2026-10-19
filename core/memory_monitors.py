@@ -62,7 +62,7 @@ import gc
 from typing import Dict, Any, Optional
 
 try:
-    from capibara.jax import numpy as jnp  # noqa: F401  # Reserved for future extensions
+    from jax import numpy as jnp  # noqa: F401  # Reserved for future extensions
 except Exception:  # pragma: no cover
     import numpy as jnp  # type: ignore  # noqa: F401
 
@@ -73,7 +73,7 @@ except Exception:  # pragma: no cover
 
 # JAX native (may not be available at runtime)
 try:
-    from capibara.jax import jax as _jax  # type: ignore
+    import jax as _jax
 except Exception:  # pragma: no cover
     _jax = None  # type: ignore
 

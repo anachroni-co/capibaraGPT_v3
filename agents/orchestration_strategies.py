@@ -1,5 +1,5 @@
 """
-Orchestration Strategies - Strategy Pattern for Agent Coordination - CapibaraGPT v2024
+Orchestration Strategies - Strategy Pattern for Agent Coordination - CapibaraGPT v3024
 =======================================================================================
 
 Implementation of Strategy pattern for different orchestration approaches:

@@ -1,3 +1,26 @@
+"""
+Hierarchical Reasoning Module - Multi-phase reasoning scaffold.
+
+This module provides a hierarchical reasoning system that processes prompts
+through abstract (H) and detailed (L) phases. It is designed as a lightweight,
+deterministic scaffold that can be integrated quickly and replaced by learned
+models later.
+
+Key Components:
+    - HierarchicalReasoningConfig: Configuration dataclass for reasoning parameters
+    - HierarchicalReasoningModule: Main reasoning class with H/L phase processing
+    - HierarchicalReasoning: Alias for backwards compatibility
+
+Example:
+    >>> from modules.hierarchical_reasoning import HierarchicalReasoningModule
+    >>> config = HierarchicalReasoningConfig(max_iterations=50)
+    >>> reasoner = HierarchicalReasoningModule(config)
+    >>> result = reasoner.process("Calculate the sum of 5 and 3")
+    >>> print(result["confidence"])
+
+Author: Skydesk International Dev Team.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -9,6 +32,21 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class HierarchicalReasoningConfig:
+    """Configuration for HierarchicalReasoningModule.
+    
+    Attributes:
+        h_dim: Dimension for abstract (H) phase representations.
+        l_dim: Dimension for detailed (L) phase representations.
+        max_iterations: Maximum number of reasoning iterations.
+        convergence_threshold: Threshold for detecting convergence.
+        tpu_cores_assigned: Number of TPU cores for computation.
+        use_with_consensus: Whether to integrate with consensus system.
+        weight_in_consensus: Weight factor when used in consensus.
+        override_threshold: Threshold for overriding consensus decisions.
+        keywords_math: Keywords for detecting mathematical tasks.
+        keywords_reasoning: Keywords for detecting reasoning tasks.
+        keywords_planning: Keywords for detecting planning tasks.
+    """
     h_dim: int = 512
     l_dim: int = 256
     max_iterations: int = 100
@@ -43,9 +81,22 @@ class HierarchicalReasoningModule:
     """
 
     def __init__(self, config: Optional[HierarchicalReasoningConfig] = None):
+        """Initialize the HierarchicalReasoningModule.
+        
+        Args:
+            config: Optional configuration object. If not provided, defaults are used.
+        """
         self.config = config or HierarchicalReasoningConfig()
 
     def is_reasoning_task(self, prompt: str) -> bool:
+        """Check if a prompt requires reasoning based on keyword detection.
+        
+        Args:
+            prompt: The input text to analyze.
+            
+        Returns:
+            True if the prompt contains math, reasoning, or planning keywords.
+        """
         text = prompt.lower()
         return any(k in text for k in self.config.keywords_math) \
             or any(k in text for k in self.config.keywords_reasoning) \
@@ -117,3 +168,7 @@ class HierarchicalReasoningModule:
     def _compose_response(self, plan: List[str], steps: List[str]) -> str:
         lines = ["Proposed plan:"] + [f"- {p}" for p in plan] + ["\nExecution:"] + steps
         return "\n".join(lines)
+
+
+# Backwards-compatible alias used across docs/imports.
+HierarchicalReasoning = HierarchicalReasoningModule

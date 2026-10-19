@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Data Tools
+CapibaraGPT v3 Data Tools
 Tools and utilities for data management
 """
 

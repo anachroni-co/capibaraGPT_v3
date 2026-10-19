@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Mathematics Datasets
+CapibaraGPT v3 Mathematics Datasets
 Datasets matemáticos and algorítmicos
 """
 

@@ -10,7 +10,6 @@ from urllib.parse import urlparse
 from tqdm import tqdm
 from pathlib import Path
 from dataclasses import dataclass
-from datasets import load_dataset
 from typing import Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
@@ -395,6 +394,7 @@ class InstitutionalDatasetManager:
 
             # Load dataset
             logger.info(f"Downloading dataset {dataset_name} from Hugging Face...")
+            from datasets import load_dataset
             dataset = load_dataset(
                 dataset_name,
                 subset,

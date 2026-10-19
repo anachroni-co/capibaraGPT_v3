@@ -1,5 +1,5 @@
 """
-Agent Behaviors - Strategy Pattern Implementation - CapibaraGPT v2024
+Agent Behaviors - Strategy Pattern Implementation - CapibaraGPT v3024
 ===================================================================
 
 Implementation of the Strategy pattern for different agent behaviors:
@@ -27,7 +27,8 @@ except ImportError:
     # Fallback if interfaces not available
     from abc import ABC, abstractmethod
     from enum import Enum
-    from dataclasses import dataclass
+    from dataclasses import dataclass, field
+    from typing import Optional
     
     class AgentBehaviorType(str, Enum):
         REASONING = "reasoning"
@@ -61,6 +62,8 @@ except ImportError:
         result: Any
         execution_time_ms: float
         confidence: float = 0.0
+        metadata: Dict[str, Any] = field(default_factory=dict)
+        error: Optional[str] = None
     
     class IAgentBehavior(ABC):
         @abstractmethod
@@ -663,7 +666,8 @@ class ExecutionBehavior(BaseBehavior):
             
             execution_result = self._execute_with_monitoring(
                 context.task_description,
-                context.requirements
+                context.requirements,
+                agent
             )
             
             execution_time = (time.time() - start_time) * 1000
@@ -694,7 +698,7 @@ class ExecutionBehavior(BaseBehavior):
                 error=str(e)
             )
     
-    def _execute_with_monitoring(self, task: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
+    def _execute_with_monitoring(self, task: str, requirements: Dict[str, Any], agent: Optional[IAgent] = None) -> Dict[str, Any]:
         """Execute with progress monitoring."""
         
         retries_used = 0
@@ -710,7 +714,7 @@ class ExecutionBehavior(BaseBehavior):
                 })
 
                 # Main execution
-                result = self._perform_execution(task, requirements)
+                result = self._perform_execution(task, requirements, agent)
 
                 # Success checkpoint
                 checkpoints.append({
@@ -750,7 +754,7 @@ class ExecutionBehavior(BaseBehavior):
                         "confidence": 0.0
                     }
     
-    def _perform_execution(self, task: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
+    def _perform_execution(self, task: str, requirements: Dict[str, Any], agent: Optional[IAgent] = None) -> Dict[str, Any]:
         """Perform main execution."""
 
         execution_steps = []
@@ -764,7 +768,7 @@ class ExecutionBehavior(BaseBehavior):
         })
 
         # Step 2: Main execution
-        main_result = self._execute_main_task(task, requirements)
+        main_result = self._execute_main_task(task, requirements, agent)
         execution_steps.append({
             "step": "main_execution",
             "result": main_result,
@@ -795,58 +799,97 @@ class ExecutionBehavior(BaseBehavior):
             "ready_to_execute": True
         }
     
-    def _execute_main_task(self, task: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute main task."""
-        
-        # Simulate execution based on task type
-        if "research" in task.lower():
+    def _execute_main_task(
+        self,
+        task: str,
+        requirements: Dict[str, Any],
+        agent: Optional[IAgent] = None
+    ) -> Dict[str, Any]:
+        """Execute main task using real actions when available."""
+        actions = requirements.get("actions") if isinstance(requirements, dict) else None
+        if actions and agent and hasattr(agent, "tools"):
+            return self._execute_actions(actions, agent)
+
+        task_lower = task.lower()
+        if "research" in task_lower:
             return self._execute_research_task(task, requirements)
-        elif "code" in task.lower() or "implement" in task.lower():
+        if "code" in task_lower or "implement" in task_lower:
             return self._execute_coding_task(task, requirements)
-        elif "analyze" in task.lower():
+        if "analyze" in task_lower or "analysis" in task_lower:
             return self._execute_analysis_task(task, requirements)
-        else:
-            return self._execute_generic_task(task, requirements)
+        return self._execute_generic_task(task, requirements)
+
+    def _execute_actions(self, actions: List[Dict[str, Any]], agent: IAgent) -> Dict[str, Any]:
+        """Execute explicit tool actions on the agent."""
+        results = []
+        tools = getattr(agent, "tools", {}) or {}
+
+        for action in actions:
+            tool_name = action.get("tool")
+            tool_action = action.get("action")
+            if "params" in action:
+                params = action.get("params") or {}
+            else:
+                params = {k: v for k, v in action.items() if k not in {"tool", "action"}}
+            tool = tools.get(tool_name)
+            if not tool:
+                raise ValueError(f"Agent missing tool '{tool_name}'")
+            results.append({
+                "tool": tool_name,
+                "action": tool_action,
+                "output": tool.run(tool_action, **params),
+            })
+
+        return {
+            "task_type": "action_execution",
+            "actions_executed": len(results),
+            "results": results,
+            "completion_status": "completed"
+        }
     
     def _execute_research_task(self, task: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute research task."""
+        """Execute research task (lightweight heuristic)."""
+        tokens = len(task.split())
+        scope = requirements.get("scope", "general") if isinstance(requirements, dict) else "general"
         return {
             "task_type": "research",
-            "sources_consulted": 5,
-            "information_gathered": "Relevant research findings",
-            "quality_score": 0.85,
+            "tokens_processed": tokens,
+            "scope": scope,
+            "quality_score": min(1.0, tokens / 200.0),
             "completion_status": "completed"
         }
     
     def _execute_coding_task(self, task: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute programming task."""
+        """Execute programming task (non-fabricated metrics)."""
+        tokens = len(task.split())
+        estimated_functions = max(1, min(5, tokens // 25))
         return {
             "task_type": "coding",
-            "code_generated": True,
-            "lines_of_code": 150,
-            "functions_created": 3,
-            "tests_included": True,
-            "quality_score": 0.9,
+            "code_generated": False,
+            "functions_estimated": estimated_functions,
+            "quality_score": min(1.0, tokens / 150.0),
             "completion_status": "completed"
         }
     
     def _execute_analysis_task(self, task: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
-        """Execute analysis task."""
+        """Execute analysis task (lightweight heuristic)."""
+        tokens = len(task.split())
         return {
             "task_type": "analysis",
-            "data_points_analyzed": 100,
-            "patterns_identified": 3,
-            "insights_generated": 5,
-            "quality_score": 0.8,
+            "tokens_processed": tokens,
+            "insights_generated": max(1, tokens // 20),
+            "quality_score": min(1.0, tokens / 180.0),
             "completion_status": "completed"
         }
     
     def _execute_generic_task(self, task: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
         """Execute generic task."""
+        tokens = len(task.split())
         return {
             "task_type": "generic",
             "work_completed": True,
-            "quality_score": 0.75,
+            "tokens_processed": tokens,
+            "quality_score": min(1.0, tokens / 250.0),
             "completion_status": "completed"
         }
     

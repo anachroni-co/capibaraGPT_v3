@@ -1,6 +1,6 @@
 # Code Standards
 
-## General principles
+## Generatel principles
 
 - All code must pass `pytest` before merging
 - Factorization guardrails are enforced in CI (`tests/unit/test_factorization.py`)

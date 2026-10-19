@@ -14,10 +14,10 @@ from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Union
 
-from capibara.jax import jax
-from capibara.jax import numpy as jnp
+import jax
+from jax import numpy as jnp
 from capibara.core.config import CheckpointConfig
-from capibara.jax.experimental.array_serialization import pytree_serialization
+from jax.experimental.array_serialization import pytree_serialization
 
 logger = logging.getLogger(__name__)
 

@@ -11,15 +11,38 @@ import logging
 from typing import Optional, Set, Dict, Any
 
 import numpy as np  # type: ignore
-import websockets  # type: ignore
-import onnxruntime as ort  # type: ignore
-import pyttsx3  # type: ignore
-from dotenv import load_dotenv  # type: ignore
+
+try:
+    import websockets  # type: ignore
+    WEBSOCKETS_AVAILABLE = True
+except ImportError:
+    websockets = None  # type: ignore
+    WEBSOCKETS_AVAILABLE = False
+
+try:
+    import onnxruntime as ort  # type: ignore
+    ONNX_AVAILABLE = True
+except ImportError:
+    ort = None  # type: ignore
+    ONNX_AVAILABLE = False
+
+try:
+    import pyttsx3  # type: ignore
+    PYTTSX3_AVAILABLE = True
+except ImportError:
+    pyttsx3 = None  # type: ignore
+    PYTTSX3_AVAILABLE = False
+
+try:
+    from dotenv import load_dotenv  # type: ignore
+except ImportError:
+    load_dotenv = None  # type: ignore
 
 logger = logging.getLogger(__name__)
 
-# Load environment variables
-load_dotenv()
+# Load environment variables if dotenv is available
+if load_dotenv:
+    load_dotenv()
 
 # Retrieve configurations from .env
 FASTSPEECH_PATH = os.getenv("FASTSPEECH_MODEL_PATH")
@@ -66,17 +89,20 @@ class CapibaraTextToSpeech:
             sample_rate (int): Audio sample rate for generated waveforms.
         """
         self.sample_rate = sample_rate
+        self.fastspeech_session = None
+        self.hifigan_session = None
 
-        # Validate paths
-        if not fastspeech_model_path or not hifigan_model_path:
-            raise ValueError("FastSpeech and HiFi-GAN model paths must be provided.")
-
-        # Load ONNX models
-        try:
-            self.fastspeech_session = ort.InferenceSession(fastspeech_model_path)
-            self.hifigan_session = ort.InferenceSession(hifigan_model_path)
-        except Exception as e:
-            raise RuntimeError(f"Error loading ONNX models: {e}")
+        # Load ONNX models if provided (optional for fallback-only usage)
+        if fastspeech_model_path and hifigan_model_path:
+            if not ONNX_AVAILABLE:
+                raise RuntimeError("onnxruntime is required to load ONNX TTS models.")
+            try:
+                self.fastspeech_session = ort.InferenceSession(fastspeech_model_path)
+                self.hifigan_session = ort.InferenceSession(hifigan_model_path)
+            except Exception as e:
+                raise RuntimeError(f"Error loading ONNX models: {e}")
+        else:
+            logger.warning("ONNX model paths not provided; only fallback TTS is available.")
 
     def text_to_spectrogram(self, text: str) -> np.ndarray:
         """
@@ -88,6 +114,8 @@ class CapibaraTextToSpeech:
         Returns:
             np.ndarray: A spectrogram array with shape (1, T, features), clipped between [-4.0, 4.0].
         """
+        if not self.fastspeech_session:
+            raise RuntimeError("FastSpeech session not initialized. Provide ONNX model paths.")
         input_text = np.array([text], dtype=object)
         inputs = {self.fastspeech_session.get_inputs()[0].name: input_text}
         spectrogram = self.fastspeech_session.run(None, inputs)[0]
@@ -103,6 +131,8 @@ class CapibaraTextToSpeech:
         Returns:
             np.ndarray: The generated waveform array.
         """
+        if not self.hifigan_session:
+            raise RuntimeError("HiFi-GAN session not initialized. Provide ONNX model paths.")
         inputs = {self.hifigan_session.get_inputs()[0].name: spectrogram}
         return self.hifigan_session.run(None, inputs)[0]
 
@@ -149,6 +179,11 @@ class CapibaraTextToSpeech:
             port (int): Port for the server.
             ssl_context: Optional SSL context for secure connections.
         """
+        if not WEBSOCKETS_AVAILABLE:
+            raise RuntimeError("websockets is required to start the TTS server.")
+        if not self.fastspeech_session or not self.hifigan_session:
+            raise RuntimeError("ONNX models are required for the WebSocket TTS server.")
+
         start_server = websockets.serve(self.handle_connection, host, port, ssl=ssl_context)
         loop = asyncio.get_event_loop()
         try:
@@ -170,6 +205,9 @@ class CapibaraTextToSpeech:
         Returns:
             bytes: The resulting audio data as a byte string.
         """
+        if not PYTTSX3_AVAILABLE:
+            raise RuntimeError("pyttsx3 is required for fallback TTS synthesis.")
+
         synthesizer = pyttsx3.init()
         synthesizer.setProperty('rate', 150)
         synthesizer.setProperty('volume', 1.0)

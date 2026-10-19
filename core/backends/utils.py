@@ -8,11 +8,27 @@ and cross-backend operations.
 import functools
 import logging
 import os
+import subprocess
+import sys
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.decorators import cached_computation
 
 logger = logging.getLogger(__name__)
+
+
+def _torch_import_works() -> bool:
+    """Check torch import in a subprocess to avoid hard crashes."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import torch"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
 
 
 @cached_computation(maxsize=1, ttl_seconds=60.0)
@@ -50,6 +66,8 @@ def detect_available_hardware() -> Dict[str, Any]:
 
     # Check GPU
     try:
+        if not _torch_import_works():
+            raise ImportError("torch import failed")
         import torch
         if torch.cuda.is_available():
             gpu_devices = []
@@ -125,6 +143,8 @@ def get_device_info(backend_name: Optional[str] = None) -> Dict[str, Any]:
 
     elif backend_name == "gpu":
         try:
+            if not _torch_import_works():
+                raise ImportError("torch import failed")
             import torch
             device = torch.cuda.current_device()
             props = torch.cuda.get_device_properties(device)
@@ -214,6 +234,8 @@ def memory_stats(backend_name: str = "auto") -> Dict[str, float]:
 
     if backend_name == "gpu":
         try:
+            if not _torch_import_works():
+                raise ImportError("torch import failed")
             import torch
             device = torch.cuda.current_device()
             props = torch.cuda.get_device_properties(device)
@@ -226,13 +248,46 @@ def memory_stats(backend_name: str = "auto") -> Dict[str, float]:
             pass
 
     elif backend_name == "tpu":
-        # JAX doesn't expose memory stats directly
-        # Return placeholder values
-        stats.update({
-            "allocated_gb": 0.0,
-            "reserved_gb": 0.0,
-            "total_gb": 16.0,  # Typical TPU v4 HBM per core
-        })
+        try:
+            import jax
+            devices = jax.devices("tpu")
+            if devices:
+                device = devices[0]
+                mem_stats = {}
+                memory_stats_fn = getattr(device, "memory_stats", None)
+                if callable(memory_stats_fn):
+                    mem_stats = memory_stats_fn() or {}
+
+                bytes_in_use = (
+                    mem_stats.get("bytes_in_use")
+                    or mem_stats.get("bytes_used")
+                    or mem_stats.get("allocated_bytes")
+                    or 0
+                )
+                bytes_limit = (
+                    mem_stats.get("bytes_limit")
+                    or mem_stats.get("memory_limit")
+                    or mem_stats.get("bytes_reserved")
+                    or 0
+                )
+
+                stats.update({
+                    "allocated_gb": bytes_in_use / (1024 ** 3),
+                    "reserved_gb": bytes_limit / (1024 ** 3),
+                    "total_gb": bytes_limit / (1024 ** 3),
+                })
+            else:
+                stats.update({
+                    "allocated_gb": 0.0,
+                    "reserved_gb": 0.0,
+                    "total_gb": 0.0,
+                })
+        except Exception:
+            stats.update({
+                "allocated_gb": 0.0,
+                "reserved_gb": 0.0,
+                "total_gb": 0.0,
+            })
 
     elif backend_name == "cpu":
         try:

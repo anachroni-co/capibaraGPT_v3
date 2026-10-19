@@ -21,13 +21,41 @@ import unicodedata
 
 logger = logging.getLogger(__name__)
 
-# Optional imports with fallbacks
-try:
-    from transformers import pipeline
-    TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    logger.warning("transformers not available - advanced filtering disabled")
-    TRANSFORMERS_AVAILABLE = False
+# Optional imports with fallbacks (defer transformers to avoid torch crashes)
+pipeline = None  # type: ignore
+TRANSFORMERS_AVAILABLE = False
+
+
+def _torch_import_works() -> bool:
+    import subprocess
+    import sys
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import torch"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _try_import_transformers() -> bool:
+    global pipeline, TRANSFORMERS_AVAILABLE
+    if TRANSFORMERS_AVAILABLE:
+        return True
+    if not _torch_import_works():
+        logger.warning("torch import failed - transformers pipeline disabled")
+        return False
+    try:
+        from transformers import pipeline as _pipeline
+        pipeline = _pipeline  # type: ignore
+        TRANSFORMERS_AVAILABLE = True
+        return True
+    except Exception:
+        logger.warning("transformers not available - advanced filtering disabled")
+        return False
 
 try:
     import fasttext
@@ -374,7 +402,7 @@ class AdvancedFilter:
                 self.perplexity_model = None
         
         # Initialize toxicity classifier
-        if self.config.use_toxicity_filter and TRANSFORMERS_AVAILABLE:
+        if self.config.use_toxicity_filter and (TRANSFORMERS_AVAILABLE or _try_import_transformers()):
             try:
                 self.toxicity_classifier = pipeline(
                     "text-classification",

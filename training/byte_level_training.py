@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
- BYTE-LEVEL TRAINING SYSTEM for CapibaraGPT-v2
+ BYTE-LEVEL TRAINING SYSTEM for CapibaraGPT v3
 ================================================
 
 Advanced byte-level training implementation that works directly with raw bytes
@@ -22,9 +22,26 @@ Key Features:
 - Integration with existing CapibaraGPT architecture
 """
 
-import jax
-import jax.numpy as jnp
-import optax
+try:
+    import jax
+    import jax.numpy as jnp
+    import optax
+    JAX_AVAILABLE = True
+except Exception as exc:
+    import logging as _logging
+    _logging.getLogger(__name__).warning("JAX/optax not available, falling back to NumPy: %s", exc)
+    jax = None
+    jnp = None
+    optax = None
+    JAX_AVAILABLE = False
+
+if JAX_AVAILABLE:
+    JAX_JIT = jax.jit
+else:
+    def JAX_JIT(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
 import numpy as np
 import logging
 import time
@@ -191,8 +208,8 @@ class ByteLevelTokenizer:
         """Create overlapping chunks from byte sequence."""
         chunks = []
         chunk_size = self.config.byte_chunk_size
-        overlap = self.config.overlap_size
-        step_size = chunk_size - overlap
+        overlap = min(self.config.overlap_size, max(chunk_size // 2, 1))
+        step_size = max(chunk_size - overlap, 1)
         
         for i in range(0, len(byte_sequence) - chunk_size + 1, step_size):
             chunk = byte_sequence[i:i + chunk_size]
@@ -277,7 +294,7 @@ class ByteLevelDataLoader:
             logger.error(f"Error loading file {file_path}: {e}")
             return None
     
-    def create_training_batch(self, file_paths: List[Path]) -> Dict[str, jnp.ndarray]:
+    def create_training_batch(self, file_paths: List[Path]) -> Dict[str, np.ndarray]:
         """Create a training batch from files."""
         sequences = []
         attention_masks = []
@@ -300,6 +317,9 @@ class ByteLevelDataLoader:
                 sequences.append(tokens)
                 attention_masks.append(np.ones(len(tokens), dtype=np.int32))
         
+        if not sequences:
+            raise ValueError("No valid sequences found for batch")
+
         # Pad sequences to same length
         max_len = min(max(len(seq) for seq in sequences), self.config.max_sequence_length)
         
@@ -322,12 +342,12 @@ class ByteLevelDataLoader:
             padded_masks.append(mask)
         
         # Convert to JAX arrays
-        input_ids = jnp.array(padded_sequences)
-        attention_mask = jnp.array(padded_masks)
+        input_ids = np.array(padded_sequences)
+        attention_mask = np.array(padded_masks)
         
         # Create targets for causal language modeling (shift by 1)
-        targets = jnp.concatenate([input_ids[:, 1:], 
-                                  jnp.full((input_ids.shape[0], 1), 
+        targets = np.concatenate([input_ids[:, 1:], 
+                                  np.full((input_ids.shape[0], 1), 
                                           self.tokenizer.special_tokens['PAD'])], axis=1)
         
         return {
@@ -337,7 +357,7 @@ class ByteLevelDataLoader:
             'metadata': {
                 'batch_size': len(padded_sequences),
                 'max_length': max_len,
-                'total_tokens': jnp.sum(attention_mask)
+                'total_tokens': int(np.sum(attention_mask))
             }
         }
 
@@ -353,7 +373,7 @@ class ByteLevelModel:
         logger.info(f" ByteLevelModel initialized")
         logger.info(f" Config: {config.hidden_size}d, {config.num_layers}L, {config.num_attention_heads}H")
     
-    def create_byte_embeddings(self, key: jax.random.PRNGKey) -> Dict[str, jnp.ndarray]:
+    def create_byte_embeddings(self, key: Any) -> Dict[str, Any]:
         """Create byte-specific embedding layers."""
         embeddings = {}
         
@@ -377,11 +397,11 @@ class ByteLevelModel:
         return embeddings
     
     def apply_byte_aware_positional_encoding(
-        self, 
-        input_embeddings: jnp.ndarray,
-        input_ids: jnp.ndarray,
-        position_embeddings: Optional[jnp.ndarray] = None
-    ) -> jnp.ndarray:
+        self,
+        input_embeddings: Any,
+        input_ids: Any,
+        position_embeddings: Optional[Any] = None
+    ) -> Any:
         """Apply byte-aware positional encoding."""
         batch_size, seq_len, hidden_size = input_embeddings.shape
         
@@ -447,19 +467,108 @@ class ByteLevelTrainer:
         self.best_loss = float('inf')
         
         # Initialize optimizer
-        schedule = optax.warmup_cosine_decay_schedule(
-            init_value=0.0,
-            peak_value=config.learning_rate,
-            warmup_steps=config.warmup_steps,
-            decay_steps=100000  # Will be updated based on data
-        )
-        
-        self.optimizer = optax.adamw(
-            learning_rate=schedule,
-            weight_decay=config.weight_decay
-        )
+        self.optimizer = None
+        self.optimizer_state = None
+        self._torch_model = None
+        self._torch_optimizer = None
+        self._torch_device = None
+
+        if JAX_AVAILABLE:
+            schedule = optax.warmup_cosine_decay_schedule(
+                init_value=0.0,
+                peak_value=config.learning_rate,
+                warmup_steps=config.warmup_steps,
+                decay_steps=100000  # Will be updated based on data
+            )
+            self.optimizer = optax.adamw(
+                learning_rate=schedule,
+                weight_decay=config.weight_decay
+            )
+        else:
+            self._init_torch_backend()
         
         logger.info(f" ByteLevelTrainer initialized")
+
+    def _init_params(self, key: Any) -> Dict[str, Any]:
+        """Initialize model parameters."""
+        embeddings = self.model.create_byte_embeddings(key)
+        params = {
+            "token_embeddings": embeddings["token_embeddings"],
+        }
+        self.model.params = params
+        return params
+
+    def _init_torch_backend(self):
+        """Initialize Torch backend for training if JAX is unavailable."""
+        import torch
+        import torch.nn as nn
+        import torch.nn.functional as F
+
+        class _TorchByteModel(nn.Module):
+            def __init__(self, vocab_size: int, hidden_size: int):
+                super().__init__()
+                self.emb = nn.Embedding(vocab_size, hidden_size)
+
+            def forward(self, input_ids):
+                x = self.emb(input_ids)
+                logits = F.linear(x, self.emb.weight)
+                return logits
+
+        self._torch_device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._torch_model = _TorchByteModel(self.config.extended_vocab_size, self.config.hidden_size).to(self._torch_device)
+        self._torch_optimizer = torch.optim.AdamW(self._torch_model.parameters(), lr=self.config.learning_rate, weight_decay=self.config.weight_decay)
+
+    def _forward(self, params: Dict[str, Any], input_ids: Any) -> Any:
+        """Forward pass: embedding lookup and tied output projection."""
+        token_embeddings = params["token_embeddings"]
+        x = token_embeddings[input_ids]  # [B, T, H]
+        logits = jnp.einsum("bth,vh->btv", x, token_embeddings)
+        return logits
+
+    def _loss_fn(self, params: Dict[str, Any], batch: Dict[str, Any]) -> Any:
+        """Compute masked cross-entropy loss."""
+        input_ids = batch["input_ids"]
+        targets = batch["targets"]
+        attention_mask = batch["attention_mask"]
+        logits = self._forward(params, input_ids)
+        loss_per_token = optax.softmax_cross_entropy_with_integer_labels(logits, targets)
+        mask = attention_mask.astype(jnp.float32)
+        masked_loss = loss_per_token * mask
+        return jnp.sum(masked_loss) / jnp.maximum(jnp.sum(mask), 1.0)
+
+    @functools.partial(JAX_JIT, static_argnums=0)
+    def _train_step(
+        self,
+        params: Dict[str, Any],
+        opt_state: Any,
+        batch: Dict[str, Any],
+    ) -> Tuple[Dict[str, Any], Any, Any]:
+        """Single training step."""
+        loss, grads = jax.value_and_grad(self._loss_fn)(params, batch)
+        updates, new_opt_state = self.optimizer.update(grads, opt_state, params)
+        new_params = optax.apply_updates(params, updates)
+        return new_params, new_opt_state, loss
+
+    def _train_step_torch(self, batch: Dict[str, np.ndarray]) -> float:
+        import torch
+        import torch.nn.functional as F
+
+        input_ids = torch.tensor(batch["input_ids"], dtype=torch.long, device=self._torch_device)
+        targets = torch.tensor(batch["targets"], dtype=torch.long, device=self._torch_device)
+        attention_mask = torch.tensor(batch["attention_mask"], dtype=torch.float32, device=self._torch_device)
+
+        self._torch_optimizer.zero_grad()
+        logits = self._torch_model(input_ids)
+        loss_per_token = F.cross_entropy(
+            logits.view(-1, logits.size(-1)),
+            targets.view(-1),
+            reduction="none",
+        ).view_as(targets)
+        masked_loss = loss_per_token * attention_mask
+        loss = masked_loss.sum() / attention_mask.sum().clamp(min=1.0)
+        loss.backward()
+        self._torch_optimizer.step()
+        return float(loss.detach().cpu().item())
     
     def train_on_directory(self, data_dir: Union[str, Path], num_epochs: int = 1) -> Dict[str, Any]:
         """Train model on directory of files."""
@@ -471,8 +580,11 @@ class ByteLevelTrainer:
             raise ValueError(f"No valid files found in {data_dir}")
         
         # Initialize model parameters (mock for demonstration)
-        key = jax.random.PRNGKey(42)
-        embeddings = self.model.create_byte_embeddings(key)
+        params = None
+        if JAX_AVAILABLE:
+            key = jax.random.PRNGKey(42)
+            params = self._init_params(key)
+            self.optimizer_state = self.optimizer.init(params)
         
         # Training metrics
         total_loss = 0.0
@@ -495,8 +607,19 @@ class ByteLevelTrainer:
                     # Create batch
                     batch = self.data_loader.create_training_batch(batch_files)
                     
-                    # Mock training step (replace with actual forward/backward pass)
-                    loss = self._mock_training_step(batch)
+                    # Real training step
+                    if JAX_AVAILABLE:
+                        jax_batch = {
+                            "input_ids": jnp.array(batch["input_ids"]),
+                            "attention_mask": jnp.array(batch["attention_mask"]),
+                            "targets": jnp.array(batch["targets"]),
+                        }
+                        params, self.optimizer_state, loss = self._train_step(
+                            params, self.optimizer_state, jax_batch
+                        )
+                        loss = float(loss)
+                    else:
+                        loss = self._train_step_torch(batch)
                     
                     total_loss += loss
                     num_batches += 1
@@ -547,19 +670,9 @@ class ByteLevelTrainer:
         logger.info(f" Byte-level training completed!")
         logger.info(f" Final results: {avg_loss:.4f} loss, {training_time:.2f}s total")
         
+        if JAX_AVAILABLE:
+            self.model.params = params
         return results
-    
-    def _mock_training_step(self, batch: Dict[str, jnp.ndarray]) -> float:
-        """Mock training step for demonstration."""
-        # In real implementation, this would be the forward/backward pass
-        batch_size = batch['metadata']['batch_size']
-        total_tokens = batch['metadata']['total_tokens']
-        
-        # Simulate loss calculation
-        # In byte-level training, we typically see higher initial losses due to 256-way classification
-        mock_loss = np.random.uniform(5.0, 8.0) / (1 + self.step * 0.001)  # Decreasing loss
-        
-        return float(mock_loss)
     
     def save_model(self, save_path: Union[str, Path]):
         """Save trained model and tokenizer."""

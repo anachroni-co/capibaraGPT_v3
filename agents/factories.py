@@ -1,5 +1,5 @@
 """
-Agent and Behavior Factories - Factory Pattern Implementation - CapibaraGPT v2024
+Agent and Behavior Factories - Factory Pattern Implementation - CapibaraGPT v3024
 ==================================================================================
 
 Implementation of Factory pattern for creating agents and behaviors:

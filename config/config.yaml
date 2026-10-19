@@ -12,8 +12,10 @@ model:
   head_dim: 64
   vocab_size: 50257
   max_seq_length: 2048
-  dropout: 0.1
-  attention_dropout: 0.1
+  # Pretraining uses no dropout (hurts loss at scale); raise only for
+  # small-data finetuning.
+  dropout: 0.0
+  attention_dropout: 0.0
   mlp_ratio: 4.0
   use_bias: true
   layer_norm_epsilon: 1.0e-5
@@ -23,13 +25,13 @@ model:
     type: "transformer"  # transformer, ssm, hybrid
     use_rotary_embeddings: true
     use_flash_attention: true
-    use_gradient_checkpointing: false
+    use_gradient_checkpointing: true
 
 # Training Configuration
 training:
   # Optimization
   learning_rate: 3.0e-4
-  min_learning_rate: 1.0e-5
+  min_learning_rate: 3.0e-5  # 10% of peak lr
   weight_decay: 0.1
   beta1: 0.9
   beta2: 0.95
@@ -43,8 +45,8 @@ training:
 
   # Batch settings
   batch_size: 32
-  gradient_accumulation_steps: 4
-  effective_batch_size: 128  # batch_size * gradient_accumulation_steps
+  gradient_accumulation_steps: 8
+  effective_batch_size: 256  # batch_size * gradient_accumulation_steps
 
   # Checkpointing
   save_steps: 1000
@@ -59,7 +61,7 @@ training:
   # Distributed
   distributed:
     enabled: false
-    backend: "nccl"  # nccl, gloo, mpi
+    backend: "jax"  # jax (TPU/GPU via pjit); nccl/gloo only for the PyTorch path
     world_size: 1
 
 # Data Configuration
@@ -74,7 +76,8 @@ data:
   preprocessing:
     tokenizer: "gpt2"
     add_special_tokens: true
-    padding: "max_length"
+    padding: "longest"          # pad only within the batch
+    use_sequence_packing: true   # pack documents to fill max_seq_length (no padding waste)
     truncation: true
 
   # Quality filtering
@@ -113,9 +116,9 @@ hardware:
   # TPU settings (when device=tpu)
   tpu:
     enabled: false
-    version: "v4"
-    num_cores: 8
-    mesh_shape: [8, 1]
+    version: "v6e"
+    num_cores: 64
+    mesh_shape: [8, 8]
 
   # Memory optimization
   memory:

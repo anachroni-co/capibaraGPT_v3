@@ -1,3 +1,17 @@
+"""
+Adaptive Router - Dynamic routing with adaptation strategies.
+
+This module provides an adaptive router that extends BtoRouterV2 with
+dynamic routing decisions based on input characteristics and
+adaptation strategies.
+
+Key Components:
+    - AdaptiveRouter: Main class for adaptive routing
+    - AdtoptiveRouter: Alias for backwards compatibility
+
+Author: Skydesk International Dev Team.
+"""
+
 from .bto import BtoRouterV2
 from ..config import ModularModelConfig
 

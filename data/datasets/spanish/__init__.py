@@ -1,5 +1,5 @@
 """
-Spanish Government Datasets for CapibaraGPT v2
+Spanish Government Datasets for CapibaraGPT v3
 
 Access to Spanish government open data including BOE, BORME, and regional data.
 """

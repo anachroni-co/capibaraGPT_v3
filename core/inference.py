@@ -17,12 +17,24 @@ Enterprise inference system with advanced capabilities:
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path as _Path
+
+if __package__ in (None, ""):
+    _repo_root = _Path(__file__).resolve().parent.parent
+    if str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
+
 import asyncio
 import gc
 import os
-import sys
 import time
-import psutil
+try:
+    import psutil
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    psutil = None  # type: ignore[assignment]
+    PSUTIL_AVAILABLE = False
 import logging
 import platform
 import threading
@@ -39,31 +51,31 @@ try:
 except ImportError:
     toml = None  # type: ignore
 
-import capibara.jax as jax
-import capibara.jax.numpy as jnp
+try:
+    from jax import devices as _jax_devices
+except Exception:
+    try:
+        from jax import devices as _jax_devices  # type: ignore
+    except Exception:
+        def _jax_devices(*args, **kwargs):  # type: ignore
+            return []
 
 # Capibara imports - organized and deduplicated
-from capibara.core.config import (
-    TPUConfig, MemoryConfig, RouterConfig, TokenizerConfig,
-    TrainingConfig, DistributedConfig, ValidationConfig, LoggingConfig,
-)
-from capibara.core.tokenizer import load_tokenizer
-from capibara.config.model_config import ModelConfig
-from capibara.config.adaptive_config import AdaptiveConfig
-from capibara.config.training_config import TrainingConfig
-from capibara.config.config_semiotic import SemioticConfig
-from capibara.prompts.prompt_template import format_markdown_response
-from capibara.prompts.response_formatter import generate_formatted_response
-from capibara.config import BaseConfig, handle_error, process_batch, InferenceError
+from config.model_config import ModelConfig
+from config.adaptive_config import AdaptiveConfig
+from config.config_semiotic import SemioticConfig
+from prompts.response_formatter import format_markdown_response
+from utils.error_handling import BaseConfig, handle_error
 
-
-from capibara.core.kernels import tpu_kernel
-from capibara.utils.checkpoint_manager import CapibaraCheckpointManager
-from capibara.sub_models.experimental.dual_process import DualProcessThinking
-from capibara.sub_models.semiotic.semiotic_interaction import SemioticInteraction
-from capibara.sub_models.semiotic.mnemosyne_semio_module import MnemosyneSemioModule
+try:
+    from .hf_model import HuggingFaceCausalLM, HuggingFaceConfig
+except Exception:
+    from core.hf_model import HuggingFaceCausalLM, HuggingFaceConfig
 
 logger = logging.getLogger(__name__)
+
+class InferenceError(Exception):
+    """Explicit inference error for core inference pipeline."""
 
 # =============================================================================
 # Hardware Detection and ARM Axion Support
@@ -189,9 +201,6 @@ def setup_arm_optimizations(detection_info: Dict[str, Any]) -> Dict[str, Any]:
             
         except ImportError:
             logger.info("ARM v3.1 optimizations not available, using basic ARM support")
-            if "arm_kleidi" in detection_info["optimizations_available"]:
-                os.environ.setdefault("ARM_KLEIDI_ENABLE", "1")
-                optimizations["use_arm_kleidi"] = True
     
     return optimizations
 
@@ -216,6 +225,7 @@ class InferenceConfig(BaseConfig):
     model_path: str
     tokenizer_path: str
     config_root: str = os.environ.get("CAPIBARA_CONFIG_ROOT", "capibara/config")
+    device: Optional[str] = os.environ.get("CAPIBARA_INFER_DEVICE")
     
     # Generation parameters
     max_length: int = 512
@@ -335,7 +345,7 @@ class ConfigurationManager:
                 logger.error(f"Failed to load config {config_name}: {e}")
                 return {}
     
-    def get_model_configs(self, config_root: str = None) -> Tuple[ModelConfig, ...]:
+    def get_model_configs(self, config_root: str = None) -> Tuple[ModelConfig, AdaptiveConfig, SemioticConfig]:
         """Gets all model configurations at once."""
         try:
             # Load all config files
@@ -345,17 +355,15 @@ class ConfigurationManager:
             
             # Extract specific sections
             model_dict = default_config.get("model", {})
-            training_dict = default_config.get("training", {})
             adaptive_dict = adaptive_config.get("adaptive", {})
             semiotic_dict = semiotic_config.get("semiotic", {})
             
             # Create config objects
             model_config = ModelConfig(**model_dict)
-            training_config = TrainingConfig(**training_dict)
             adaptive_config_obj = AdaptiveConfig(**adaptive_dict)
             semiotic_config_obj = SemioticConfig(**semiotic_dict)
             
-            return model_config, training_config, adaptive_config_obj, semiotic_config_obj
+            return model_config, adaptive_config_obj, semiotic_config_obj
             
         except Exception as e:
             logger.error(f"Failed to load model configs: {e}")
@@ -401,19 +409,23 @@ class CapibaraInference:
         self._validate_setup()
         
         # Detect available hardware
+        self.arm_optimizations = ARM_OPTIMIZATIONS
         self.use_arm = config.use_arm_axion and HARDWARE_INFO["is_axion"]
+        if self.use_arm and not self.arm_optimizations.get("arm_optimization_suite"):
+            logger.info(
+                "ARM Axion detected but optimizations are unavailable in core inference. "
+                "Falling back to standard CPU path."
+            )
+            self.use_arm = False
+
         if self.use_arm:
-            logger.info("Using ARM Axion for inference")
-            # Configure ARM optimizations
-            self.arm_optimizations = ARM_OPTIMIZATIONS
-            if "arm_optimization_suite" in self.arm_optimizations:
-                logger.info("ARM Axion v3.1 features activated")
+            logger.info("Using ARM Axion optimizations in core inference")
         else:
-            logger.info("Using standard CPU for inference")
+            logger.info("Using standard CPU inference")
             
         # TPU only for training
         self.use_tpu = False  # TPU not used in inference
-        if config.use_tpu and len(jax.devices()) >= 32:
+        if config.use_tpu and len(_jax_devices()) >= 32:
             logger.warning("TPU v4-32 detected but will not be used in inference (training only)")
         
         self._load_model()
@@ -429,6 +441,11 @@ class CapibaraInference:
         if not Path(self.config.tokenizer_path).exists():
             logger.warning(f"Tokenizer path does not exist: {self.config.tokenizer_path}")
         
+        if self.config.device:
+            device_lower = self.config.device.lower()
+            if device_lower not in {"cpu", "cuda"}:
+                logger.warning("Unknown device '%s'; expected cpu or cuda", self.config.device)
+        
         # Check config files
         config_root = Path(self.config.config_root)
         required_configs = ["default", "adaptive", "semiotic_config"]
@@ -441,28 +458,20 @@ class CapibaraInference:
     def _load_model(self) -> None:
         """Loads the model and tokenizer."""
         try:
-            # Load configurations
-            model_config, training_config, adaptive_config, semiotic_config = \
+            # Load configurations (best-effort)
+            try:
                 self._config_manager.get_model_configs(self.config.config_root)
-            
-            # Initialize submodels
-            submodels = {
-                'dual_process': DualProcessThinking(hidden_size=model_config.hidden_size),
-                'adaptive': AdaptiveSubmodel(**dataclasses.asdict(adaptive_config)),
-                'semiotic': SemioModule(hidden_size=semiotic_config.hidden_size),
-                'semiotic_interaction': SemioticInteraction(**dataclasses.asdict(semiotic_config)),
-            }
-            
-            # Create model
-            self.model = DynamicCapibaraModel(
-                config=model_config,
-                submodels=submodels,
-                hidden_size=model_config.hidden_size,
-                use_context=True
+            except Exception as exc:
+                logger.warning("Config load failed; continuing with inference: %s", exc)
+
+            hf_config = HuggingFaceConfig(
+                model_path=self.config.model_path,
+                tokenizer_path=self.config.tokenizer_path,
+                device=self.config.device if self.config.device != "auto" else None,
+                dtype="auto",
             )
-            
-            # Load tokenizer
-            self.tokenizer = load_tokenizer(self.config.tokenizer_path)
+            self.model = HuggingFaceCausalLM(hf_config)
+            self.tokenizer = self.model.tokenizer
             
             logger.info("Model and tokenizer loaded successfully")
             
@@ -509,67 +518,38 @@ class CapibaraInference:
         """Generates new response using the model."""
         try:
             # Tokenize input
-            input_ids = self.tokenizer.encode(prompt)
-            
-            if self.use_arm:
-                # Use ARM Axion optimizations
-                try:
-                    # Obtain embeddings using ARM optimizations
-                    if self.arm_optimizations.get("use_arm_kleidi"):
-                        # Use Kleidi for embeddings
-                        input_embeds = self.arm_optimizations["arm_optimization_suite"].kleidi_forward(
-                            input_ids,
-                            self.model.get_input_embeddings().weight
-                        )
-                    else:
-                        # Fallback to standard matmul
-                        input_embeds = jnp.matmul(
-                            input_ids,
-                            self.model.get_input_embeddings().weight
-                        )
-                    
-                    # Use ARM optimizations for attention
-                    if self.arm_optimizations.get("sve2_vectorization"):
-                        # SVE2 vectorized attention
-                        hidden_states = self.arm_optimizations["arm_optimization_suite"].sve2_attention(
-                            input_embeds,
-                            causal=True
-                        )
-                    else:
-                        # Fallback to standard attention
-                        hidden_states = self.model.attention(input_embeds)
-                    
-                    # Output layer with ARM optimizations
-                    if self.arm_optimizations.get("arm_quantization_available"):
-                        # Quantized matmul
-                        logits = self.arm_optimizations["arm_optimization_suite"].quantized_matmul(
-                            hidden_states,
-                            self.model.get_output_embeddings().weight.T
-                        )
-                    else:
-                        # Fallback to standard matmul
-                        logits = jnp.matmul(
-                            hidden_states,
-                            self.model.get_output_embeddings().weight.T
-                        )
-                        
-                except Exception as e:
-                    logger.warning(f"Error using ARM optimizations: {e}")
-                    # Fallback to standard forward pass
-                    logits = self.model(input_ids=input_ids).logits
+            tokens = self.model.encode_with_mask(prompt)
+            input_ids = tokens["input_ids"]
+            attention_mask = tokens.get("attention_mask")
+
+            # Generation parameters
+            max_new_tokens = generation_config.get("max_new_tokens")
+            if max_new_tokens is None:
+                max_new_tokens = generation_config.get("max_length", self.config.max_length)
+
+            gen_kwargs = {
+                "max_new_tokens": max_new_tokens,
+                "temperature": generation_config.get("temperature", self.config.temperature),
+                "top_p": generation_config.get("top_p", self.config.top_p),
+                "top_k": generation_config.get("top_k", self.config.top_k),
+                "num_return_sequences": generation_config.get("num_return_sequences", self.config.num_return_sequences),
+                "do_sample": generation_config.get("do_sample", True),
+                "pad_token_id": getattr(self.tokenizer, "pad_token_id", None),
+                "eos_token_id": getattr(self.tokenizer, "eos_token_id", None),
+                "attention_mask": attention_mask,
+            }
+
+            output_ids = self.model.generate(input_ids, **gen_kwargs)
+            if hasattr(output_ids, "shape") and output_ids.shape[0] > 1:
+                selected = output_ids[0]
             else:
-                # Standard CPU without optimizations
-                logits = self.model(input_ids=input_ids).logits
-            
-            # Generate tokens
-            output_ids = self._sample_tokens(logits, generation_config)
-            
-            # Decode response
-            response = self.tokenizer.decode(output_ids)
-            
-            # Format response
-            formatted_response = format_markdown_response(response)
-            
+                selected = output_ids[0] if hasattr(output_ids, "__getitem__") else output_ids
+
+            decoded = self.model.decode(selected, skip_special_tokens=True)
+            if decoded.startswith(prompt):
+                decoded = decoded[len(prompt):].lstrip()
+
+            formatted_response = format_markdown_response(decoded)
             return formatted_response
             
         except Exception as e:
@@ -775,6 +755,7 @@ def main():
     parser.add_argument("--interactive", action="store_true", help="Interactive mode")
     parser.add_argument("--stats", action="store_true", help="Show system stats")
     parser.add_argument("--health", action="store_true", help="Health check")
+    parser.add_argument("--device", choices=["cpu", "cuda", "auto"], default="auto", help="Inference device")
     parser.add_argument("--temperature", type=float, default=0.7, help="Generation temperature")
     parser.add_argument("--max-length", type=int, default=512, help="Max generation length")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
@@ -791,6 +772,7 @@ def main():
     config = InferenceConfig(
         model_path=args.model_path,
         tokenizer_path=args.tokenizer_path,
+        device=args.device,
         temperature=args.temperature,
         max_length=args.max_length,
         log_level=args.log_level

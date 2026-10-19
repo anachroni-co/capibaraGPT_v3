@@ -7,15 +7,15 @@ import logging
 
 # Gets the path of the current directory (scripts) -> /.../scripts
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Goes up one level to get the project root -> /.../capibaraGPT-v2
+# Goes up one level to get the project root -> /.../CapibaraGPT v3
 project_root = os.path.dirname(script_dir)
 # Adds the project root to sys.path
 if project_root not in sys.path:
     # Fixed: Using proper imports instead of sys.path manipulation
     pass
 
-from capibara.jax import jax
-from capibara.jax.numpy import jnp
+import jax
+import jax.numpy as jnp
 from flax import linen as nn
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass, field

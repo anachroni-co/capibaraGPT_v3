@@ -11,7 +11,7 @@ import time
 import logging
 from pathlib import Path
 
-from capibara.jax import numpy as jnp
+from jax import numpy as jnp
 from capibara.core.memory_monitors import CoreIntegratedMemoryMonitor
 from capibara.core.metrics import MetricsCollector
 
@@ -357,7 +357,7 @@ class CapibaraAdvancedRAG:
         # Simplified attention processing
         # In real implementation would use proper TPU kernels
         
-        # Self-attention simulation
+        # Self-attention computation
         batch_size, seq_len = inputs.shape[:2]
         
         # Simple attention weights (identity for demo)

@@ -4,7 +4,7 @@
 type = "tpu"
 version = "v4-32"
 cores = 32
-memory_per_core_gb = 32
+memory_per_core_gb = 16  # v4: 32 GB HBM por chip, 2 cores por chip
 hbm_bandwidth_gbps = 1200
 
 [mesh]
@@ -25,15 +25,13 @@ supported = [
     "float32",
     "int32",
     "bool",
-    "complex64",
-    "qstate",
-    "cultural_embedding"
+    "complex64"
 ]
 
 [performance]
 min_batch_size = 32
 max_batch_size = 4096
-optimal_batch_size = 512
+optimal_batch_size = 256  # alineado con training.toml (32 x accum 8)
 
 [sparsity]
 block_size = 16

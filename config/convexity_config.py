@@ -9,7 +9,7 @@ configuration system.
 import logging
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, ValidationInfo
 
 logger = logging.getLogger(__name__)
 
@@ -110,10 +110,11 @@ class ConvexityConfigPydantic(BaseModel):
     enable_logging: bool = Field(True, description="Enable detailed logging")
     stability_threshold: float = Field(1e-8, gt=0.0, description="Stability threshold")
     
-    @validator('max_gain')
-    def validate_gain_bounds(cls, v, values):
+    @field_validator('max_gain')
+    def validate_gain_bounds(cls, v, info: ValidationInfo):
         """Validate that max_gain > min_gain."""
-        if 'min_gain' in values and v <= values['min_gain']:
+        min_gain = info.data.get('min_gain')
+        if min_gain is not None and v <= min_gain:
             raise ValueError('max_gain must be greater than min_gain')
         return v
     
@@ -149,10 +150,11 @@ class ConvexityTrainingConfigPydantic(BaseModel):
     # Advanced options
     min_lr_factor: float = Field(0.1, gt=0.0, le=1.0, description="Minimum LR factor")
     
-    @validator('warmup_steps')
-    def validate_warmup_steps(cls, v, values):
+    @field_validator('warmup_steps')
+    def validate_warmup_steps(cls, v, info: ValidationInfo):
         """Validate that warmup_steps <= total_steps."""
-        if 'total_steps' in values and v > values['total_steps']:
+        total_steps = info.data.get('total_steps')
+        if total_steps is not None and v > total_steps:
             raise ValueError('warmup_steps must be <= total_steps')
         return v
     
@@ -306,11 +308,11 @@ def validate_config_dict(config_dict: Dict[str, Any]) -> Dict[str, Any]:
     # Validate convexity config if present
     if 'convexity_config' in config_dict:
         convexity_validated = ConvexityConfigPydantic(**config_dict['convexity_config'])
-        config_dict['convexity_config'] = convexity_validated.dict()
+        config_dict['convexity_config'] = convexity_validated.model_dump()
     
     # Validate main config
     validated = ConvexityTrainingConfigPydantic(**config_dict)
-    return validated.dict()
+    return validated.model_dump()
 
 
 # Configuration export utilities

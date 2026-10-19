@@ -1,25 +1,66 @@
+"""
+Enhanced Chain-of-Thought Module - Advanced reasoning with self-verification.
+
+This module provides an enhanced Chain-of-Thought (CoT) reasoning system
+with meta-cognition, self-verification, and TPU kernel support. It implements
+step-by-step reasoning with confidence scoring and process rewards.
+
+Key Components:
+    - ReasoningConfig: Configuration for reasoning parameters
+    - EnhancedCoTModule: Main class for chain-of-thought reasoning
+
+Features:
+    - Multi-step reasoning with configurable depth
+    - Self-verification and meta-cognition
+    - Process reward modeling
+    - TPU kernel optimization
+    - Flash attention support
+
+Author: Skydesk International Dev Team.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-# Lazy imports for JAX/Flax (TPU backend)
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Lazy imports for JAX/Flax (TPU backend) with CPU fallback
 nn = None
 jnp = None
+_HAS_JAX: Optional[bool] = None
 
-def _ensure_jax():
-    """Lazy import JAX/Flax modules."""
-    global nn, jnp
-    if jnp is None:
-        try:
-            import flax.linen as _nn
-            import jax.numpy as _jnp
-            nn = _nn
-            jnp = _jnp
-        except ImportError as e:
-            raise ImportError(
-                "JAX/Flax not installed. Install with: pip install jax flax"
-            ) from e
+try:
+    import numpy as _np
+except Exception:
+    _np = None  # type: ignore
+
+
+def _ensure_backend() -> bool:
+    """Lazy import JAX/Flax modules. Falls back to NumPy if unavailable."""
+    global nn, jnp, _HAS_JAX
+    if _HAS_JAX is not None:
+        return _HAS_JAX
+
+    try:
+        import flax.linen as _nn
+        import jax.numpy as _jnp
+        nn = _nn
+        jnp = _jnp
+        _HAS_JAX = True
+        return True
+    except Exception:
+        nn = None
+        jnp = _np  # type: ignore
+        _HAS_JAX = False
+        logger.debug("JAX/Flax not available; using CPU fallback for CoT")
+        return False
+
+
+ADVANCED_COT_AVAILABLE = _ensure_backend()
 
 try:
     from capibara.core.kernels.tpu_v4_wrappers import tpu_kernthe
@@ -44,16 +85,18 @@ class ReasoningConfig:
 
 
 class ProcessRewardModel:
-    def __call__(self, step_embedding: jnp.ndarray) -> float:
+    def __call__(self, step_embedding: Any) -> float:
         # Simple heuristic based on embedding norm
         try:
-            linalg = getattr(jnp, "linalg", None)
-            if linalg is not None and hasattr(linalg, "norm"):
-                norm_val = linalg.norm(step_embedding)
+            if jnp is not None:
+                linalg = getattr(jnp, "linalg", None)
+                if linalg is not None and hasattr(linalg, "norm"):
+                    norm_val = linalg.norm(step_embedding)
+                else:
+                    norm_val = jnp.mean(jnp.abs(step_embedding))
+                norm = float(getattr(jnp, "clip", lambda x, a_min=0.0, a_max=10.0: x)(norm_val, a_min=0.0, a_max=10.0))
             else:
-                # Fallback: absolute mean
-                norm_val = jnp.mean(jnp.abs(step_embedding))
-            norm = float(getattr(jnp, "clip", lambda x, a_min=0.0, a_max=10.0: x)(norm_val, a_min=0.0, a_max=10.0))
+                norm = 1.0
         except Exception:
             norm = 1.0
         return norm / 10.0
@@ -66,7 +109,7 @@ class MetaCognitionModule:
         try:
             val = current_confidence + history_factor
             # clip fallback
-            if hasattr(jnp, "clip"):
+            if jnp is not None and hasattr(jnp, "clip"):
                 return float(jnp.clip(val, 0.0, 1.0))
             return min(1.0, max(0.0, float(val)))
         except Exception:
@@ -79,7 +122,10 @@ class SelfReflectionModule:
             return {"verified": False, "score": 0.0}
         try:
             arr = [s.get("step_confidence", 0.0) for s in reasoning_trace]
-            avg_conf = float(jnp.mean(jnp.array(arr))) if hasattr(jnp, "mean") else (sum(arr)/len(arr))
+            if jnp is not None and hasattr(jnp, "mean"):
+                avg_conf = float(jnp.mean(jnp.array(arr)))
+            else:
+                avg_conf = sum(arr) / len(arr)
         except Exception:
             avg_conf = 0.0
         return {
@@ -89,35 +135,122 @@ class SelfReflectionModule:
         }
 
 
-class EnhancedCoTModule(nn.Module):
-    config: ReasoningConfig
-    
-    def setup(self):
-        hidden = int(getattr(self.config, "hidden_size", 768))
-        self.reasoning_generator = nn.Dense(hidden)
-        self.step_encoder = nn.Dense(hidden)
+if ADVANCED_COT_AVAILABLE and nn is not None:
+    class EnhancedCoTModuleFlax(nn.Module):
+        """Flax variant for JAX training. Use via init()/apply(), never direct call."""
+        config: ReasoningConfig
+
+        def setup(self):
+            hidden = int(getattr(self.config, "hidden_size", 768))
+            self.reasoning_generator = nn.Dense(hidden)
+            self.step_encoder = nn.Dense(hidden)
+            self.process_reward_model = ProcessRewardModel() if self.config.use_process_rewards else None
+            self.meta_cognition = MetaCognitionModule() if self.config.enable_meta_cognition else None
+            self.self_reflection = SelfReflectionModule() if self.config.enable_self_verification else None
+
+        def generate_reasoning_step(
+            self,
+            context_embedding: Any,
+            reasoning_steps: List[Dict[str, Any]],
+            step_index: int,
+        ) -> Dict[str, Any]:
+            # Encode step
+            step_hidden = self.step_encoder(context_embedding)
+            step_embedding = self.reasoning_generator(step_hidden)
+
+            # Confidence based on smoothing and progress
+            try:
+                base_conf = float(jnp.tanh(jnp.mean(jnp.abs(step_embedding)) * 0.01))
+            except Exception:
+                base_conf = 0.5
+            step_confidence = min(1.0, base_conf + 0.03 * (step_index + 1))
+
+            # Process reward
+            step_reward = (
+                float(self.process_reward_model(step_embedding)) if self.process_reward_model is not None else step_confidence
+            )
+
+            return {
+                "step_index": step_index,
+                "step_embedding": step_embedding,
+                "step_confidence": step_confidence,
+                "step_reward": step_reward,
+            }
+
+        def verify_reasoning_chain(self, reasoning_steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+            if self.self_reflection is None:
+                return {"verified": True, "score": 1.0, "steps": len(reasoning_steps)}
+            return self.self_reflection.verify(reasoning_steps)
+
+        def __call__(self, inputs: Any, training: bool = False) -> Dict[str, Any]:
+            # Attention (optional) with TPU kernels
+            context_embedding = inputs
+            if self.config.use_tpu_kernels and tpu_kernthe is not None and self.config.use_flash_attention:
+                try:
+                    context_embedding = tpu_kernthe.flash_attention(
+                        query=inputs, key=inputs, value=inputs
+                    )
+                except Exception:
+                    context_embedding = inputs
+
+            reasoning_steps: List[Dict[str, Any]] = []
+            for step in range(self.config.max_reasoning_steps):
+                step_output = self.generate_reasoning_step(context_embedding, reasoning_steps, step)
+
+                # Optional metacognition
+                if self.meta_cognition is not None:
+                    step_output["step_confidence"] = self.meta_cognition.assess(
+                        reasoning_steps, step_output["step_confidence"]
+                    )
+
+                reasoning_steps.append(step_output)
+
+                # Early verification with process rewards
+                if step_output["step_reward"] < self.config.confidence_threshold:
+                    break
+
+            try:
+                confidences = [s["step_confidence"] for s in reasoning_steps] or [0.0]
+                avg_confidence = float(jnp.mean(jnp.array(confidences)))
+            except Exception:
+                avg_confidence = 0.0
+
+            return {
+                "output": reasoning_steps[-1]["step_embedding"] if reasoning_steps else context_embedding,
+                "reasoning_trace": reasoning_steps,
+                "confidence": avg_confidence,
+                "verification": self.verify_reasoning_chain(reasoning_steps),
+                "metrics": {"num_steps": len(reasoning_steps)},
+            }
+else:
+    EnhancedCoTModuleFlax = None  # type: ignore[assignment]
+
+
+class EnhancedCoTModuleCPU:
+    """CPU fallback CoT module when JAX/Flax are unavailable."""
+
+    def __init__(self, config: ReasoningConfig):
+        self.config = config
         self.process_reward_model = ProcessRewardModel() if self.config.use_process_rewards else None
         self.meta_cognition = MetaCognitionModule() if self.config.enable_meta_cognition else None
         self.self_reflection = SelfReflectionModule() if self.config.enable_self_verification else None
 
     def generate_reasoning_step(
         self,
-        context_embedding: jnp.ndarray,
+        context_embedding: Any,
         reasoning_steps: List[Dict[str, Any]],
         step_index: int,
     ) -> Dict[str, Any]:
-        # Encode step
-        step_hidden = self.step_encoder(context_embedding)
-        step_embedding = self.reasoning_generator(step_hidden)
-
-        # Confidence based on smoothing and progress
+        step_embedding = context_embedding
         try:
-            base_conf = float(jnp.tanh(jnp.mean(jnp.abs(step_embedding)) * 0.01))
+            if jnp is not None:
+                base_conf = float(jnp.tanh(jnp.mean(jnp.abs(jnp.array(step_embedding))) * 0.01))
+            else:
+                base_conf = 0.5
         except Exception:
             base_conf = 0.5
         step_confidence = min(1.0, base_conf + 0.03 * (step_index + 1))
 
-        # Process reward
         step_reward = (
             float(self.process_reward_model(step_embedding)) if self.process_reward_model is not None else step_confidence
         )
@@ -134,22 +267,13 @@ class EnhancedCoTModule(nn.Module):
             return {"verified": True, "score": 1.0, "steps": len(reasoning_steps)}
         return self.self_reflection.verify(reasoning_steps)
 
-    def __call__(self, inputs: jnp.ndarray, training: bool = False) -> Dict[str, Any]:
-        # Attention (optional) with TPU kernels
+    def __call__(self, inputs: Any, training: bool = False) -> Dict[str, Any]:
         context_embedding = inputs
-        if self.config.use_tpu_kernels and tpu_kernthe is not None and self.config.use_flash_attention:
-            try:
-                context_embedding = tpu_kernthe.flash_attention(
-                    query=inputs, key=inputs, value=inputs
-                )
-            except Exception:
-                context_embedding = inputs
 
         reasoning_steps: List[Dict[str, Any]] = []
         for step in range(self.config.max_reasoning_steps):
             step_output = self.generate_reasoning_step(context_embedding, reasoning_steps, step)
 
-            # Optional metacognition
             if self.meta_cognition is not None:
                 step_output["step_confidence"] = self.meta_cognition.assess(
                     reasoning_steps, step_output["step_confidence"]
@@ -157,23 +281,26 @@ class EnhancedCoTModule(nn.Module):
 
             reasoning_steps.append(step_output)
 
-            # Early verification with process rewards
             if step_output["step_reward"] < self.config.confidence_threshold:
                 break
 
-        try:
-            confidences = [s["step_confidence"] for s in reasoning_steps] or [0.0]
-            avg_confidence = float(jnp.mean(jnp.array(confidences)))
-        except Exception:
-            avg_confidence = 0.0
+        confidences = [s["step_confidence"] for s in reasoning_steps] or [0.0]
+        avg_confidence = sum(confidences) / len(confidences)
 
         return {
             "output": reasoning_steps[-1]["step_embedding"] if reasoning_steps else context_embedding,
             "reasoning_trace": reasoning_steps,
-            "confidence": avg_confidence,
+            "confidence": float(avg_confidence),
             "verification": self.verify_reasoning_chain(reasoning_steps),
-            "metrics": {"num_steps": len(reasoning_steps)},
+            "metrics": {"num_steps": len(reasoning_steps), "backend": "cpu_fallback"},
         }
+
+
+
+# Public direct-call API: the CPU implementation works on every backend
+# (jnp falls back to numpy). The Flax variant is only for JAX training
+# through init()/apply().
+EnhancedCoTModule = EnhancedCoTModuleCPU
 
 
 class CapibaraEnhancedCoT(EnhancedCoTModule):
@@ -181,11 +308,13 @@ class CapibaraEnhancedCoT(EnhancedCoTModule):
 
     def __init__(self, config: ReasoningConfig):
         super().__init__(config)
-        # Integrate with existing TPU kernels
+        # Integrate with existing TPU kernels when available
         self.tpu_kernels = tpu_kernthe  # From kernels/tpu_v4_wrappers.py file
 
     def setup(self):
-        # Use Capibara native implementations
+        # Use Capibara native implementations if JAX/Flax available
+        if nn is None:
+            return
         hidden = int(getattr(self.config, "hidden_size", 768))
         self.reasoning_generator = nn.Dense(hidden)
         self.step_encoder = nn.Dense(hidden)

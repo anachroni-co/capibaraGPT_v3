@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Data Loaders
+CapibaraGPT v3 Data Loaders
 Utilities for loading and managing datasets
 """
 

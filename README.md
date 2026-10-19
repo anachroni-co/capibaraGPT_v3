@@ -1,690 +1,631 @@
 # CapibaraGPT v3
 
-<div align="center">
+Experimental open-source foundation model stack for research and education.
 
-<img src="https://img.shields.io/badge/CapibaraGPT-v3.0-orange?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyQzYuNDggMiAyIDYuNDggMiAxMnM0LjQ4IDEwIDEwIDEwIDEwLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyem0wIDE4Yy00LjQxIDAtOC0zLjU5LTgtOHMzLjU5LTggOC04IDggMy41OSA4IDgtMy41OSA4LTggOHoiLz48L3N2Zz4=" alt="CapibaraGPT"/>
+## What this repository includes
 
-**An Experimental Open-Source Foundation Model for Research and Education**
+- Multi-backend core runtime (CPU, optional GPU/TPU).
+- Training modules (consensus, strategies, federated paths).
+- Inference modules (including quantization/hybrid experiments).
+- Data pipelines and dataset tooling.
+- Optional services and integrations.
+- Test and benchmark suites.
 
-[![License](https://img.shields.io/badge/License-Dual%20(Open%20%2B%20Commercial)-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.9+-3776AB.svg?logo=python&logoColor=white)](https://python.org)
-[![Tests](https://img.shields.io/badge/Tests-392%20passed-success.svg?logo=pytest)](tests/)
-[![Coverage](https://img.shields.io/badge/Coverage-85%25-brightgreen.svg)](tests/)
-[![Code Style](https://img.shields.io/badge/Code%20Style-Ruff-000000.svg?logo=ruff)](https://github.com/astral-sh/ruff)
+## Live Repository Metrics
 
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.1+-EE4C2C.svg?logo=pytorch&logoColor=white)](https://pytorch.org)
-[![JAX](https://img.shields.io/badge/JAX-0.4+-A435F0.svg)](https://github.com/google/jax)
-[![NumPy](https://img.shields.io/badge/NumPy-1.24+-013243.svg?logo=numpy&logoColor=white)](https://numpy.org)
+Last refreshed: `2026-04-20`
 
-</div>
-
----
-
-## Project Statistics
-
-<div align="center">
+### Snapshot
 
 | Metric | Value |
-|--------|-------|
-| **Total Python Files** | 519 |
-| **Lines of Code** | ~130,000+ |
-| **Test Cases** | 392 |
-| **Modules** | 15+ |
-| **Backends** | 3 (CPU, GPU, TPU) |
+|---|---:|
+| Python files (repo only) | ~594 |
+| Markdown files (repo only) | ~70 |
+| Python LOC (repo only) | ~180,000 |
+| Test files (repo only) | 38 |
+| Test functions (`def test_*`, `async def test_*`) | ~466 |
 
-</div>
+### Python LOC by top-level folder (approximate)
 
-### Lines of Code by Module
-
-```
-core          ████████████████████████████████████████  30,097 (23%)
-training      ██████████████████████████████████████████████████  35,915 (28%)
-data          ████████████████  11,231 (9%)
-services      ███████████████  10,993 (8%)
-sub_models    ███████████████  10,497 (8%)
-jax           ████████████  9,582 (7%)
-utils         ██████████  8,200 (6%)
-agents        ██████████  8,807 (7%)
-inference     ███████  6,446 (5%)
-config        ████  3,659 (3%)
-benchmarks    ██  2,133 (2%)
-pipeline      ██  2,201 (2%)
-```
-
----
-
-## Architecture Overview
-
-### System Architecture
+| Folder | LOC |
+|---|---:|
+| `training` | 35,177 |
+| `core` | 28,474 |
+| `capibara` | 14,605 |
+| `services` | 10,601 |
+| `data` | 10,162 |
+| `sub_models` | 9,616 |
+| `agents` | 8,873 |
+| `jax` | 8,788 |
+| `utils` | 7,607 |
+| `inference` | 6,208 |
 
 ```mermaid
-graph TB
-    subgraph Input[" Input Layer"]
-        TEXT[Text Input]
-        IMG[Image Input]
-        AUDIO[Audio Input]
-    end
-
-    subgraph Encoders[" Encoders"]
-        TOK[Tokenizer]
-        VE[Vision Encoder]
-        AE[Audio Encoder]
-    end
-
-    subgraph Core["️ Core Model"]
-        EMB[Embeddings]
-
-        subgraph Layers["Transformer Layers"]
-            ATT[Multi-Head Attention]
-            MOE[Mixture of Experts]
-            SSM[State Space Model]
-            FFN[Feed Forward]
-        end
-
-        COT[Chain-of-Thought]
-        NORM[Layer Norm]
-    end
-
-    subgraph Backends["️ Hardware Backends"]
-        CPU[CPU Backend<br/>NumPy]
-        GPU[GPU Backend<br/>PyTorch/CUDA]
-        TPU[TPU Backend<br/>JAX/Flax]
-    end
-
-    subgraph Output[" Output"]
-        LM[Language Model Head]
-        GEN[Generation]
-    end
-
-    TEXT --> TOK
-    IMG --> VE
-    AUDIO --> AE
-
-    TOK --> EMB
-    VE --> EMB
-    AE --> EMB
-
-    EMB --> ATT
-    ATT --> MOE
-    MOE --> SSM
-    SSM --> FFN
-    FFN --> COT
-    COT --> NORM
-    NORM --> LM
-    LM --> GEN
-
-    Layers -.-> CPU
-    Layers -.-> GPU
-    Layers -.-> TPU
+xychart-beta
+    title "Python LOC by Folder (Top 10)"
+    x-axis [training, core, capibara, services, data, sub_models, agents, jax, utils, inference]
+    y-axis "LOC" 0 --> 36000
+    bar [35177, 28474, 14605, 10601, 10162, 9616, 8873, 8788, 7607, 6208]
 ```
 
-### Module Structure
+## Current reality
 
-```mermaid
-graph LR
-    subgraph core[" Core (30K lines)"]
-        backends[backends]
-        attention[attention]
-        moe[moe]
-        ssm[ssm]
-        cot[cot]
-        encoders[encoders]
-        kernels[kernels]
-        optimizers[optimizers]
-    end
+This is an active research codebase, not a production-hardened product.
+Some modules are fully functional, while others are still under active implementation.
 
-    subgraph training[" Training (36K lines)"]
-        consensus[consensus]
-        strategies[strategies]
-        safety[safety]
-        preprocessing[preprocessing]
-        federated[federated]
-    end
+Pending technical work lives in a single file:
 
-    subgraph data[" Data (11K lines)"]
-        datasets[datasets]
-        loaders[loaders]
-        processors[processors]
-    end
+- **[`BACKLOG.md`](./BACKLOG.md)** — concrete, verifiable pending items with scope and exit criteria.
 
-    subgraph services[" Services (11K lines)"]
-        automation[automation]
-        generation[generation]
-        analysis[analysis]
-    end
+The previous auto-generated `TODOs.md`, `TODOs_PRIORITIZED.md` and 20 per-folder `TODOs.md` files were removed on 2026-04-20 because they were low-signal regex scrapes that conflated code comments with real pending work.
 
-    core --> training
-    data --> training
-    training --> services
-```
+## Requirements
 
----
+- Python `>=3.9`
+- `pip`
 
-## Key Components
+Optional acceleration backends:
 
-### Backend Architecture
-
-```mermaid
-flowchart TD
-    subgraph API["Unified API"]
-        GET[get_backend]
-        OPS[Tensor Operations]
-        ATT[Attention Ops]
-    end
-
-    subgraph Backends
-        subgraph CPU["CPU Backend"]
-            NP[NumPy]
-            SP[SciPy]
-        end
-
-        subgraph GPU["GPU Backend"]
-            PT[PyTorch]
-            CUDA[CUDA Kernels]
-            FA[Flash Attention]
-        end
-
-        subgraph TPU["TPU Backend"]
-            JAX[JAX]
-            FLAX[Flax]
-            XLA[XLA Compiler]
-        end
-    end
-
-    GET --> CPU
-    GET --> GPU
-    GET --> TPU
-
-    OPS --> NP
-    OPS --> PT
-    OPS --> JAX
-
-    ATT --> SP
-    ATT --> FA
-    ATT --> XLA
-```
-
-### Mixture of Experts (MoE)
-
-```mermaid
-flowchart LR
-    INPUT[Input Tokens] --> ROUTER[Router Network]
-
-    ROUTER --> |Top-K| E1[Expert 1<br/>Language]
-    ROUTER --> |Top-K| E2[Expert 2<br/>Math]
-    ROUTER --> |Top-K| E3[Expert 3<br/>Code]
-    ROUTER --> |Top-K| E4[Expert 4<br/>Reasoning]
-    ROUTER --> |Top-K| EN[Expert N<br/>Domain]
-
-    E1 --> COMBINE[Weighted<br/>Combination]
-    E2 --> COMBINE
-    E3 --> COMBINE
-    E4 --> COMBINE
-    EN --> COMBINE
-
-    COMBINE --> OUTPUT[Output]
-
-    style ROUTER fill:#f9f,stroke:#333
-    style COMBINE fill:#9f9,stroke:#333
-```
-
-### State Space Model (SSM/Mamba)
-
-```mermaid
-flowchart LR
-    X[Input x] --> PROJ1[Input Projection]
-    PROJ1 --> CONV[Conv1D]
-    CONV --> SSM_BLOCK[SSM Block]
-
-    subgraph SSM_BLOCK[Selective SSM]
-        A[State Matrix A]
-        B[Input Matrix B]
-        C[Output Matrix C]
-        D[Delta Δ]
-    end
-
-    SSM_BLOCK --> MULT[Gated Multiplication]
-    X --> PROJ2[Gate Projection]
-    PROJ2 --> SILU[SiLU]
-    SILU --> MULT
-
-    MULT --> OUT[Output Projection]
-    OUT --> Y[Output y]
-```
-
----
-
-## Benchmark Results
-
-### Performance Benchmarks (CPU Backend)
-
-| Benchmark | Mean Time | Std Dev | Throughput |
-|-----------|-----------|---------|------------|
-| attention_small (128 seq) | 30.7 ms | ±0.7 ms | 32.5 ops/s |
-| attention_medium (512 seq) | 174.8 ms | ±3.0 ms | 5.7 ops/s |
-| matmul (512x512) | 438.0 ms | ±3.0 ms | 2.3 ops/s |
-| gelu | 1416.2 ms | ±10.7 ms | 0.7 ops/s |
-| softmax | 454.2 ms | ±1.8 ms | 2.2 ops/s |
-| layer_norm | 475.3 ms | ±4.0 ms | 2.1 ops/s |
-
-```
-Benchmark Performance (lower is better)
-═══════════════════════════════════════════════════════════════
-
-attention_small   ███░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  30.7ms
-attention_medium  ██████████░░░░░░░░░░░░░░░░░░░░░░░░░░  174.8ms
-matmul            █████████████████████████░░░░░░░░░░░  438.0ms
-softmax           ██████████████████████████░░░░░░░░░░  454.2ms
-layer_norm        ███████████████████████████░░░░░░░░░  475.3ms
-gelu              █████████████████████████████████████  1416.2ms
-```
-
-### Memory Profile
-
-```mermaid
-pie title Memory Distribution by Component
-    "Model Parameters" : 45
-    "Activations" : 25
-    "Optimizer States" : 20
-    "Buffers" : 10
-```
-
----
-
-## Test Coverage
-
-### Test Results Summary
-
-```
-Total Tests: 411
-├── Passed:  392 (95.4%)
-├── Skipped: 45  (10.9%)  [Hardware-specific]
-└── Failed:  0   (0%)
-```
-
-### Coverage by Module
-
-```
-Module Coverage
-═══════════════════════════════════════════════════════════════
-
-core/backends     ████████████████████████████████████████  98%
-core/attention    ██████████████████████████████████████░░  95%
-core/moe          █████████████████████████████████████░░░  92%
-utils             ████████████████████████████████████░░░░  90%
-benchmarks        ████████████████████████████████████░░░░  90%
-training          ██████████████████████████████░░░░░░░░░░  75%
-config            █████████████████████████████████░░░░░░░  85%
-```
-
-### Test Categories
-
-| Category | Tests | Status |
-|----------|-------|--------|
-| Unit Tests | 280 |  All Pass |
-| Benchmarks | 36 |  All Pass |
-| Security | 45 |  All Pass |
-| Integration | 31 |  All Pass |
-
----
-
-## Sub-Models & Experts
-
-```mermaid
-graph TB
-    subgraph SubModels[" Sub-Models"]
-        SSM_TPU[SSM TPU<br/>State Space Model]
-        BYTE_TPU[Byte TPU<br/>Byte-level Processing]
-        CSA[CSA Expert<br/>Context-aware]
-        ALEPH[Aleph Tilde<br/>Mathematical]
-        DIALOG[Deep Dialog<br/>Conversation]
-        REASON[Reasoning<br/>Enhancement]
-    end
-
-    subgraph Orchestrator[" Ultra Orchestrator"]
-        ROUTER[Model Router]
-        ENSEMBLE[Ensemble Manager]
-        WEIGHT[Weight Allocator]
-    end
-
-    subgraph Output[" Unified Output"]
-        MERGE[Response Merger]
-        RANK[Quality Ranker]
-    end
-
-    SSM_TPU --> ROUTER
-    BYTE_TPU --> ROUTER
-    CSA --> ROUTER
-    ALEPH --> ROUTER
-    DIALOG --> ROUTER
-    REASON --> ROUTER
-
-    ROUTER --> ENSEMBLE
-    ENSEMBLE --> WEIGHT
-    WEIGHT --> MERGE
-    MERGE --> RANK
-```
-
----
-
-## Services Architecture
-
-```mermaid
-flowchart TB
-    subgraph Services[" Services Layer"]
-        subgraph Meta["Meta Generation"]
-            TTS[Text-to-Speech]
-            TTG[Text-to-Gen]
-        end
-
-        subgraph Analysis["Analysis"]
-            GENOMIC[Genomic Analysis]
-            BIM[BIM Generation]
-        end
-
-        subgraph Automation["Automation"]
-            PIPELINE[Pipeline Runner]
-            SCHEDULER[Task Scheduler]
-        end
-    end
-
-    subgraph Core["Core Model"]
-        MODEL[CapibaraGPT Core]
-    end
-
-    MODEL --> Meta
-    MODEL --> Analysis
-    MODEL --> Automation
-```
-
----
-
-## Training Pipeline
-
-```mermaid
-flowchart LR
-    subgraph Data[" Data Pipeline"]
-        RAW[Raw Data]
-        CLEAN[Cleaning]
-        TOK[Tokenization]
-        BATCH[Batching]
-    end
-
-    subgraph Training[" Training Loop"]
-        FWD[Forward Pass]
-        LOSS[Loss Computation]
-        BWD[Backward Pass]
-        OPT[Optimizer Step]
-    end
-
-    subgraph Consensus[" Consensus"]
-        FED[Federated Learning]
-        AGG[Gradient Aggregation]
-        SYNC[Model Sync]
-    end
-
-    subgraph Safety["️ Safety"]
-        FILTER[Content Filter]
-        ALIGN[Alignment Check]
-        AUDIT[Audit Log]
-    end
-
-    RAW --> CLEAN --> TOK --> BATCH
-    BATCH --> FWD --> LOSS --> BWD --> OPT
-    OPT --> FED --> AGG --> SYNC
-    SYNC --> FILTER --> ALIGN --> AUDIT
-    AUDIT --> FWD
-```
-
----
+- GPU: PyTorch + CUDA
+- TPU: JAX + Flax
 
 ## Installation
 
-### Requirements
-
-- Python 3.9+
-- NumPy >= 1.24.0
-
-**Optional dependencies (for accelerated backends):**
-- PyTorch >= 2.0.0 (GPU support)
-- JAX >= 0.4.0 (TPU support)
-- Flax >= 0.7.0
-
-### Quick Install
-
 ```bash
-# Clone the repository
 git clone https://github.com/anachroni-co/capibaraGPT_v3.git
 cd capibaraGPT_v3
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
+python -m venv .venv
+# Linux/macOS
+source .venv/bin/activate
+# Windows PowerShell
+# .\.venv\Scripts\Activate.ps1
 
-# Install base package
 pip install -e .
-
-# Install with GPU support
-pip install -e ".[gpu]"
-
-# Install with TPU support
-pip install -e ".[tpu]"
-
-# Install development dependencies
-pip install -e ".[dev]"
 ```
 
----
+Optional extras:
 
-## Quick Start
+```bash
+pip install -e ".[dev]"
+pip install -e ".[gpu]"
+pip install -e ".[tpu]"
+```
 
-### Basic Usage
+## Quick start
 
 ```python
 from core.backends import get_backend, BackendType
 
-# Automatically select best available backend
 backend = get_backend(BackendType.AUTO)
 print(f"Using backend: {backend.name}")
-
-# Create tensors
-x = backend.randn((batch_size, seq_len, hidden_dim))
-
-# Perform operations
-y = backend.layer_norm(x, normalized_shape=(hidden_dim,))
-z = backend.gelu(y)
 ```
 
-### Running Tests
+## Run tests
 
 ```bash
-# Run all tests
 pytest tests/ -v
-
-# Run only unit tests
-pytest tests/unit/ -v
-
-# Run with coverage
-pytest tests/ --cov=core --cov-report=html
 ```
 
-### Running Benchmarks
+Coverage:
 
 ```bash
-# Run automated benchmarks
+pytest tests/ --cov=core --cov-report=term-missing
+```
+
+## Run benchmarks
+
+```bash
 python -m benchmarks run
-
-# Generate HTML report
-python -m benchmarks report --input results.json --output report.html
-
-# CI/CD mode with regression detection
-python -m benchmarks run --ci --baseline baseline.json --threshold 10
 ```
 
----
+## Repository layout
 
-## Component Status
+- `core/`: model/runtime components.
+  - `core/think_anywhere/` — Think-Anywhere reasoning module (see below).
+  - `core/special_tokens/` — structured meta-token framework (see below).
+- `training/`: training systems and strategies.
+  - `training/data_capture/` — training data capture pipeline (see below).
+- `inference/`: inference engines and quantization paths.
+- `data/`: datasets, processing, and loading.
+- `capibara/`: specialized modules (VQ, SSM, routers, optimizations).
+- `services/`: optional service-level integrations.
+- `sub_models/`: specialized expert modules.
+- `tests/`: unit/integration/security/benchmark tests.
+- `docs/`: project documentation.
 
-| Component | Status | Progress |
-|-----------|--------|----------|
-| CPU Backend | ✅ Stable | █████████████████████ 100% |
-| GPU Backend | 🔶 Beta | ████████████████░░░░░ 80% |
-| TPU Backend | 🔸 Alpha | ████████████░░░░░░░░░ 60% |
-| MoE Routing | 🔶 Beta | ████████████████░░░░░ 80% |
-| SSM/Mamba | 🔸 Alpha | ██████████░░░░░░░░░░░ 50% |
-| CoT Reasoning | Alpha | ████████░░░░░░░░░░░░░ 40% |
-| Memory Profiler | ✅ Stable | █████████████████████ 100% |
-| Benchmarks | Stable | █████████████████████ 100% |
-| Documentation | Beta | ██████████████░░░░░░░ 70% |
+## Think-Anywhere reasoning
 
----
+`core/think_anywhere/` implements the **Think-Anywhere** mechanism from
+[_Think Anywhere in Code Generation_](https://arxiv.org/abs/2603.29957)
+(Jiang et al., Peking University / Alibaba, 2026).
 
-## Project Structure
+Instead of reasoning only before the output (upfront thinking), Think-Anywhere
+lets the model insert `<thinkanywhere>` blocks at any token position during
+generation — focusing computation where the code is hardest to write.
 
-```
-capibaraGPT_v3/
-├──  core/                 # Core model components (30K lines)
-│   ├── backends/            # Hardware abstraction (CPU/GPU/TPU)
-│   ├── attention/           # Multi-head and sparse attention
-│   ├── moe/                 # Mixture of Experts
-│   ├── ssm/                 # State Space Models
-│   ├── cot/                 # Chain-of-Thought reasoning
-│   ├── encoders/            # Multimodal encoders
-│   ├── kernels/             # Optimized compute kernels
-│   └── optimizers/          # Training optimizers
-│
-├──  training/             # Training system (36K lines)
-│   ├── consensus/           # Distributed consensus
-│   ├── strategies/          # Training strategies
-│   ├── safety/              # Safety mechanisms
-│   └── federated/           # Federated learning
-│
-├──  data/                 # Data handling (11K lines)
-│   ├── datasets/            # Dataset implementations
-│   └── loaders/             # Data loaders
-│
-├──  sub_models/           # Specialized sub-models (10K lines)
-│   ├── SSM_TPU/             # TPU-optimized SSM
-│   ├── csa_expert/          # Context-aware expert
-│   └── reasoning/           # Reasoning enhancement
-│
-├──  services/             # Application services (11K lines)
-│   ├── meta_generation/     # Content generation
-│   └── automation/          # Task automation
-│
-├── ️ utils/                # Utilities (8K lines)
-│   ├── memory_profiler/     # Memory profiling
-│   └── monitoring/          # System monitoring
-│
-├──  benchmarks/           # Benchmark system (2K lines)
-│   ├── runner.py            # Benchmark execution
-│   ├── comparator.py        # Result comparison
-│   └── reporter.py          # Report generation
-│
-├── ️ config/               # Configuration (4K lines)
-│   ├── config.yaml          # Main configuration
-│   └── config_loader.py     # Config utilities
-│
-├──  tests/                # Test suite (7K lines)
-│   ├── unit/                # Unit tests
-│   ├── benchmarks/          # Performance tests
-│   └── security/            # Security tests
-│
-└──  docs/                 # Documentation
-    ├── conf.py              # Sphinx config
-    └── api/                 # API reference
+### Key components
+
+| Class | File | Purpose |
+|---|---|---|
+| `ThinkAnywhereConfig` | `config.py` | All hyperparameters: token strings, reward weights (α = 0.1 / 0.9), GRPO settings, semantic-mix α = 0.5 |
+| `ThinkAnywhereProcessor` | `token_processor.py` | Format prompts (Table 1), parse responses, validate structure, strip thinking blocks, initialize special-token embeddings (Eqs. 5–6) |
+| `ThinkAnywhereReward` | `rewards.py` | Hierarchical reward R = 0.1·R\_struct + 0.9·R\_correct (Eq. 9), subprocess sandbox execution, GRPO group-normalized advantages (Eq. 7) |
+| `ThinkAnywhereStreamFilter` | `streaming.py` | Real-time streaming filter: suppresses thinking blocks token-by-token without buffering the full response |
+
+### Quick usage
+
+```python
+from core.think_anywhere import ThinkAnywhereProcessor, ThinkAnywhereReward
+
+proc = ThinkAnywhereProcessor()
+
+# Format a prompt for Think-Anywhere generation
+prompt = proc.format_prompt("Write a function that returns the edit distance between two strings.")
+
+# Parse a model response — extract clean code and thinking blocks
+result = proc.parse(model_response)
+print(result.clean_code)           # executable code, all <thinkanywhere> stripped
+print(result.think_anywhere_blocks)  # list of inline reasoning fragments
+print(result.is_valid)             # structural validation (R_struct)
+
+# Compute GRPO reward for a batch of rollout responses
+reward_fn = ThinkAnywhereReward()
+results = reward_fn.batch(responses, test_cases=["assert f('horse','ros') == 3"])
+advantages = reward_fn.group_normalized_advantages(results)
 ```
 
----
+### Inference integration
 
-## Research References
+Set `InferenceConfig.think_anywhere_mode = True` to automatically strip
+thinking blocks from generated text before returning it to the caller:
 
-### Transformer Architecture
-- Vaswani et al. (2017). "Attention Is All You Need" [[arXiv:1706.03762](https://arxiv.org/abs/1706.03762)]
+```python
+from inference.hybrid_inference_engine import InferenceConfig, InferenceBackend
 
-### Mixture of Experts
-- Fedus et al. (2021). "Switch Transformers" [[arXiv:2101.03961](https://arxiv.org/abs/2101.03961)]
-- Lepikhin et al. (2020). "GShard" [[arXiv:2006.16668](https://arxiv.org/abs/2006.16668)]
+config = InferenceConfig(
+    backend=InferenceBackend.AUTO,
+    think_anywhere_mode=True,   # strips <think> and <thinkanywhere> blocks
+)
+```
 
-### State Space Models
-- Gu et al. (2023). "Mamba" [[arXiv:2312.00752](https://arxiv.org/abs/2312.00752)]
+Streaming (`generate_stream`) uses `ThinkAnywhereStreamFilter` to suppress
+thinking content in real time — the caller never sees reasoning tokens.
 
-### Efficient Attention
-- Dao et al. (2022). "FlashAttention" [[arXiv:2205.14135](https://arxiv.org/abs/2205.14135)]
+### Special-token variant (Think-Anywhere\*)
 
----
+`ThinkAnywhereConfig(use_special_tokens=True)` switches to single-token
+`<ta>` / `</ta>` delimiters. Call
+`ThinkAnywhereProcessor.initialize_special_token_embedding()` to compute
+the semantic-aware embeddings from Eqs. 5–6 before fine-tuning:
+
+```python
+e_open, e_close = proc.initialize_special_token_embedding(
+    tokenizer.get_input_embeddings().weight.detach().numpy(),
+    token_ids={"think": t1, "any": t2, "where": t3, "<im_start>": t4, "<im_end>": t5},
+)
+```
+
+## Special-token framework
+
+`core/special_tokens/` generalizes the Think-Anywhere pattern into a reusable
+framework for any structured meta-token type. Each token has semantic-aware
+embedding initialization, a real-time streaming filter, and a global registry.
+
+### Built-in tokens
+
+| Token | strip? | Purpose |
+|---|---|---|
+| `<verify>` / `</verify>` | ✅ | Self-verification: model checks its output before continuing |
+| `<plan>` / `</plan>` | ✅ | Task decomposition: outline algorithm before writing code |
+| `<uncertain>` / `</uncertain>` | ❌ kept | Low-confidence marker: preserved for caller post-processing |
+| `<search>query</search>` | ✅ | On-demand local RAG trigger at the exact token position needed |
+| `<web_search>query</web_search>` | ✅ | Real-time internet search (Brave/Serper/DuckDuckGo) |
+| `<fact_check>claim</fact_check>` | ❌ kept | Contradiction/misinformation signal: surfaces to UI for verification |
+| `<lang:XX>` / `</lang>` | ✅ | Inline language switch (gl/pt/es/en/…) |
+| `<debug>` / `</debug>` | ✅ | Error diagnosis before writing a fix |
+
+### Quick usage
+
+```python
+from core.special_tokens import (
+    get_registry, SearchTokenHandler, LangTokenProcessor,
+    WebSearchHandler, WebSearchRetriever, FactCheckHandler,
+)
+
+reg = get_registry()
+print(reg.list_tokens())
+# ['verify', 'plan', 'uncertain', 'search', 'lang', 'debug', 'fact_check', 'web_search']
+
+# Strip all strippable tokens (keeps <uncertain> and <fact_check>)
+clean = reg.strip_all(model_output)
+
+# <web_search> with live internet retrieval + RAG indexing
+handler = WebSearchHandler(
+    retriever=WebSearchRetriever(engine="brave", api_key="…"),
+    rag_store=my_rag_store,      # optional: index results for future queries
+    data_logger=my_capture,      # optional: log for training data
+)
+output = handler.process(model_output)  # <web_search>q</web_search> → [Web: …]
+
+# <fact_check> claim extraction and verification
+fc = FactCheckHandler(verifier=my_verifier)
+processed, verdicts = fc.verify(model_output)
+```
+
+### Inference integration
+
+`InferenceConfig.strip_special_tokens=True` (default) wires the registry into
+the inference engine — all strip tokens are removed from `generate()` output.
+`<uncertain>` and `<fact_check>` are intentionally preserved.
+
+```python
+from inference.hybrid_inference_engine import InferenceConfig, InferenceBackend
+
+config = InferenceConfig(
+    backend=InferenceBackend.AUTO,
+    think_anywhere_mode=True,     # strips <think> / <thinkanywhere>
+    strip_special_tokens=True,    # strips verify/plan/search/web_search/lang/debug
+)
+```
+
+### Adding a custom token
+
+```python
+from core.special_tokens import SpecialTokenConfig, register_token
+
+register_token(SpecialTokenConfig(
+    name="cite",
+    open_tag="<cite>",
+    close_tag="</cite>",
+    seed_tokens=["source", "reference", "citation"],
+    strip_from_output=False,  # keep citations in output
+))
+```
+
+### TOON context compression
+
+`SearchTokenHandler` and `WebSearchHandler` serialize multi-result context
+using **TOON (Token-Oriented Object Notation)** before injecting it into
+the prompt — reducing input token overhead by ~30–40% for uniform arrays.
+
+```
+# Before (JSON-style, ~40 tokens):
+[Retrieved: {"text": "Paris is the capital", "score": "0.9"}]
+[Retrieved: {"text": "Population 2M", "score": "0.8"}]
+
+# After (TOON, ~25 tokens):
+[Retrieved:
+results[2]{text,score}:
+  Paris is the capital,0.9
+  Population 2M,0.8]
+```
+
+**Impact:**
+- ~30–40% fewer input tokens for RAG / web-search context injections
+- Direct cost saving on external API calls (`ConfidenceRouter`) charged per input token
+- Larger effective context window: more results fit in the same token budget → better quality
+
+**Known limitation:** a 3B base model without TOON fine-tuning may misparse
+dense tabular context. Disable with `use_toon=False` if accuracy degrades,
+and track via `BACKLOG.md ISSUE-007`. Single-result queries always fall back
+to plain text regardless of this setting.
+
+```python
+# Opt out if the model struggles with TOON context
+handler = SearchTokenHandler(retriever=my_rag, use_toon=False)
+handler = WebSearchHandler(retriever=my_web, use_toon=False)
+```
+
+## Training data capture
+
+`training/data_capture/` intercepts high-signal inference interactions and
+converts them into training pairs automatically — building a self-improving
+dataset as the model is used.
+
+### Signal sources
+
+| Source | Trigger | Pair type | File |
+|---|---|---|---|
+| `web_search` | `<web_search>` fired | SFT — grounded response | `web_search.jsonl` |
+| `fact_check` | `<fact_check>` verified | DPO — corrected vs original | `fact_check.jsonl` |
+| `api_routing` | `<uncertain>`/`<fact_check>` → external API | DPO — teacher vs student | `api_routing.jsonl` |
+| `uncertain` | `<uncertain>` spans present | SFT — queued for review | `uncertain.jsonl` |
+
+### Pipeline
+
+```
+User query
+    ↓
+ConfidenceRouter.generate()
+    ├── local model response
+    │       ↓
+    │   <uncertain> or <fact_check> detected?
+    │       ├── YES → route to external API (OpenRouter / Llama / etc.)
+    │       │           ├── return api_response to user
+    │       │           └── log (prompt, local, api) → api_routing.jsonl  [DPO pair]
+    │       └── NO  → return local response
+    │                   └── log uncertain spans   → uncertain.jsonl
+    │
+    └── <web_search> in response?
+            ↓
+        WebSearchHandler.process()
+            ├── fetch live results (Brave / Serper / DDG)
+            ├── inject [Web: snippet] inline
+            ├── index into local RAG store
+            └── log (query, result)              → web_search.jsonl  [SFT pair]
+```
+
+### Quick usage
+
+```python
+from training.data_capture import TrainingDataCapture, CaptureConfig, ConfidenceRouter, RouterConfig
+from core.special_tokens import WebSearchHandler, WebSearchRetriever
+
+capture = TrainingDataCapture(CaptureConfig(output_dir="data/captured"))
+
+# Wrap your inference function
+router = ConfidenceRouter(
+    local_fn=my_model.generate,
+    config=RouterConfig(
+        sample_rate=0.1,                                    # 10% random exploration
+        api_model="meta-llama/llama-3.1-8b-instruct:free", # via OpenRouter
+        api_key="sk-or-…",
+    ),
+    capture=capture,
+)
+
+# Wire web search with RAG indexing + data logging
+web_handler = WebSearchHandler(
+    retriever=WebSearchRetriever(engine="brave", api_key="…"),
+    rag_store=my_rag,
+    data_logger=capture,
+)
+
+# Use normally — data is captured automatically
+response = router.generate(user_prompt)
+response = web_handler.process(response)
+
+# Stats
+print(capture.get_stats())
+# {'web_search': 42, 'api_routing': 18, 'uncertain': 7, 'fact_check': 3}
+```
+
+## CPU-only inference & training (no GPU/TPU)
+
+All components below run on commodity CPU hardware — no CUDA, no JAX, no PyTorch required.
+
+### Architecture: TransformerNumpyBackbone
+
+Pure-NumPy GPT-2 style transformer used for local training and as a drop-in when GGUF files are not available.
+
+| | Value |
+|---|---|
+| Architecture | 6 layers · 6 heads · d_model = 384 |
+| Parameters | 10.9 M |
+| Training corpus | 11 MB (repo `.py` + `.md`) |
+| Baseline NTP loss | 6.30 nats/byte |
+| After 2 000 steps | **3.08 nats/byte (−51 %)** |
+| Throughput | ~1 350 tok/s on CPU |
+
+### GGUF export & llama.cpp integration
+
+Trained weights can be exported directly to GGUF (GPT-2 format) and loaded by llama.cpp without any network download:
+
+```bash
+python scripts/train_and_export_gguf.py \
+    --steps 2000 --out models/capibara_trained.gguf
+```
+
+Place any real `.gguf` file in `models/` and `auto_backbone()` selects it automatically:
+
+```python
+from models.pretrained_backbone import auto_backbone
+bb = auto_backbone()                    # picks GGUF > HF > NumPy
+out = bb.generate("def factorial(n):", max_new_tokens=80)
+```
+
+Recommended drop-in models (download separately):
+
+| Model | Size | Notes |
+|---|---|---|
+| `SmolLM2-135M-Instruct-Q4_K_M.gguf` | ~90 MB | best quality/size ratio |
+| `Qwen2.5-0.5B-Instruct-Q4_K_M.gguf` | ~370 MB | stronger coding |
+| `TinyLlama-1.1B-Chat-Q4_K_M.gguf` | ~670 MB | largest tested |
+
+### Production CPU pipeline (5 steps)
+
+```bash
+python scripts/production_cpu_pipeline.py
+```
+
+| Step | Component | Result |
+|---|---|---|
+| 1 — KV Cache | `inference/cpu_kv_cache.py` | 1.21× decode speedup |
+| 2 — INT8 | `inference/int8_inference.py` | ×4 memory reduction · 100 % greedy match |
+| 3 — Gate loop | `inference/gate_inference_loop.py` | online ThinkAnywhereGate training |
+| 4 — Server | `serving/cpu_server.py` | FastAPI + ThreadPoolExecutor + bounded queue |
+| 5 — Eval | `evaluation/code_eval.py` | 8-task pass@k harness |
+
+### L-MTP training (look-ahead multi-token prediction)
+
+```bash
+python scripts/train_lmtp_cpu.py --warmup-steps 300 --full-steps 300
+```
+
+Implements arXiv:2505.17505. After 600 steps on CPU:
+- NTP loss: 5.55 → 4.11 (−26 %)
+- L-MTP loss: 22.18 → 15.37 (−27 %)
+- Look-backward inference: 7 tokens/step
+
+## Corpus download & preparation
+
+`scripts/download_corpus.py` streams pre-training data from HuggingFace without downloading entire datasets — all sources use Parquet format (no legacy scripts).
+
+### Available sources
+
+| Source | HF dataset | Languages | Notes |
+|---|---|---|---|
+| `wikipedia` | `wikimedia/wikipedia` | gl, es, pt, en, … | Clean encyclopedia text, ideal starting corpus |
+| `culturax` | `uonlp/CulturaX` | gl, es, pt, en, … | Cleaned mC4 + OSCAR blend — best multilingual web source |
+| `oscar` | `oscar-corpus/OSCAR-2301` | gl, es, pt, en, … | Deduplicated web crawl |
+| `c4` | `allenai/c4` | en | High-quality filtered English web text |
+| `books` | `storytelling-nlp/books_corpus` | en | Book-quality prose for language modelling |
+| `code` | `HuggingFaceTB/smollm-corpus` | Python | Educational Python code (SmolLM training set) |
+
+### Download
+
+```bash
+# Galician Wikipedia
+python scripts/download_corpus.py --source wikipedia --lang gl \
+    --output data/raw/gl/ --max-tokens 50_000_000
+
+# Portuguese Wikipedia
+python scripts/download_corpus.py --source wikipedia --lang pt \
+    --output data/raw/pt/ --max-tokens 200_000_000
+
+# English books
+python scripts/download_corpus.py --source books --lang en \
+    --output data/raw/books/ --max-tokens 200_000_000
+
+# Python code
+python scripts/download_corpus.py --source code --lang Python \
+    --output data/raw/code/python/ --max-tokens 100_000_000
+
+# List all sources
+python scripts/download_corpus.py --list
+```
+
+### Tokenize to shards
+
+```bash
+python scripts/prepare_corpus.py \
+    --input  data/raw/gl/ \
+    --output data/tokenized/gl/
+```
+
+Produces `.npy` shards (int16, byte-level vocab=512) ready for `ShardDataLoader`.
+
+### Web mirrors (wget)
+
+For sites not available on HuggingFace, mirror with `wget --mirror` and extract
+with `scripts/extract_trisquel.py` (handles pages saved without `.html` extension):
+
+```bash
+# Mirror the site
+wget --mirror --convert-links --no-parent \
+     --keep-session-cookies --wait=1 \
+     -P data/raw/trisquel_wget/ https://trisquel.info/
+
+# Inspect language distribution
+python scripts/extract_trisquel.py \
+    --input  data/raw/trisquel_wget/trisquel.info \
+    --inspect
+
+# Extract English + Spanish pages
+python scripts/extract_trisquel.py \
+    --input  data/raw/trisquel_wget/trisquel.info \
+    --output data/raw/trisquel \
+    --langs en es
+
+# Tokenize
+python scripts/prepare_corpus.py \
+    --input  data/raw/trisquel \
+    --output data/tokenized/trisquel/ \
+    --extensions .txt
+```
+
+### Reference corpus
+
+Corpora validated on Google Axion c4a-standard-32:
+
+| Corpus | Tokens | Shards | Quality |
+|---|---|---|---|
+| Galician Wikipedia | 51M | 1 | High |
+| Spanish Wikipedia | 510M | 5 | High |
+| Portuguese Wikipedia | 200M | 2 | High |
+| C4 English | 200M | 2 | High |
+| Python code (SmolLM) | 100M | 1 | High |
+| Programming languages (Lua, Elixir, Zig, Lisp, Bash, …) | ~50M | 1–2 | Med–High |
+| Trisquel website (en/es) | ~5M | 1 | Medium |
+| capibaraGPT_v3 repo source | ~1M | 1 | High |
+| **Total** | **~1.1B** | ~14 | |
+
+## Google Axion ARM64 training
+
+`scripts/launch_axion_training.py` runs the Slim 200M model on Google Cloud
+**c4a-standard-32** (32 vCPU, 128 GB RAM, Neoverse V2) using JAX CPU backend.
+No GPU or TPU required.
+
+### Model presets
+
+| Preset | Params | d | L | H | seq | Axion tok/s | 5k steps |
+|---|---|---|---|---|---|---|---|
+| `smoke` | ~4M | 256 | 4 | 4 | 256 | ~25 000 | ~1 min |
+| `small` | ~34M | 512 | 8 | 8 | 512 | ~3 400 | ~6 h |
+| `medium` | ~114M | 768 | 12 | 12 | 1024 | ~800 | ~27 h |
+| `full` | ~202M | 1024 | 12 | 16 | 2048 | ~200 | ~4 d |
+
+Throughput measured on a live c4a-standard-32 VM — 8–12× better than initial estimates.
+
+### Quick start
+
+```bash
+# Install (Axion / Neoverse V2)
+pip install jax[cpu] flax optax psutil
+
+# Smoke test — full training loop in ~1 min
+python scripts/launch_axion_training.py \
+    --data-dir data/tokenized/ \
+    --preset smoke --steps 200
+
+# Small model overnight
+python scripts/launch_axion_training.py \
+    --data-dir data/tokenized/ \
+    --preset small --steps 5000 \
+    --output checkpoints/axion/
+
+# Custom config
+python scripts/launch_axion_training.py \
+    --data-dir data/tokenized/ \
+    --hidden-size 512 --num-layers 8 --num-heads 8 \
+    --seq-len 512 --batch-size 32 --steps 5000
+```
+
+### Thread configuration
+
+The launcher automatically sets all CPU parallelism variables before JAX
+initialises (`OMP_NUM_THREADS`, `XLA_FLAGS`, `MKL_NUM_THREADS`, etc.). On
+a c4a-standard-32 the default `--threads 32` saturates all 32 vCPUs.
+
+Config reference: `config/configs_toml/arm_axion/training.toml`
+
+### TPU training
+
+For TPU v5e/v6e, use `scripts/launch_tpu_training.py` with `--mesh-rows`
+and `--mesh-cols` matching your topology (2×2 for v5e-4, 8×8 for v6e-64).
+
+- Several advanced paths still include placeholder/mock logic (see `BACKLOG.md`).
+- Hardware-specific features depend on external stacks and environment.
+- Performance numbers can vary significantly across machines.
+
+## Reproduce metrics
+
+```bash
+# Python/Markdown files (excluding venv)
+rg --files -g "*.py" -g "!**/.venv/**" -g "!**/venv/**" -g "!**/.git/**" | wc -l
+rg --files -g "*.md" -g "!**/.venv/**" -g "!**/venv/**" -g "!**/.git/**" | wc -l
+
+# Test functions
+rg -n "^(async )?def test_" -g "*.py" -g "!**/venv/**" -g "!**/.git/**" | wc -l
+```
 
 ## License
 
-<div align="center">
-
-| Use Case | License |
-|----------|---------|
-|  Academic Research |  Free |
-|  Education |  Free |
-| ️ Non-profit |  Free |
-|  Personal Projects |  Free |
-|  Commercial Use |  Contact Us |
-
-</div>
-
-**Contact for commercial licensing:**
-- **Email**: info@anachroni.co
-- **Website**: https://www.anachroni.co
-
----
-
-## Acknowledgments
-
-### Compute Partners
-
-<div align="center">
-<table>
-<tr>
-<td align="center">
-<a href="https://www.cesga.es">
-<img src="https://www.cesga.es/wp-content/uploads/2024/10/logo_Blanco450x113.png" alt="CESGA" width="220"/>
-</a>
-<br/>
-<b>CESGA</b> — Centro de Supercomputación de Galicia
-<br/>
-Providing access to the <b>Finisterrae III</b> supercomputer
-</td>
-<td align="center">
-<a href="https://eurocc-spain.res.es/">
-<img src="https://eurocc-spain.res.es/wp-content/uploads/2020/12/LOGOTIPO-EURO-CC-RES-SPAIN.png" alt="EuroCC Spain" width="220"/>
-</a>
-<br/>
-<b>EuroCC Spain</b> — European HPC Competence Centre
-<br/>
-European programme supporting HPC access for research
-</td>
-</tr>
-</table>
-</div>
-
----
+Dual licensing (open + commercial). See `LICENSE`.
 
 ## Contact
 
-<div align="center">
-
-[![GitHub](https://img.shields.io/badge/GitHub-anachroni--co/capibaraGPT__v3-181717?logo=github)](https://github.com/anachroni-co/capibaraGPT_v3)
-[![Website](https://img.shields.io/badge/Website-anachroni.co-blue)](https://www.anachroni.co)
-[![Email](https://img.shields.io/badge/Email-info@anachroni.co-red)](mailto:info@anachroni.co)
-
-</div>
-
----
-
-<div align="center">
-
-**CapibaraGPT v3** — Open Foundation Model Research
-
-*Free for science, education, and research. Commercial use requires license.*
-
-```
-Copyright (c) 2024-2026 Anacroni S.Coop.Gal. All rights reserved.
-```
-
-</div>
+- GitHub: `https://github.com/anachroni-co/capibaraGPT_v3`
+- Website: `https://www.anachroni.co`
+- Email: `info@anachroni.co`

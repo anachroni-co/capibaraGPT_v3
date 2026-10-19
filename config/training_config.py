@@ -1,5 +1,5 @@
 """
-Centralized Training Configurations for CapibaraGPT-v2
+Centralized Training Configurations for CapibaraGPT v3
 
 This module centralizes all training configurations, including
 automatic consensus distilling for 3B+ models and TPU v4-32 optimizations.

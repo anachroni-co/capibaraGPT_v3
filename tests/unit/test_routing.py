@@ -77,7 +77,7 @@ class TestCreateRouter:
         router = create_router()
         info = router.route("/info")
         assert info["name"] == "CapibaraGPT"
-        assert info["version"] == "4.0"
+        assert info["version"] == "3.0"
         assert "mesh" in info
         assert "dtype" in info
 

@@ -1,5 +1,5 @@
 """
-Ultra Agent Orchestrator - CapibaraGPT v2024
+Ultra Agent Orchestrator - CapibaraGPT v3024
 ===========================================
 
 Sistema de orquestación ultra-avanzada for coordination inteligente de múltiples agentes:
@@ -18,12 +18,32 @@ import sys
 import time
 import logging
 import asyncio
+import tempfile
+import subprocess
+import tracemalloc
+import ipaddress
+import concurrent.futures
+from urllib.parse import urlparse
 from typing import Dict, Any, Optional, Union, List, Tuple, Callable, Type
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
 from enum import Enum
 from pathlib import Path
 import numpy as np
+
+try:
+    import httpx
+    _HAS_HTTPX = True
+except Exception:
+    httpx = None
+    _HAS_HTTPX = False
+
+try:
+    import psutil  # type: ignore
+    _HAS_PSUTIL = True
+except Exception:
+    psutil = None
+    _HAS_PSUTIL = False
 
 # Path setup
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -126,6 +146,13 @@ class UltraAgentConfig:
     enable_performance_tracking: bool = True
     auto_optimization: bool = True
 
+    # Tooling and IO
+    filesystem_allowed_paths: Optional[List[str]] = None
+    web_allowed_hosts: Optional[List[str]] = None
+    web_timeout_seconds: int = 30
+    web_max_bytes: int = 1_000_000
+    code_execution_timeout: int = 15
+
 @dataclass
 class AgentPerformanceMetrics:
     """Performance metrics for agent operations."""
@@ -137,6 +164,309 @@ class AgentPerformanceMetrics:
     efficiency_score: float = 0.0
     resource_usage: Dict[str, float] = field(default_factory=dict)
 
+
+@dataclass
+class ResourceSnapshot:
+    """Snapshot of process resource usage."""
+    timestamp: float
+    cpu_time_s: float
+    rss_bytes: int
+    cpu_percent: Optional[float] = None
+    memory_percent: Optional[float] = None
+
+
+class ResourceMonitor:
+    """Collects real timing/CPU/memory metrics."""
+
+    def __init__(self):
+        self._process = psutil.Process() if _HAS_PSUTIL else None
+        self._tracemalloc_started = False
+
+    def sample(self) -> ResourceSnapshot:
+        timestamp = time.time()
+        cpu_time_s = time.process_time()
+        rss_bytes = 0
+        cpu_percent = None
+        memory_percent = None
+
+        if _HAS_PSUTIL and self._process:
+            try:
+                cpu_times = self._process.cpu_times()
+                cpu_time_s = cpu_times.user + cpu_times.system
+                mem_info = self._process.memory_info()
+                rss_bytes = mem_info.rss
+                cpu_percent = self._process.cpu_percent(interval=None)
+                memory_percent = self._process.memory_percent()
+            except Exception:
+                # Fall back to basic counters
+                cpu_time_s = time.process_time()
+        else:
+            if not self._tracemalloc_started:
+                tracemalloc.start()
+                self._tracemalloc_started = True
+            current, _ = tracemalloc.get_traced_memory()
+            rss_bytes = current
+
+        return ResourceSnapshot(
+            timestamp=timestamp,
+            cpu_time_s=cpu_time_s,
+            rss_bytes=rss_bytes,
+            cpu_percent=cpu_percent,
+            memory_percent=memory_percent,
+        )
+
+    @staticmethod
+    def diff(start: ResourceSnapshot, end: ResourceSnapshot) -> Dict[str, Any]:
+        duration_ms = max(0.0, (end.timestamp - start.timestamp) * 1000.0)
+        cpu_time_ms = max(0.0, (end.cpu_time_s - start.cpu_time_s) * 1000.0)
+        memory_delta_bytes = end.rss_bytes - start.rss_bytes
+        memory_peak_bytes = max(start.rss_bytes, end.rss_bytes)
+        return {
+            "duration_ms": duration_ms,
+            "cpu_time_ms": cpu_time_ms,
+            "memory_delta_bytes": memory_delta_bytes,
+            "memory_peak_bytes": memory_peak_bytes,
+            "cpu_percent": end.cpu_percent,
+            "memory_percent": end.memory_percent,
+        }
+
+
+class SafePathResolver:
+    """Resolve and validate filesystem paths."""
+
+    def __init__(self, allowed_roots: List[Path], blocked_prefixes: Optional[List[Path]] = None):
+        self.allowed_roots = [root.resolve() for root in allowed_roots]
+        self.blocked_prefixes = [p.resolve() for p in (blocked_prefixes or [])]
+
+    def resolve(self, path: Union[str, Path], operation: str = "access") -> Path:
+        resolved = Path(path).expanduser().resolve()
+        for blocked in self.blocked_prefixes:
+            if resolved.is_relative_to(blocked):
+                raise ValueError(
+                    f"Path traversal blocked: {operation} to '{resolved}' is not allowed"
+                )
+        if self.allowed_roots:
+            for root in self.allowed_roots:
+                if resolved.is_relative_to(root):
+                    return resolved
+            raise ValueError(
+                f"Path '{resolved}' is outside allowed roots: {self.allowed_roots}"
+            )
+        return resolved
+
+
+class FileSystemTool:
+    """Filesystem tool with safe path validation."""
+
+    name = "filesystem"
+
+    def __init__(self, resolver: SafePathResolver):
+        self._resolver = resolver
+
+    def run(self, action: str, **kwargs) -> Any:
+        action = action.lower().strip()
+        if action == "read_text":
+            path = self._resolver.resolve(kwargs["path"], "read")
+            encoding = kwargs.get("encoding", "utf-8")
+            return path.read_text(encoding=encoding)
+        if action == "read_bytes":
+            path = self._resolver.resolve(kwargs["path"], "read")
+            return path.read_bytes()
+        if action == "write_text":
+            path = self._resolver.resolve(kwargs["path"], "write")
+            encoding = kwargs.get("encoding", "utf-8")
+            data = kwargs.get("data", "")
+            overwrite = kwargs.get("overwrite", True)
+            if path.exists() and not overwrite:
+                raise FileExistsError(f"File exists: {path}")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(data, encoding=encoding)
+            return {"written": str(path), "bytes": len(data.encode(encoding))}
+        if action == "write_bytes":
+            path = self._resolver.resolve(kwargs["path"], "write")
+            data = kwargs.get("data", b"")
+            overwrite = kwargs.get("overwrite", True)
+            if path.exists() and not overwrite:
+                raise FileExistsError(f"File exists: {path}")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+            return {"written": str(path), "bytes": len(data)}
+        if action == "list_dir":
+            path = self._resolver.resolve(kwargs["path"], "list")
+            if not path.exists() or not path.is_dir():
+                raise FileNotFoundError(f"Directory not found: {path}")
+            return [
+                {
+                    "name": entry.name,
+                    "is_dir": entry.is_dir(),
+                    "size": entry.stat().st_size if entry.is_file() else 0,
+                }
+                for entry in path.iterdir()
+            ]
+        if action == "stat":
+            path = self._resolver.resolve(kwargs["path"], "stat")
+            stat = path.stat()
+            return {
+                "path": str(path),
+                "size": stat.st_size,
+                "mtime": stat.st_mtime,
+                "is_dir": path.is_dir(),
+            }
+        raise ValueError(f"Unknown filesystem action: {action}")
+
+
+class WebTool:
+    """HTTP GET tool with SSRF protections."""
+
+    name = "web"
+
+    def __init__(self, allowed_hosts: Optional[List[str]] = None,
+                 timeout_seconds: int = 30,
+                 max_bytes: int = 1_000_000,
+                 user_agent: str = "CapibaraGPT/3.3"):
+        self.allowed_hosts = set([h.lower() for h in allowed_hosts or []])
+        self.timeout_seconds = timeout_seconds
+        self.max_bytes = max_bytes
+        self.user_agent = user_agent
+
+    def _validate_url(self, url: str) -> None:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(f"Disallowed URL scheme: {parsed.scheme}")
+        if not parsed.hostname:
+            raise ValueError("URL must include a hostname")
+        host = parsed.hostname.lower()
+        if host in ("localhost",) or host.endswith(".local"):
+            raise ValueError(f"Disallowed host: {host}")
+        try:
+            ip = ipaddress.ip_address(host)
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                raise ValueError(f"Disallowed host: {host}")
+        except ValueError:
+            # Not an IP, hostname check
+            pass
+        if self.allowed_hosts:
+            allowed = False
+            for entry in self.allowed_hosts:
+                if entry.startswith(".") and host.endswith(entry):
+                    allowed = True
+                    break
+                if host == entry:
+                    allowed = True
+                    break
+            if not allowed:
+                raise ValueError(f"Disallowed host: {host}")
+
+    def run(self, action: str, **kwargs) -> Any:
+        if action != "get":
+            raise ValueError(f"Unknown web action: {action}")
+        if not _HAS_HTTPX:
+            raise RuntimeError("httpx is required for WebTool")
+        url = kwargs["url"]
+        params = kwargs.get("params")
+        headers = kwargs.get("headers", {})
+        headers.setdefault("User-Agent", self.user_agent)
+        self._validate_url(url)
+
+        with httpx.Client(timeout=self.timeout_seconds, follow_redirects=False) as client:
+            with client.stream("GET", url, params=params, headers=headers) as response:
+                response.raise_for_status()
+                content = b""
+                truncated = False
+                for chunk in response.iter_bytes():
+                    if len(content) + len(chunk) > self.max_bytes:
+                        remaining = self.max_bytes - len(content)
+                        if remaining > 0:
+                            content += chunk[:remaining]
+                        truncated = True
+                        break
+                    content += chunk
+                return {
+                    "status_code": response.status_code,
+                    "headers": dict(response.headers),
+                    "content": content,
+                    "truncated": truncated,
+                    "url": str(response.url),
+                }
+
+
+class CodeExecutionTool:
+    """Execute Python code safely using subprocess."""
+
+    name = "code"
+
+    def __init__(self, timeout_seconds: int = 15):
+        self.timeout_seconds = timeout_seconds
+
+    def run(self, action: str, **kwargs) -> Any:
+        action = action.lower().strip()
+        if action not in {"python", "run_python"}:
+            raise ValueError(f"Unknown code action: {action}")
+        code = kwargs.get("code", "")
+        args = kwargs.get("args", [])
+        env = kwargs.get("env")
+        return self._run_python(code, args=args, env=env)
+
+    def _run_python(self, code: str, args: Optional[List[str]] = None, env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        args = args or []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            script_path = Path(temp_dir) / "snippet.py"
+            script_path.write_text(code, encoding="utf-8")
+
+            cmd = [sys.executable, str(script_path), *args]
+            completed = subprocess.run(
+                cmd,
+                cwd=temp_dir,
+                capture_output=True,
+                text=True,
+                timeout=self.timeout_seconds,
+                env=env,
+                shell=False,
+            )
+
+            stdout = completed.stdout
+            stderr = completed.stderr
+            max_output = 20000
+            if len(stdout) > max_output:
+                stdout = stdout[:max_output] + "\n...<truncated>"
+            if len(stderr) > max_output:
+                stderr = stderr[:max_output] + "\n...<truncated>"
+
+            return {
+                "returncode": completed.returncode,
+                "stdout": stdout,
+                "stderr": stderr,
+            }
+
+
+def _normalize_action(action: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize action dicts into {tool, action, params}."""
+    if "tool" in action and "action" in action:
+        return {
+            "tool": action["tool"],
+            "action": action["action"],
+            "params": {k: v for k, v in action.items() if k not in {"tool", "action"}},
+        }
+
+    action_type = action.get("type", "").lower()
+    type_map = {
+        "read_file": ("filesystem", "read_text"),
+        "read_bytes": ("filesystem", "read_bytes"),
+        "write_file": ("filesystem", "write_text"),
+        "write_bytes": ("filesystem", "write_bytes"),
+        "list_dir": ("filesystem", "list_dir"),
+        "stat": ("filesystem", "stat"),
+        "http_get": ("web", "get"),
+        "fetch": ("web", "get"),
+        "run_python": ("code", "python"),
+        "execute_python": ("code", "python"),
+    }
+    if action_type in type_map:
+        tool, act = type_map[action_type]
+        params = {k: v for k, v in action.items() if k != "type"}
+        return {"tool": tool, "action": act, "params": params}
+    raise ValueError(f"Unsupported action format: {action}")
+
 # ============================================================================
 # Ultra Agent Orchestrator
 # ============================================================================
@@ -144,8 +474,17 @@ class AgentPerformanceMetrics:
 class UltraAgentOrchestrator:
     """Ultra-advanced orchestrator for intelligent multi-agent coordination."""
     
-    def __init__(self, config: UltraAgentConfig):
-        self.config = config
+    def __init__(self, config: Optional[Union[UltraAgentConfig, Dict[str, Any]]] = None, **kwargs):
+        if config is None:
+            config = UltraAgentConfig(**kwargs)
+        elif isinstance(config, dict):
+            merged = {**config, **kwargs}
+            config = UltraAgentConfig(**merged)
+        elif kwargs:
+            merged = {**config.__dict__, **kwargs}
+            config = UltraAgentConfig(**merged)
+
+        self.config: UltraAgentConfig = config
         self.agents: Dict[str, Any] = {}
         self.specialized_agents: Dict[AgentType, List[str]] = {}
         self.active_tasks: Dict[str, Any] = {}
@@ -170,6 +509,10 @@ class UltraAgentOrchestrator:
             "collaboration_events": 0,
             "reasoning_cycles": 0
         }
+
+        # Tooling and monitoring
+        self.tool_registry: Dict[str, Any] = {}
+        self._resource_monitor = ResourceMonitor()
         
         # Initialize the orchestrator
         self._initialize_orchestrator()
@@ -194,16 +537,47 @@ class UltraAgentOrchestrator:
             except Exception as e:
                 logger.warning(f"️ Data integration failed: {e}")
         
+        # Initialize tool registry before creating agents
+        self._initialize_tools()
+
         # Initialize specialized agent pools
         self._initialize_specialized_agents()
         
         # Initialize collaboration framework
         self._initialize_collaboration_framework()
+
+        self.global_metrics["total_agents"] = len(self.agents)
         
         logger.info(f" Ultra Agent Orchestrator initialized")
         logger.info(f"    Agent types: {len(self.config.enabled_agent_types)}")
         logger.info(f"    Reasoning depth: {self.config.reasoning_depth}")
         logger.info(f"    Planning horizon: {self.config.planning_horizon}")
+
+    def _initialize_tools(self) -> None:
+        """Initialize built-in tool registry."""
+        allowed_paths = self.config.filesystem_allowed_paths
+        if not allowed_paths:
+            allowed_paths = [project_root, tempfile.gettempdir()]
+
+        resolver = SafePathResolver(
+            allowed_roots=[Path(p) for p in allowed_paths],
+            blocked_prefixes=[
+                Path("/etc"),
+                Path("/proc"),
+                Path("/sys"),
+                Path("/root"),
+            ],
+        )
+
+        self.tool_registry = {
+            "filesystem": FileSystemTool(resolver),
+            "web": WebTool(
+                allowed_hosts=self.config.web_allowed_hosts,
+                timeout_seconds=self.config.web_timeout_seconds,
+                max_bytes=self.config.web_max_bytes,
+            ),
+            "code": CodeExecutionTool(timeout_seconds=self.config.code_execution_timeout),
+        }
     
     def _initialize_specialized_agents(self):
         """Initialize pools of specialized agents."""
@@ -251,125 +625,155 @@ class UltraAgentOrchestrator:
             )
         
         return agent_pool
+
+    def _tools_for_agent_type(self, agent_type: AgentType) -> Dict[str, Any]:
+        """Assign tools based on agent type."""
+        tool_map = {
+            AgentType.RESEARCH: ["web"],
+            AgentType.EXECUTION: ["filesystem", "code"],
+            AgentType.CODING: ["filesystem", "code"],
+            AgentType.MONITORING: [],
+            AgentType.COMMUNICATION: [],
+            AgentType.REASONING: [],
+            AgentType.PLANNING: [],
+        }
+        tool_names = tool_map.get(agent_type, [])
+        return {name: self.tool_registry[name] for name in tool_names if name in self.tool_registry}
+
+    def _build_agent(
+        self,
+        agent_id: str,
+        agent_type: AgentType,
+        capabilities: List[str],
+        **extra: Any
+    ) -> Dict[str, Any]:
+        agent = {
+            "id": agent_id,
+            "type": agent_type,
+            "capabilities": capabilities,
+            "status": "ready",
+            "tools": self._tools_for_agent_type(agent_type),
+            "load": 0,
+            "stats": {
+                "tasks_completed": 0,
+                "tasks_failed": 0,
+                "last_execution_time_ms": 0.0,
+                "last_error": None,
+            },
+        }
+        agent.update(extra)
+        return agent
     
     def _create_reasoning_agent(self, agent_id: str):
         """Create specialized reasoning agent."""
-        return {
-            "id": agent_id,
-            "type": AgentType.REASONING,
-            "capabilities": [
+        return self._build_agent(
+            agent_id,
+            AgentType.REASONING,
+            [
                 "logical_reasoning",
-                "causal_analysis", 
+                "causal_analysis",
                 "pattern_recognition",
                 "hypothesis_generation",
-                "evidence_evaluation"
+                "evidence_evaluation",
             ],
-            "reasoning_depth": self.config.reasoning_depth,
-            "status": "ready"
-        }
+            reasoning_depth=self.config.reasoning_depth,
+        )
     
     def _create_planning_agent(self, agent_id: str):
         """Create specialized planning agent."""
-        return {
-            "id": agent_id,
-            "type": AgentType.PLANNING,
-            "capabilities": [
+        return self._build_agent(
+            agent_id,
+            AgentType.PLANNING,
+            [
                 "task_decomposition",
                 "strategy_formulation",
                 "resource_allocation",
                 "timeline_optimization",
-                "contingency_planning"
+                "contingency_planning",
             ],
-            "planning_horizon": self.config.planning_horizon,
-            "status": "ready"
-        }
+            planning_horizon=self.config.planning_horizon,
+        )
     
     def _create_execution_agent(self, agent_id: str):
         """Create specialized execution agent."""
-        return {
-            "id": agent_id,
-            "type": AgentType.EXECUTION,
-            "capabilities": [
+        return self._build_agent(
+            agent_id,
+            AgentType.EXECUTION,
+            [
                 "action_execution",
                 "progress_monitoring",
                 "error_handling",
                 "result_validation",
-                "feedback_collection"
+                "feedback_collection",
             ],
-            "status": "ready"
-        }
+        )
     
     def _create_research_agent(self, agent_id: str):
         """Create specialized research agent."""
-        return {
-            "id": agent_id,
-            "type": AgentType.RESEARCH,
-            "capabilities": [
+        return self._build_agent(
+            agent_id,
+            AgentType.RESEARCH,
+            [
                 "information_gathering",
                 "source_validation",
                 "data_analysis",
                 "literature_review",
-                "synthesis_generation"
+                "synthesis_generation",
             ],
-            "data_integration": self.data_orchestrator is not None,
-            "status": "ready"
-        }
+            data_integration=self.data_orchestrator is not None,
+        )
     
     def _create_coding_agent(self, agent_id: str):
         """Create specialized coding agent."""
-        return {
-            "id": agent_id,
-            "type": AgentType.CODING,
-            "capabilities": [
+        return self._build_agent(
+            agent_id,
+            AgentType.CODING,
+            [
                 "code_generation",
                 "code_debugging",
                 "code_optimization",
                 "testing_framework",
-                "documentation_generation"
+                "documentation_generation",
             ],
-            "programming_languages": ["python", "javascript", "rust", "go"],
-            "status": "ready"
-        }
+            programming_languages=["python", "javascript", "rust", "go"],
+        )
     
     def _create_communication_agent(self, agent_id: str):
         """Create specialized communication agent."""
-        return {
-            "id": agent_id,
-            "type": AgentType.COMMUNICATION,
-            "capabilities": [
+        return self._build_agent(
+            agent_id,
+            AgentType.COMMUNICATION,
+            [
                 "inter_agent_communication",
                 "message_routing",
                 "protocol_management",
                 "conflict_resolution",
-                "consensus_building"
+                "consensus_building",
             ],
-            "status": "ready"
-        }
+        )
     
     def _create_monitoring_agent(self, agent_id: str):
         """Create specialized monitoring agent."""
-        return {
-            "id": agent_id,
-            "type": AgentType.MONITORING,
-            "capabilities": [
+        return self._build_agent(
+            agent_id,
+            AgentType.MONITORING,
+            [
                 "performance_monitoring",
                 "health_checking",
                 "anomaly_detection",
                 "resource_tracking",
-                "alert_generation"
+                "alert_generation",
             ],
-            "monitoring_frequency": "continuous",
-            "status": "ready"
-        }
+            monitoring_frequency="continuous",
+        )
     
     def _create_generic_agent(self, agent_id: str, agent_type: AgentType):
         """Create generic agent for unknown types."""
-        return {
-            "id": agent_id,
-            "type": agent_type,
-            "capabilities": ["general_purpose"],
-            "status": "ready"
-        }
+        return self._build_agent(
+            agent_id,
+            agent_type,
+            ["general_purpose"],
+        )
     
     def intelligent_task_orchestration(
         self,
@@ -430,6 +834,11 @@ class UltraAgentOrchestrator:
             # Update global metrics
             self.global_metrics["completed_tasks"] += 1
             self.global_metrics["collaboration_events"] += orchestration_result["metrics"]["collaboration_events"]
+            total_completed = self.global_metrics["completed_tasks"]
+            prev_avg = self.global_metrics["average_completion_time_ms"]
+            self.global_metrics["average_completion_time_ms"] = (
+                (prev_avg * (total_completed - 1) + completion_time) / max(1, total_completed)
+            )
             
         except Exception as e:
             logger.error(f"Task orchestration failed: {e}")
@@ -441,36 +850,60 @@ class UltraAgentOrchestrator:
     
     def _analyze_task(self, task_description: str, requirements: Dict[str, Any]) -> Dict[str, Any]:
         """Analyze task and determine requirements using reasoning agents."""
-        
+        description_lower = task_description.lower()
         analysis = {
+            "task_description": task_description,
+            "requirements": requirements,
             "task_type": "general",
             "complexity": "medium",
             "required_capabilities": [],
+            "required_tools": [],
             "estimated_duration": "medium",
             "reasoning_cycles": 0,
-            "sub_tasks": []
+            "sub_tasks": [],
+            "actions": [],
         }
-        
-        # Use reasoning agents for task analysis
-        reasoning_agents = self.specialized_agents.get(AgentType.REASONING, [])
-        if reasoning_agents:
-            reasoning_agent_id = reasoning_agents[0]
-            
-            # Simulate intelligent task analysis
-            if "code" in task_description.lower() or "programming" in task_description.lower():
-                analysis["task_type"] = "coding"
-                analysis["required_capabilities"] = ["code_generation", "debugging", "testing"]
-            elif "research" in task_description.lower() or "analyze" in task_description.lower():
-                analysis["task_type"] = "research"
-                analysis["required_capabilities"] = ["information_gathering", "analysis", "synthesis"]
-            elif "plan" in task_description.lower() or "strategy" in task_description.lower():
-                analysis["task_type"] = "planning"
-                analysis["required_capabilities"] = ["strategic_planning", "task_decomposition"]
-            else:
-                analysis["required_capabilities"] = ["general_reasoning", "problem_solving"]
-            
-            analysis["reasoning_cycles"] = min(self.config.reasoning_depth, 3)
-        
+
+        # Normalize explicit actions
+        actions = requirements.get("actions") or []
+        normalized_actions = []
+        for action in actions:
+            normalized_actions.append(_normalize_action(action))
+        if normalized_actions:
+            analysis["actions"] = normalized_actions
+            analysis["required_tools"] = sorted({a["tool"] for a in normalized_actions})
+
+        # Determine task type from description
+        if any(word in description_lower for word in ["code", "programming", "implement"]):
+            analysis["task_type"] = "coding"
+        elif any(word in description_lower for word in ["research", "analyze", "analysis", "study"]):
+            analysis["task_type"] = "research"
+        elif any(word in description_lower for word in ["plan", "strategy", "design"]):
+            analysis["task_type"] = "planning"
+        elif any(word in description_lower for word in ["execute", "run", "apply"]):
+            analysis["task_type"] = "execution"
+
+        # Required capabilities by task type
+        capabilities_map = {
+            "coding": ["code_generation", "code_debugging", "testing_framework"],
+            "research": ["information_gathering", "data_analysis", "synthesis_generation"],
+            "planning": ["task_decomposition", "strategy_formulation", "resource_allocation"],
+            "execution": ["action_execution", "progress_monitoring", "result_validation"],
+            "general": ["logical_reasoning", "problem_solving"],
+        }
+        analysis["required_capabilities"] = capabilities_map.get(
+            analysis["task_type"], capabilities_map["general"]
+        )
+
+        # Add tool requirements based on description if not explicit
+        if not analysis["required_tools"]:
+            if any(word in description_lower for word in ["http", "web", "download", "fetch"]):
+                analysis["required_tools"].append("web")
+            if any(word in description_lower for word in ["file", "read", "write", "folder", "directory"]):
+                analysis["required_tools"].append("filesystem")
+            if any(word in description_lower for word in ["execute", "run python", "script"]):
+                analysis["required_tools"].append("code")
+
         # Determine complexity based on requirements
         if requirements.get("data_size") == "large" or requirements.get("complexity") == "high":
             analysis["complexity"] = "high"
@@ -478,54 +911,52 @@ class UltraAgentOrchestrator:
         elif requirements.get("urgency") == "low":
             analysis["complexity"] = "low"
             analysis["estimated_duration"] = "short"
-        
+
+        analysis["reasoning_cycles"] = min(self.config.reasoning_depth, 3)
+
         return analysis
     
     def _select_optimal_agents(self, task_analysis: Dict[str, Any]) -> List[str]:
         """Select optimal agents based on task analysis."""
-        
-        selected_agents = []
         required_capabilities = task_analysis.get("required_capabilities", [])
+        required_tools = task_analysis.get("required_tools", [])
         task_type = task_analysis.get("task_type", "general")
-        
-        # Select agents based on task type
+
+        preferred_types = []
         if task_type == "coding":
-            coding_agents = self.specialized_agents.get(AgentType.CODING, [])
-            if coding_agents:
-                selected_agents.extend(coding_agents[:1])  # One coding agent
-        
-        if task_type == "research":
-            research_agents = self.specialized_agents.get(AgentType.RESEARCH, [])
-            if research_agents:
-                selected_agents.extend(research_agents[:1])  # One research agent
-        
-        if task_type == "planning":
-            planning_agents = self.specialized_agents.get(AgentType.PLANNING, [])
-            if planning_agents:
-                selected_agents.extend(planning_agents[:1])  # One planning agent
-        
-        # Always include reasoning for complex tasks
-        if task_analysis.get("complexity") in ["medium", "high"]:
-            reasoning_agents = self.specialized_agents.get(AgentType.REASONING, [])
-            if reasoning_agents and reasoning_agents[0] not in selected_agents:
-                selected_agents.extend(reasoning_agents[:1])
-        
-        # Include execution agent
-        execution_agents = self.specialized_agents.get(AgentType.EXECUTION, [])
-        if execution_agents:
-            selected_agents.extend(execution_agents[:1])
-        
-        # Include communication agent for multi-agent tasks
-        if len(selected_agents) > 2:
-            comm_agents = self.specialized_agents.get(AgentType.COMMUNICATION, [])
-            if comm_agents:
-                selected_agents.extend(comm_agents[:1])
-        
-        return selected_agents
+            preferred_types = [AgentType.CODING, AgentType.EXECUTION, AgentType.REASONING]
+        elif task_type == "research":
+            preferred_types = [AgentType.RESEARCH, AgentType.REASONING]
+        elif task_type == "planning":
+            preferred_types = [AgentType.PLANNING, AgentType.REASONING]
+        elif task_type == "execution":
+            preferred_types = [AgentType.EXECUTION]
+
+        scored = []
+        for agent_id, agent in self.agents.items():
+            score = 0
+            if agent.get("status") != "ready":
+                score -= 2
+            score -= agent.get("load", 0)
+
+            for cap in required_capabilities:
+                if cap in agent.get("capabilities", []):
+                    score += 2
+            for tool in required_tools:
+                if tool in agent.get("tools", {}):
+                    score += 3
+            if agent.get("type") in preferred_types:
+                score += 2
+            scored.append((score, agent_id))
+
+        scored.sort(reverse=True)
+        selected_agents = [agent_id for score, agent_id in scored if score > -5]
+
+        # Limit to a reasonable pool
+        return selected_agents[: max(1, min(5, len(selected_agents)))]
     
     def _create_execution_plan(self, task_analysis: Dict[str, Any], selected_agents: List[str]) -> Dict[str, Any]:
         """Create execution plan for coordinated task execution."""
-        
         execution_plan = {
             "strategy": self.config.orchestration_strategy.value,
             "phases": [],
@@ -533,30 +964,47 @@ class UltraAgentOrchestrator:
             "resource_allocation": {},
             "timeline": {}
         }
-        
-        # Create phases based on task type
+
+        actions = task_analysis.get("actions", [])
         task_type = task_analysis.get("task_type", "general")
-        
-        if task_type == "coding":
-            execution_plan["phases"] = [
-                {"phase": "analysis", "agents": [a for a in selected_agents if "reasoning" in a]},
-                {"phase": "planning", "agents": [a for a in selected_agents if "planning" in a]},
-                {"phase": "coding", "agents": [a for a in selected_agents if "coding" in a]},
-                {"phase": "execution", "agents": [a for a in selected_agents if "execution" in a]}
-            ]
-        elif task_type == "research":
-            execution_plan["phases"] = [
-                {"phase": "planning", "agents": [a for a in selected_agents if "planning" in a]},
-                {"phase": "research", "agents": [a for a in selected_agents if "research" in a]},
-                {"phase": "analysis", "agents": [a for a in selected_agents if "reasoning" in a]},
-                {"phase": "synthesis", "agents": [a for a in selected_agents if "execution" in a]}
-            ]
+
+        if actions:
+            for idx, action in enumerate(actions, 1):
+                phase = {
+                    "phase": f"action_{idx}",
+                    "actions": [action],
+                    "required_tools": [action["tool"]],
+                    "required_capabilities": self._capabilities_for_tool(action["tool"]),
+                    "agents": [],
+                }
+                phase["task_description"] = task_analysis.get("task_description", "")
+                phase["requirements"] = task_analysis.get("requirements", {})
+                phase["agents"] = self._assign_agents_to_phase(phase, selected_agents)
+                execution_plan["phases"].append(phase)
         else:
-            execution_plan["phases"] = [
-                {"phase": "planning", "agents": selected_agents[:len(selected_agents)//2]},
-                {"phase": "execution", "agents": selected_agents[len(selected_agents)//2:]}
-            ]
-        
+            phases = []
+            if task_type == "coding":
+                phases = ["analysis", "planning", "coding", "execution"]
+            elif task_type == "research":
+                phases = ["planning", "research", "analysis", "synthesis"]
+            elif task_type == "planning":
+                phases = ["analysis", "planning", "execution"]
+            else:
+                phases = ["planning", "execution"]
+
+            for phase_name in phases:
+                phase = {
+                    "phase": phase_name,
+                    "actions": [],
+                    "required_tools": task_analysis.get("required_tools", []),
+                    "required_capabilities": self._capabilities_for_phase(phase_name),
+                    "agents": [],
+                }
+                phase["task_description"] = task_analysis.get("task_description", "")
+                phase["requirements"] = task_analysis.get("requirements", {})
+                phase["agents"] = self._assign_agents_to_phase(phase, selected_agents)
+                execution_plan["phases"].append(phase)
+
         # Add collaboration steps
         if len(selected_agents) > 1:
             execution_plan["collaboration_steps"] = [
@@ -564,8 +1012,50 @@ class UltraAgentOrchestrator:
                 {"step": "progress_sync", "participants": selected_agents},
                 {"step": "final_integration", "participants": selected_agents}
             ]
-        
+
         return execution_plan
+
+    def _capabilities_for_phase(self, phase_name: str) -> List[str]:
+        phase_map = {
+            "analysis": ["logical_reasoning", "pattern_recognition"],
+            "planning": ["task_decomposition", "strategy_formulation"],
+            "research": ["information_gathering", "data_analysis"],
+            "synthesis": ["result_validation", "synthesis_generation"],
+            "coding": ["code_generation", "code_debugging"],
+            "execution": ["action_execution", "progress_monitoring"],
+        }
+        return phase_map.get(phase_name, ["general_purpose"])
+
+    def _capabilities_for_tool(self, tool_name: str) -> List[str]:
+        tool_map = {
+            "filesystem": ["action_execution", "result_validation"],
+            "web": ["information_gathering", "source_validation"],
+            "code": ["code_generation", "testing_framework"],
+        }
+        return tool_map.get(tool_name, ["general_purpose"])
+
+    def _assign_agents_to_phase(self, phase: Dict[str, Any], candidates: List[str]) -> List[str]:
+        required_caps = phase.get("required_capabilities", [])
+        required_tools = phase.get("required_tools", [])
+        scored = []
+        candidate_ids = candidates or list(self.agents.keys())
+        for agent_id in candidate_ids:
+            agent = self.agents.get(agent_id)
+            if not agent:
+                continue
+            score = 0
+            if agent.get("status") != "ready":
+                score -= 2
+            score -= agent.get("load", 0)
+            for cap in required_caps:
+                if cap in agent.get("capabilities", []):
+                    score += 2
+            for tool in required_tools:
+                if tool in agent.get("tools", {}):
+                    score += 3
+            scored.append((score, agent_id))
+        scored.sort(reverse=True)
+        return [agent_id for score, agent_id in scored if score > -5][:1]
     
     def _execute_coordinated_task(self, execution_plan: Dict[str, Any]) -> Dict[str, Any]:
         """Execute task using coordinated agents."""
@@ -579,9 +1069,9 @@ class UltraAgentOrchestrator:
         # Execute phases
         for phase in execution_plan.get("phases", []):
             phase_name = phase["phase"]
-            phase_agents = phase["agents"]
+            phase_agents = phase.get("agents", [])
             
-            phase_result = self._execute_phase(phase_name, phase_agents)
+            phase_result = self._execute_phase(phase_name, phase_agents, phase)
             results["phase_results"][phase_name] = phase_result
         
         # Execute collaboration steps
@@ -594,9 +1084,10 @@ class UltraAgentOrchestrator:
         
         return results
     
-    def _execute_phase(self, phase_name: str, agents: List[str]) -> Dict[str, Any]:
+    def _execute_phase(self, phase_name: str, agents: List[str], phase_spec: Dict[str, Any]) -> Dict[str, Any]:
         """Execute a specific phase with assigned agents."""
-        
+        phase_start = self._resource_monitor.sample()
+
         phase_result = {
             "phase": phase_name,
             "participants": agents,
@@ -604,52 +1095,199 @@ class UltraAgentOrchestrator:
             "outputs": {},
             "metrics": {}
         }
-        
-        # Simulate phase execution
+
         for agent_id in agents:
             agent = self.agents.get(agent_id)
-            if agent:
-                # Simulate agent work
-                agent_output = self._simulate_agent_execution(agent, phase_name)
+            if not agent:
+                continue
+
+            agent_start = self._resource_monitor.sample()
+            agent["status"] = "active"
+            agent["load"] = agent.get("load", 0) + 1
+
+            try:
+                agent_output = self._execute_agent_for_phase(agent, phase_name, phase_spec)
                 phase_result["outputs"][agent_id] = agent_output
-        
-        phase_result["metrics"]["completion_time_ms"] = 100  # Simulated
-        
+                agent["stats"]["tasks_completed"] += 1
+                success = True
+            except Exception as e:
+                phase_result["outputs"][agent_id] = {"status": "failed", "error": str(e)}
+                agent["stats"]["tasks_failed"] += 1
+                agent["stats"]["last_error"] = str(e)
+                success = False
+
+            agent_end = self._resource_monitor.sample()
+            agent["status"] = "ready"
+            agent["load"] = max(0, agent.get("load", 1) - 1)
+
+            metrics = self._resource_monitor.diff(agent_start, agent_end)
+            agent["stats"]["last_execution_time_ms"] = metrics["duration_ms"]
+            self._update_agent_metrics(agent_id, metrics, success)
+
+        phase_end = self._resource_monitor.sample()
+        phase_metrics = self._resource_monitor.diff(phase_start, phase_end)
+        phase_result["metrics"] = phase_metrics
+        if any(
+            isinstance(output, dict) and output.get("status") == "failed"
+            for output in phase_result["outputs"].values()
+        ):
+            phase_result["status"] = "failed"
+
         return phase_result
+
+    def _execute_agent_for_phase(self, agent: Dict[str, Any], phase_name: str, phase_spec: Dict[str, Any]) -> Dict[str, Any]:
+        """Execute work for a specific agent and phase."""
+        actions = phase_spec.get("actions", [])
+        if actions:
+            return self._execute_actions(agent, actions)
+
+        task_description = phase_spec.get("task_description", "")
+        requirements = phase_spec.get("requirements", {})
+
+        # Provide deterministic, real analysis/planning outputs
+        if agent.get("type") == AgentType.REASONING:
+            return {
+                "agent_id": agent["id"],
+                "phase": phase_name,
+                "analysis": {
+                    "task_type": self._infer_task_type(task_description),
+                    "keywords": self._extract_keywords(task_description),
+                    "requirements": requirements,
+                },
+                "status": "completed",
+            }
+        if agent.get("type") == AgentType.PLANNING:
+            plan = self._simple_plan(task_description, requirements)
+            return {
+                "agent_id": agent["id"],
+                "phase": phase_name,
+                "plan": plan,
+                "status": "completed",
+            }
+
+        # Default no-op with traceable output
+        return {
+            "agent_id": agent["id"],
+            "phase": phase_name,
+            "status": "completed",
+            "note": "No concrete actions provided for this phase",
+        }
+
+    def _execute_actions(self, agent: Dict[str, Any], actions: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Execute concrete tool actions with real IO."""
+        results = []
+        for action in actions:
+            tool_name = action["tool"]
+            tool_action = action["action"]
+            params = action.get("params", {})
+            tool = agent.get("tools", {}).get(tool_name)
+            if not tool:
+                raise ValueError(f"Agent {agent['id']} lacks tool '{tool_name}'")
+            action_start = self._resource_monitor.sample()
+            output = tool.run(tool_action, **params)
+            action_end = self._resource_monitor.sample()
+            results.append({
+                "tool": tool_name,
+                "action": tool_action,
+                "params": params,
+                "output": output,
+                "metrics": self._resource_monitor.diff(action_start, action_end),
+            })
+        return {"status": "completed", "results": results}
+
+    def _update_agent_metrics(self, agent_id: str, metrics: Dict[str, Any], success: bool) -> None:
+        """Update agent metrics and global stats."""
+        perf = self.performance_metrics.get(agent_id)
+        if not perf:
+            return
+        perf.task_completion_time_ms = metrics.get("duration_ms", 0.0)
+        perf.resource_usage = {
+            "cpu_time_ms": metrics.get("cpu_time_ms", 0.0),
+            "memory_delta_bytes": metrics.get("memory_delta_bytes", 0),
+            "memory_peak_bytes": metrics.get("memory_peak_bytes", 0),
+        }
+        agent = self.agents.get(agent_id)
+        if agent:
+            total = agent["stats"]["tasks_completed"] + agent["stats"]["tasks_failed"]
+            perf.success_rate = agent["stats"]["tasks_completed"] / max(1, total)
+
+    @staticmethod
+    def _infer_task_type(description: str) -> str:
+        text = description.lower()
+        if any(word in text for word in ["code", "programming", "implement"]):
+            return "coding"
+        if any(word in text for word in ["research", "analyze", "analysis", "study"]):
+            return "research"
+        if any(word in text for word in ["plan", "strategy", "design"]):
+            return "planning"
+        return "general"
+
+    @staticmethod
+    def _extract_keywords(description: str) -> List[str]:
+        tokens = [t.strip(".,:;()[]{}") for t in description.lower().split()]
+        keywords = []
+        for token in tokens:
+            if token and token not in {"the", "and", "or", "of", "to", "a", "in"}:
+                keywords.append(token)
+        return keywords[:20]
+
+    @staticmethod
+    def _simple_plan(description: str, requirements: Dict[str, Any]) -> List[Dict[str, Any]]:
+        steps = []
+        if requirements.get("actions"):
+            for idx, action in enumerate(requirements["actions"], 1):
+                try:
+                    normalized = _normalize_action(action)
+                    steps.append({
+                        "step": idx,
+                        "action": normalized["action"],
+                        "tool": normalized["tool"],
+                    })
+                except Exception:
+                    steps.append({"step": idx, "action": "unknown", "tool": "unknown"})
+            return steps
+
+        task_type = UltraAgentOrchestrator._infer_task_type(description)
+        default_steps = {
+            "coding": ["analyze requirements", "design solution", "implement", "test"],
+            "research": ["define scope", "gather sources", "analyze data", "summarize findings"],
+            "planning": ["identify goals", "decompose tasks", "allocate resources", "timeline"],
+            "general": ["understand task", "execute", "review"],
+        }
+        for idx, step in enumerate(default_steps.get(task_type, []), 1):
+            steps.append({"step": idx, "action": step})
+        return steps
     
     def _execute_collaboration_step(self, step_name: str, participants: List[str]) -> Dict[str, Any]:
         """Execute collaboration step between agents."""
-        
+        events = []
+        timestamp = time.time()
+        for sender in participants:
+            for receiver in participants:
+                if sender == receiver:
+                    continue
+                events.append({
+                    "sender": sender,
+                    "receiver": receiver,
+                    "timestamp": timestamp,
+                    "step": step_name,
+                })
+
+        self.collaboration_graph.setdefault(step_name, []).extend(events)
+
         collab_result = {
             "step": step_name,
             "participants": participants,
-            "communication_events": len(participants) * (len(participants) - 1),
-            "consensus_reached": True,
-            "outcomes": {}
+            "communication_events": len(events),
+            "consensus_reached": len(participants) > 0,
+            "outcomes": {
+                "shared_understanding": "established" if participants else "none",
+                "coordination_plan": "aligned" if participants else "none",
+            },
         }
-        
-        # Simulate collaboration
-        collab_result["outcomes"]["shared_understanding"] = "established"
-        collab_result["outcomes"]["coordination_plan"] = "aligned"
-        
+
         return collab_result
     
-    def _simulate_agent_execution(self, agent: Dict[str, Any], phase_name: str) -> Dict[str, Any]:
-        """Simulate agent execution for a specific phase."""
-        
-        agent_type = agent.get("type")
-        capabilities = agent.get("capabilities", [])
-        
-        output = {
-            "agent_id": agent["id"],
-            "agent_type": agent_type.value if hasattr(agent_type, 'value') else str(agent_type),
-            "phase": phase_name,
-            "result": f"Completed {phase_name} using {len(capabilities)} capabilities",
-            "confidence": 0.85,
-            "execution_time_ms": 50
-        }
-        
-        return output
     
     def _synthesize_results(self, execution_results: Dict[str, Any]) -> Dict[str, Any]:
         """Synthesize end results from all execution phases."""
@@ -664,6 +1302,8 @@ class UltraAgentOrchestrator:
         
         # Aggregate phase results
         phase_results = execution_results.get("phase_results", {})
+        total_outputs = 0
+        successful_outputs = 0
         for phase_name, phase_result in phase_results.items():
             synthesis["key_achievements"].append(f"Successfully completed {phase_name} phase")
             
@@ -672,16 +1312,22 @@ class UltraAgentOrchestrator:
                 if agent_id not in synthesis["agent_contributions"]:
                     synthesis["agent_contributions"][agent_id] = []
                 synthesis["agent_contributions"][agent_id].append(output)
+                total_outputs += 1
+                if isinstance(output, dict) and output.get("status") != "failed":
+                    successful_outputs += 1
         
         # Calculate quality metrics
         total_agents = len(synthesis["agent_contributions"])
         collaboration_events = len(execution_results.get("collaboration_outcomes", {}))
-        
+
+        overall_quality = successful_outputs / max(1, total_outputs)
+        coordination_efficiency = successful_outputs / max(1, total_outputs)
+
         synthesis["quality_metrics"] = {
             "agent_utilization": total_agents,
             "collaboration_score": min(1.0, collaboration_events / max(1, total_agents)),
-            "coordination_efficiency": 0.9,  # Simulated
-            "overall_quality": 0.85  # Simulated
+            "coordination_efficiency": coordination_efficiency,
+            "overall_quality": overall_quality,
         }
         
         return synthesis
@@ -722,6 +1368,7 @@ class UltraAgentOrchestrator:
     def coordinate_agents(self, task: Dict[str, Any], agents: List[str] = None) -> Dict[str, Any]:
         """Coordinate multiple agents to complete a task."""
         try:
+            start_time = time.time()
             # Basic coordination logic
             if agents is None:
                 agents = list(self.agents.keys())[:3]  # Use first 3 agents
@@ -731,7 +1378,7 @@ class UltraAgentOrchestrator:
                 "assigned_agents": agents,
                 "coordination_strategy": "sequential",
                 "status": "coordinated",
-                "coordination_time_ms": 50.0
+                "coordination_time_ms": (time.time() - start_time) * 1000
             }
             
             logger.info(f"Coordinated {len(agents)} agents for task")
@@ -744,6 +1391,7 @@ class UltraAgentOrchestrator:
     def manage_workflow(self, workflow: Dict[str, Any]) -> Dict[str, Any]:
         """Manage complex multi-agent workflows."""
         try:
+            start_time = time.time()
             # Workflow management logic
             workflow_id = workflow.get("id", "workflow_001")
             steps = workflow.get("steps", [])
@@ -753,7 +1401,7 @@ class UltraAgentOrchestrator:
                 "total_steps": len(steps),
                 "completed_steps": 0,
                 "status": "managing",
-                "execution_time_ms": 100.0,
+                "execution_time_ms": (time.time() - start_time) * 1000,
                 "next_step": steps[0] if steps else None
             }
             
@@ -767,23 +1415,37 @@ class UltraAgentOrchestrator:
     def execute_parallel(self, tasks: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Execute multiple tasks in parallel using agent pool."""
         try:
-            # Parallel execution logic
+            start_time = time.time()
             execution_result = {
                 "total_tasks": len(tasks),
                 "parallel_execution": True,
                 "assigned_agents": [],
-                "execution_time_ms": 75.0,
+                "execution_time_ms": 0.0,
                 "completed_tasks": 0,
                 "status": "executing"
             }
             
-            # Simulate agent assignment
-            for i, task in enumerate(tasks):
-                agent_id = f"agent_{i % len(self.agents) if self.agents else i % 3}"
-                execution_result["assigned_agents"].append(agent_id)
+            def _run_task(task: Dict[str, Any]) -> Dict[str, Any]:
+                description = task.get("description") or task.get("task_description") or str(task)
+                requirements = task.get("requirements", {})
+                return self.intelligent_task_orchestration(description, requirements)
+
+            max_workers = min(4, max(1, len(tasks)))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = [executor.submit(_run_task, task) for task in tasks]
+                for future in concurrent.futures.as_completed(futures):
+                    try:
+                        result = future.result()
+                        assigned = result.get("assigned_agents", [])
+                        execution_result["assigned_agents"].extend(assigned)
+                        execution_result["completed_tasks"] += 1
+                    except Exception as e:
+                        execution_result.setdefault("errors", []).append(str(e))
+                        execution_result["status"] = "failed"
             
-            execution_result["completed_tasks"] = len(tasks)
-            execution_result["status"] = "completed"
+            if execution_result.get("status") != "failed":
+                execution_result["status"] = "completed"
+            execution_result["execution_time_ms"] = (time.time() - start_time) * 1000
             
             logger.info(f"Executed {len(tasks)} tasks in parallel")
             return execution_result

@@ -10,23 +10,23 @@ import numpy as np
 from dataclasses import dataclass, fieldield
 # Obtiene la path del directory current (scripts) -> /.../scripts
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Sube un level for obtain la raíz del proyecto -> /.../capibaraGPT-v2
+# Sube un level for obtain la raíz del proyecto -> /.../CapibaraGPT v3
 project_root = os.path.dirname(script_dir)
 # Añade la raíz del proyecto a sys.path
 if project_root not in sys.path:
     pass  # Using proper imports instead of sys.path manipulation
 
-from capibara.jax import jax
+import jax
 from flax import linen as nn
 from functools import partial
-from capibara.jax import numpy as jnp
+from jax import numpy as jnp
 from flax.core import freeze, unfreezeze
 
 # Imports with fallbacks for dependencias experimentales
 try:
-    from capibara.jax.experimental import Mesh
-    from capibara.jax.experimental import Partition
-    from capibara.jax.experimental import mesh_utils
+    from jax.experimental import Mesh
+    from jax.experimental import Partition
+    from jax.experimental import mesh_utils
 except ImportError:
     # Fallbacks for imports experimentales
     class Mesh:
@@ -55,7 +55,7 @@ except ImportError:
 from typing import Dict, Any, Optional, Tuple, List, Set
 
 try:
-    from ...sub_models.experimental.spike_ssm import SpikeSSM
+    from sub_models.experimental.spike_ssm import SpikeSSM
 except ImportError:
     class SpikeSSM(nn.Module):
         def __init__(self, **kwargs):
@@ -63,7 +63,7 @@ except ImportError:
                 setattr(self, k, v)
 
 try:
-    from capibara.jax.experimental.profiler import device_memory_stats, start_trace, stop_trace
+    from jax.experimental.profiler import device_memory_stats, start_trace, stop_trace
 except ImportError:
     def device_memory_stats():
         return {}

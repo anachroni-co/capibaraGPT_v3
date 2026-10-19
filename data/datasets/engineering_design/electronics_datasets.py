@@ -1,5 +1,5 @@
 """
-Electronics Circuit Design Datasets for CapibaraGPT v2
+Electronics Circuit Design Datasets for CapibaraGPT v3
 
 Comprehensive collection of electronics datasets for:
 - Circuit schematics and PCB designs

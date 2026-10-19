@@ -9,7 +9,7 @@ import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSeq2SeqLM, pipeline
 import numpy as np
 import asyncio
 import aiohttp
@@ -67,6 +67,7 @@ class TPUv6HuggingFaceProStrategy:
         self.expert_models = self._load_tpu_v6_optimized_models()
         self.hf_pro_client = self._initialize_hf_pro_client()
         self.tpu_optimizer = self._initialize_tpu_v6_optimizer()
+        self._pipeline_cache: Dict[str, Any] = {}
         self._setup_distributed_inference()
     
     def _load_tpu_v6_optimized_models(self) -> Dict[str, Dict[str, Any]]:
@@ -294,7 +295,7 @@ class TPUv6HuggingFaceProStrategy:
             
             for model_config in gpu_models:
                 try:
-                    # Simulate H200 inference with HuggingFace Pro
+                    # Run H200 inference with HuggingFace Pro
                     response_text = await self._call_hf_pro_inference(
                         model_config["model_id"], 
                         prompt, 
@@ -378,7 +379,7 @@ class TPUv6HuggingFaceProStrategy:
         
         async def process_single_model(model_config: Dict[str, Any]) -> Dict[str, Any]:
             try:
-                # Simulate TPU v6 optimized inference
+                # Run TPU v6 optimized inference
                 response_text = await self._call_tpu_v6_inference(
                     model_config["model_id"], 
                     prompt, 
@@ -414,6 +415,8 @@ class TPUv6HuggingFaceProStrategy:
         
         return [r for r in batch_responses if isinstance(r, dict) and r.get("success", False)]
     
+    
+    
     async def _call_hf_pro_inference(
         self, 
         model_id: str, 
@@ -422,29 +425,10 @@ class TPUv6HuggingFaceProStrategy:
         gpu_id: int
     ) -> str:
         """Call HuggingFace Pro inference with H200 distributed support."""
-        # Simulate H200 distributed inference with HF Pro
-        # In production, this would use the actual HF Pro API
-        
-        # Use 20x inference credits
         credits_used = 10  # Base cost
         self.hf_pro_client["inference_credits"] -= credits_used
-        
-        # Simulate response generation
-        await asyncio.sleep(0.1)  # Simulate H200 inference time
-        
-        # Return simulated response based on domain
-        domain_responses = {
-            "mathematics": f"Respuesta matemática optimizada por H200 GPU {gpu_id}: {prompt}",
-            "programming": f"Código optimizado por H200 GPU {gpu_id}: def solution(): return '{prompt}'",
-            "spanish_language": f"Respuesta en español optimizada por H200 GPU {gpu_id}: {prompt}",
-            "medical": f"Respuesta médica optimizada por H200 GPU {gpu_id}: {prompt}",
-            "legal": f"Respuesta legal optimizada por H200 GPU {gpu_id}: {prompt}",
-            "logical_reasoning": f"Razonamiento optimizado por H200 GPU {gpu_id}: {prompt}",
-            "multimodal": f"Respuesta multimodal optimizada por H200 GPU {gpu_id}: {prompt}"
-        }
-        
-        return domain_responses.get(config["domain"], f"Respuesta optimizada por H200 GPU {gpu_id}: {prompt}")
-    
+        return await self._run_inference_pipeline(model_id, prompt, config)
+
     async def _call_tpu_v6_inference(
         self, 
         model_id: str, 
@@ -452,25 +436,65 @@ class TPUv6HuggingFaceProStrategy:
         config: Dict[str, Any]
     ) -> str:
         """Call TPU v6-64 optimized inference."""
-        # Simulate TPU v6 inference
-        await asyncio.sleep(0.05)  # Simulate TPU v6 speed
-        
-        # Return simulated response
-        domain_responses = {
-            "mathematics": f"Respuesta matemática optimizada por TPU v6: {prompt}",
-            "programming": f"Código optimizado por TPU v6: def solution(): return '{prompt}'",
-            "spanish_language": f"Respuesta en español optimizada por TPU v6: {prompt}",
-            "medical": f"Respuesta médica optimizada por TPU v6: {prompt}",
-            "legal": f"Respuesta legal optimizada por TPU v6: {prompt}",
-            "logical_reasoning": f"Razonamiento optimizado por TPU v6: {prompt}",
-            "multimodal": f"Respuesta multimodal optimizada por TPU v6: {prompt}"
-        }
-        
-        return domain_responses.get(config["domain"], f"Respuesta optimizada por TPU v6: {prompt}")
-    
+        return await self._run_inference_pipeline(model_id, prompt, config)
+
+    async def _run_inference_pipeline(
+        self,
+        model_id: str,
+        prompt: str,
+        config: Dict[str, Any]
+    ) -> str:
+        """Run real model inference via HuggingFace pipelines."""
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            None, self._run_pipeline_sync, model_id, prompt, config
+        )
+
+    def _run_pipeline_sync(
+        self,
+        model_id: str,
+        prompt: str,
+        config: Dict[str, Any]
+    ) -> str:
+        """Synchronous pipeline execution for a model."""
+        pipe = self._get_or_create_pipeline(model_id)
+        max_length = int(config.get("max_length", 256))
+        temperature = float(config.get("temperature", 0.7))
+        result = pipe(
+            prompt,
+            max_length=max_length,
+            do_sample=True,
+            temperature=temperature,
+            num_return_sequences=1
+        )
+        if isinstance(result, list) and result:
+            if "generated_text" in result[0]:
+                return result[0]["generated_text"]
+            if "summary_text" in result[0]:
+                return result[0]["summary_text"]
+        return str(result)
+
+    def _get_or_create_pipeline(self, model_id: str):
+        """Create or reuse a text generation pipeline."""
+        if model_id in self._pipeline_cache:
+            return self._pipeline_cache[model_id]
+
+        device = 0 if torch.cuda.is_available() else -1
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            model = AutoModelForCausalLM.from_pretrained(model_id)
+            pipe = pipeline("text-generation", model=model, tokenizer=tokenizer, device=device)
+        except Exception:
+            tokenizer = AutoTokenizer.from_pretrained(model_id)
+            model = AutoModelForSeq2SeqLM.from_pretrained(model_id)
+            pipe = pipeline("text2text-generation", model=model, tokenizer=tokenizer, device=device)
+
+        self._pipeline_cache[model_id] = pipe
+        return pipe
+
     def _apply_tpu_v6_consensus_algorithm(
-        self, 
-        responses: List[Dict[str, Any]], 
+        self,
+        responses: List[Dict[str, Any]],
         original_prompt: str
     ) -> Dict[str, Any]:
         """Apply advanced consensus algorithm optimized for TPU v6-64."""

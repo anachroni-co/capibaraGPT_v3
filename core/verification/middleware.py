@@ -1,9 +1,22 @@
+"""
+Verification Middleware - Pipeline integration for verification.
+
+This module provides middleware for integrating heuristic verification
+into any pipeline. It wraps functions with automatic verification
+of results using the Constitutional AI system.
+
+Key Components:
+    - VerificationMiddleware: Middleware class for pipeline integration
+
+Author: Skydesk International Dev Team.
+"""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Callable
 
 try:
-    from capibara.jax.numpy import jnp  # type: ignore
+    import jax.numpy as jnp
 except Exception:
     try:
         import numpy as jnp  # type: ignore
@@ -14,13 +27,13 @@ from .constitutional_ai import ComprehensiveVerificationSystem
 
 
 class VerificationMiddleware:
-    """Middleware para integrar verificación en cualquier pipeline."""
+    """Middleware para integrar verificacion heuristica en cualquier pipeline."""
 
     def __init__(self, verification_system: ComprehensiveVerificationSystem):
         self.verification_system = verification_system
 
     def __call__(self, func: Callable[..., Any]):
-        """Decorador para añadir verificación a funciones."""
+        """Decorador que agrega verificacion a funciones."""
 
         def wrapper(*args, **kwargs):
             result = func(*args, **kwargs)
@@ -32,7 +45,7 @@ class VerificationMiddleware:
         return wrapper
 
     def _verify_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """Verifies the result of a function."""
+        """Verifica el resultado de una funcion y adjunta metadatos."""
         embedding = jnp.ones((768,)) if jnp is not None else None
         verification = self.verification_system.verify_output(embedding)
         return {

@@ -1,28 +1,44 @@
 """
-layers embedding module.
-
-# This module provides functionality for embedding.
+Embedding layer for CapibaraGPT v3.
 """
 
-import os
-import sys
+from __future__ import annotations
 
 import logging
-# Obtiene la path del directory current (scripts) -> /.../scripts
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Sube un level for obtain la raíz del proyecto -> /.../capibaraGPT-v2
-project_root = os.path.dirname(script_dir)
-# Añade la raíz del proyecto a sys.path
-if project_root not in sys.path:
-    # Fixed: Using proper imports instead of sys.path manipulation
-    pass
+from dataclasses import dataclass
+
+from layers.jax_compat import jnp, nn, JAX_AVAILABLE
+from layers.base import LayerConfig
 
 logger = logging.getLogger(__name__)
 
-def main():
-    # Main function for this module.
+
+@dataclass
+class EmbeddingConfig(LayerConfig):
+    """Configuration for EmbeddingLayer."""
+    vocab_size: int = 50257
+    embedding_dim: int = 768
+
+
+class EmbeddingLayer(nn.Module):
+    """Token embedding layer."""
+    config: EmbeddingConfig
+
+    @nn.compact
+    def __call__(self, token_ids: jnp.ndarray) -> jnp.ndarray:
+        embed = nn.Embed(
+            num_embeddings=self.config.vocab_size,
+            features=self.config.embedding_dim,
+        )
+        return embed(token_ids)
+
+
+def main() -> bool:
     logger.info("Module embedding.py starting")
+    if not JAX_AVAILABLE:
+        logger.warning("JAX/Flax not available; EmbeddingLayer will not be usable.")
     return True
+
 
 if __name__ == "__main__":
     main()

@@ -19,10 +19,10 @@ if project_root not in sys.path:
     # Fixed: Using proper imports instead of sys.path manipulation
     pass
 
-from capibara.jax import jax
+import jax
 from flax import linen as nn
 from functools import partial
-from capibara.jax import numpy as jnp
+from jax import numpy as jnp
 
 # Import layer components
 from .base import BaseLayer, LayerConfig

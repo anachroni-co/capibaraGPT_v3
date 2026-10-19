@@ -1,5 +1,5 @@
 """
-AI-Powered Workflow Builder for Capibara5 N8N Integration
+AI-Powered Workflow Builder for CapibaraGPT v3 N8N Integration
 ========================================================
 
 Converts natural language descriptions into n8n workflow specifications
@@ -21,6 +21,7 @@ script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
 if project_root not in sys.path:
     # Fixed: Using proper imports instead of sys.path manipulation
+    pass
 
 from .models import (
     WorkflowSpec, WorkflowNode, WorkflowConnection, NodeType,

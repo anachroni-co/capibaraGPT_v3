@@ -1,376 +1,74 @@
 # Modules
 
-**Specialized Processing Modules and Adaptive Routing System**
+This directory contains optional processing modules for CapibaraGPT v3. Some
+modules require JAX + Flax, while others are CPU-only and work out of the box.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        MODULE ARCHITECTURE                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│                          Input Sequence                                      │
-│                               │                                              │
-│                               ▼                                              │
-│                    ┌─────────────────────┐                                  │
-│                    │   Adaptive Router   │                                  │
-│                    │   ┌─────────────┐   │                                  │
-│                    │   │  Analysis   │   │                                  │
-│                    │   │  Scoring    │   │                                  │
-│                    │   └─────────────┘   │                                  │
-│                    └──────────┬──────────┘                                  │
-│                               │                                              │
-│         ┌─────────────────────┼─────────────────────┐                       │
-│         │                     │                     │                       │
-│         ▼                     ▼                     ▼                       │
-│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐                 │
-│  │  Reasoning  │      │  Attention  │      │ Specialized │                 │
-│  │   Module    │      │   Module    │      │ Processors  │                 │
-│  └─────────────┘      └─────────────┘      └─────────────┘                 │
-│         │                     │                     │                       │
-│         └─────────────────────┴─────────────────────┘                       │
-│                               │                                              │
-│                               ▼                                              │
-│                    ┌─────────────────────┐                                  │
-│                    │   Output Fusion     │                                  │
-│                    └─────────────────────┘                                  │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+## Structure
+- `capibara_adaptive_router.py`: JAX/Flax adaptive router (AdaptiveRouter alias,
+  plus OptimizedAdaptiveRouter, ContextualRouterOptimized, VQbitLayerOptimized).
+- `shared_attention.py`: JAX/Flax attention variants (OptimizedSharedAttention,
+  MultiScaleSharedAttention, EfficiencyOptimizedAttention).
+- `hierarchical_reasoning.py`: CPU-only reasoning scaffold
+  (HierarchicalReasoning / HierarchicalReasoningModule).
+- `specialized_processors.py`: CPU-only text/code/multimodal processors and
+  manager (SpecializedProcessorManager).
+- `ultra_module_orchestrator.py`: Optional orchestrator that ties modules
+  together (requires JAX/Flax).
+- `personality/`: CPU-only personality system.
+- `ultra_modules_demo.py`: Demonstration script.
 
-## Overview
+## Dependencies
+- JAX + Flax required for adaptive router, shared attention, and ultra
+  orchestrator modules.
+- `hierarchical_reasoning` and `specialized_processors` are CPU-only.
 
-The modules package contains specialized processing components that handle different aspects of the model's computation. This includes adaptive routing, shared attention mechanisms, hierarchical reasoning, and domain-specific processors.
-
-## Module Structure
-
-```
-modules/
-├── __init__.py                     # Module exports
-├── capibara_adaptive_router.py     # Adaptive routing system
-├── shared_attention.py             # Shared attention mechanisms
-├── hierarchical_reasoning.py       # Hierarchical reasoning module
-├── specialized_processors.py       # Domain-specific processors
-├── ultra_module_orchestrator.py    # Module orchestration system
-├── ultra_modules_demo.py           # Demo and examples
-├── analysis_modules_and_jax_decorators.md  # Documentation
-└── personality/                    # Personality modules
-    └── ...
-```
-
-## Components
-
-### Adaptive Router
-
-Dynamically routes inputs to appropriate processing modules based on content analysis.
-
+## Quickstart (CPU)
 ```python
-from modules import AdaptiveRouter
-
-router = AdaptiveRouter(
-    modules=["reasoning", "attention", "specialized"],
-    routing_strategy="learned",  # or "rule_based", "hybrid"
-    top_k=2  # Activate top 2 modules
-)
-
-# Route input
-routing_weights = router.route(input_embeddings)
-# {"reasoning": 0.6, "attention": 0.3, "specialized": 0.1}
-
-# Apply weighted processing
-output = router.forward(input_embeddings)
-```
-
-**Routing Strategies:**
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│                    Routing Strategies                          │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  Rule-Based:                                                   │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │ IF contains_math(input) → route to reasoning_module     │ │
-│  │ IF is_long_context(input) → route to attention_module   │ │
-│  │ IF is_code(input) → route to code_processor             │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│                                                                │
-│  Learned (Neural):                                            │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │ router_logits = Linear(input_embeddings)                │ │
-│  │ routing_weights = softmax(router_logits / temperature)  │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│                                                                │
-│  Hybrid:                                                       │
-│  ┌──────────────────────────────────────────────────────────┐ │
-│  │ rule_weights = apply_rules(input)                       │ │
-│  │ learned_weights = neural_router(input)                  │ │
-│  │ final_weights = combine(rule_weights, learned_weights)  │ │
-│  └──────────────────────────────────────────────────────────┘ │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
-```
-
-### Shared Attention
-
-Efficient attention mechanisms shared across model layers.
-
-```python
-from modules import SharedAttention, AttentionConfig
-
-# Configure shared attention
-config = AttentionConfig(
-    num_heads=16,
-    head_dim=64,
-    num_shared_layers=4,
-    share_weights=True,
-    use_flash_attention=True
-)
-
-attention = SharedAttention(config)
-
-# Forward pass
-output = attention(
-    query=query_states,
-    key=key_states,
-    value=value_states,
-    attention_mask=mask
-)
-```
-
-**Benefits of Shared Attention:**
-
-| Aspect | Standard | Shared |
-|--------|----------|--------|
-| Parameters | O(L × d²) | O(d²) |
-| Memory | High | Reduced |
-| Training | Slower | Faster |
-| Generalization | Per-layer | Cross-layer |
-
-### Hierarchical Reasoning
-
-Multi-level reasoning module for complex problem-solving.
-
-```python
-from modules import HierarchicalReasoning
-
-reasoning = HierarchicalReasoning(
-    num_levels=3,
-    hidden_size=768,
-    reasoning_steps=5
-)
-
-# Perform hierarchical reasoning
-result = reasoning.forward(
-    input_embeddings=embeddings,
-    problem_context=context,
-    max_depth=3
-)
-
-# Access reasoning trace
-trace = result.reasoning_trace
-# [
-#     {"level": 0, "step": 1, "thought": "..."},
-#     {"level": 0, "step": 2, "thought": "..."},
-#     {"level": 1, "step": 1, "thought": "..."},
-#     ...
-# ]
-```
-
-**Reasoning Hierarchy:**
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                  Hierarchical Reasoning                      │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  Level 0: Surface Understanding                              │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ • Parse input structure                                 ││
-│  │ • Identify key entities                                 ││
-│  │ • Extract explicit information                          ││
-│  └─────────────────────────────────────────────────────────┘│
-│                          │                                   │
-│                          ▼                                   │
-│  Level 1: Relational Reasoning                              │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ • Build relationship graphs                             ││
-│  │ • Identify causal chains                                ││
-│  │ • Connect related concepts                              ││
-│  └─────────────────────────────────────────────────────────┘│
-│                          │                                   │
-│                          ▼                                   │
-│  Level 2: Abstract Reasoning                                │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │ • Apply logical rules                                   ││
-│  │ • Generate hypotheses                                   ││
-│  │ • Synthesize conclusions                                ││
-│  └─────────────────────────────────────────────────────────┘│
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Specialized Processors
-
-Domain-specific processing modules.
-
-```python
+from modules.hierarchical_reasoning import HierarchicalReasoning
 from modules.specialized_processors import (
-    MathProcessor,
-    CodeProcessor,
-    LanguageProcessor,
-    ScienceProcessor
+    create_processor_manager,
+    create_default_processors,
 )
 
-# Math processing
-math_proc = MathProcessor()
-math_result = math_proc.process(
-    input_text="Solve: 2x + 5 = 13",
-    show_steps=True
-)
+reasoning = HierarchicalReasoning()
+result = reasoning.process("Plan a solution with steps.")
 
-# Code processing
-code_proc = CodeProcessor(
-    languages=["python", "javascript", "rust"]
-)
-code_result = code_proc.process(
-    code="def fibonacci(n): ...",
-    task="explain"  # or "optimize", "debug", "translate"
-)
+manager = create_processor_manager()
+create_default_processors(manager)
+analysis = manager.process("text_analyzer", "Hello world.")
 ```
 
-**Available Processors:**
-
-| Processor | Domain | Capabilities |
-|-----------|--------|--------------|
-| MathProcessor | Mathematics | Symbolic computation, proofs |
-| CodeProcessor | Programming | Analysis, generation, debugging |
-| LanguageProcessor | NLP | Translation, summarization |
-| ScienceProcessor | Science | Scientific reasoning, citations |
-| CreativeProcessor | Creative | Story generation, style transfer |
-
-### Module Orchestrator
-
-Coordinates multiple modules for complex tasks.
-
+## Quickstart (JAX/Flax)
 ```python
-from modules import ModuleOrchestrator
+from modules import AdaptiveRouter, OptimizedSharedAttention
 
-orchestrator = ModuleOrchestrator(
-    modules={
-        "router": AdaptiveRouter(...),
-        "attention": SharedAttention(...),
-        "reasoning": HierarchicalReasoning(...),
-        "processors": [MathProcessor(), CodeProcessor()]
-    },
-    execution_strategy="parallel"  # or "sequential", "adaptive"
-)
-
-# Process complex input
-result = orchestrator.process(
-    input_data=input_embeddings,
-    task_type="problem_solving",
-    return_intermediates=True
-)
+# Requires JAX + Flax installed
+router = AdaptiveRouter(hidden_size=128, num_virtual_qubits=64, vocab_size=50257)
+attention = OptimizedSharedAttention(hidden_size=128, num_heads=4)
 ```
 
-## Personality Module
+## Orchestrator
+The `UltraModuleOrchestrator` can combine attention/router/processor modules.
+For processor and personality paths, provide text or code via the `context`
+dict (for example `{"text": "...", "code": "..."}` or `{"modalities": {...}}`).
 
-Customizable response personality system.
+## Issues por hacer
 
-```python
-from modules.personality import PersonalityModule, PersonalityConfig
-
-config = PersonalityConfig(
-    tone="friendly",           # friendly, professional, casual
-    verbosity="balanced",      # concise, balanced, detailed
-    formality="medium",        # low, medium, high
-    creativity=0.7,            # 0.0 - 1.0
-    emoji_usage=False
-)
-
-personality = PersonalityModule(config)
-
-# Apply personality to response
-styled_response = personality.apply(
-    base_response="Here is the answer.",
-    context=conversation_context
-)
-```
-
-## Usage Example
-
-```python
-from modules import (
-    AdaptiveRouter,
-    SharedAttention,
-    HierarchicalReasoning,
-    ModuleOrchestrator
-)
-
-# Build module pipeline
-router = AdaptiveRouter(num_modules=4)
-attention = SharedAttention(num_heads=16)
-reasoning = HierarchicalReasoning(num_levels=3)
-
-orchestrator = ModuleOrchestrator(
-    modules={"router": router, "attention": attention, "reasoning": reasoning}
-)
-
-# Process input
-class ModularModel:
-    def __init__(self):
-        self.orchestrator = orchestrator
-
-    def forward(self, input_ids, attention_mask):
-        # Get embeddings
-        embeddings = self.embed(input_ids)
-
-        # Route and process
-        output = self.orchestrator.process(
-            embeddings,
-            attention_mask=attention_mask
-        )
-
-        return output
-```
-
-## Configuration
-
-```yaml
-# config/modules.yaml
-modules:
-  router:
-    strategy: "learned"
-    top_k: 2
-    temperature: 1.0
-
-  attention:
-    num_heads: 16
-    head_dim: 64
-    use_flash: true
-    dropout: 0.1
-
-  reasoning:
-    num_levels: 3
-    max_steps: 10
-    early_stopping: true
-
-  orchestrator:
-    execution: "adaptive"
-    timeout_ms: 1000
-    fallback_module: "attention"
-```
-
-## See Also
-
-- [Core Module](../core/README.md)
-- [MoE System](../core/moe/README.md)
-- [Chain-of-Thought](../core/cot/README.md)
-
-## Ejemplo rápido
-
-Ejemplo (pseudo-código) para activar un módulo:
-
-```python
-# module = SomeModule(config)
-# result = module.run(payload)
-```
+- [ ] ### 3. Add missing decorators - `modules\analysis_modules_and_jax_decorators.md:171`
+- [ ] | `@jax.vmap` | 0 | 0 |  Missing | - `modules\analysis_modules_and_jax_decorators.md:196`
+- [ ] | `@jax.remat` | 0 | 0 |  Missing | - `modules\analysis_modules_and_jax_decorators.md:197`
+- [ ] | **TPU optimizations** |  Partial | Missing vectorization and rematerialization | - `modules\analysis_modules_and_jax_decorators.md:223`
+- [ ] 3. **Medium term**: Add missing optimizations - `modules\analysis_modules_and_jax_decorators.md:230`
+- [ ] # Simulate feature extraction and normalization - `modules\specialized_processors.py:564`
+- [ ] """Extract text features (simulated).""" - `modules\specialized_processors.py:591`
+- [ ] # Create module instance (placeholder for current testing) - `modules\ultra_modules_demo.py:280`
+- [ ] # Simulate performance testing - `modules\ultra_modules_demo.py:543`
+- [ ] # Simulate timing measurements - `modules\ultra_modules_demo.py:553`
+- [ ] # Simulate processing time - `modules\ultra_modules_demo.py:559`
+- [ ] # Simulate feature availability check - `modules\ultra_modules_demo.py:591`
+- [ ] available = True  # Placeholder - `modules\ultra_modules_demo.py:592`
+- [ ] Sistema de orquestación ultra-avanzada for todos los modules: - `modules\ultra_module_orchestrator.py:5`
+- [ ] """Orquestador ultra-advanced for todos los modules del sistema.""" - `modules\ultra_module_orchestrator.py:165`
+- [ ] self.expert_soup_manager = "expert_soup_placeholder" - `modules\ultra_module_orchestrator.py:771`
+- [ ] """initialization optimizada de todos los sistemas.""" - `modules\personality\human_gender_personality.py:682`
+- [ ] # ==================== MÉTODOS DE UTILIDAD ==================== - `modules\personality\human_gender_personality.py:1147`

@@ -16,7 +16,7 @@ from .config import TPUConfig
 from dataclasses import dataclass
 from .memory_config import MemoryOptimizationConfig
 from .convexity_config import ConvexityTrainingConfig, ConvexityControllerConfig
-from pydantic import BaseModel, Field, validator  # type: ignore
+from pydantic import BaseModel, Field, field_validator  # type: ignore
 
 
 from typing import Optional, List, Dict, Any, Tuple, Callable, Type, TypeVar
@@ -70,14 +70,14 @@ class ModelConfig(BaseModel):
         description="Custom layers"
     )
 
-    @validator('hidden_size')
+    @field_validator('hidden_size')
     def validate_hidden_size(cls, v):
         """Validates that hidden size is divisible by number of heads."""
         if v % 12 != 0:
             raise ValueError("Hidden size must be divisible by 12")
         return v
 
-    @validator('num_bits')
+    @field_validator('num_bits')
     def validate_num_bits(cls, v):
         """Validates that the number of bits is valid."""
         if v not in [1, 2, 4, 8, 16]:
@@ -105,7 +105,7 @@ class CapibaraConfig(BaseModel):
     tpu_config: TPUConfig
     log_level: str = 'INFO'
 
-    @validator('device')
+    @field_validator('device')
     def validate_device(cls, v):
         """Validates that the device is configured as 'tpu'."""
         if v != 'tpu':

@@ -11,6 +11,7 @@ import json
 import statistics
 import platform
 import subprocess
+import sys
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from pathlib import Path
@@ -29,12 +30,21 @@ except ImportError:
     psutil = None
     HAS_PSUTIL = False
 
-try:
-    import torch
-    HAS_TORCH = True
-except ImportError:
-    torch = None
-    HAS_TORCH = False
+torch = None  # type: ignore
+HAS_TORCH = False
+
+
+def _torch_import_works() -> bool:
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import torch"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
 
 logger = logging.getLogger(__name__)
 
@@ -158,12 +168,16 @@ class BenchmarkRunner:
             except Exception:
                 pass
 
-        if HAS_TORCH:
-            info["torch_version"] = torch.__version__
-            info["cuda_available"] = torch.cuda.is_available()
-            if torch.cuda.is_available():
-                info["cuda_device_count"] = torch.cuda.device_count()
-                info["cuda_device_name"] = torch.cuda.get_device_name(0)
+        if _torch_import_works():
+            try:
+                import torch as _torch  # type: ignore
+                info["torch_version"] = _torch.__version__
+                info["cuda_available"] = _torch.cuda.is_available()
+                if _torch.cuda.is_available():
+                    info["cuda_device_count"] = _torch.cuda.device_count()
+                    info["cuda_device_name"] = _torch.cuda.get_device_name(0)
+            except Exception:
+                pass
 
         # Try to get git commit
         try:

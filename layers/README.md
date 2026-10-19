@@ -1,6 +1,6 @@
 # Capibara Layers Module
 
-**Advanced neural network layer implementations for capibaraGPT-v2**
+**Advanced neural network layer implementations for CapibaraGPT v3**
 
 ##  Table of Contents
 
@@ -692,7 +692,7 @@ output = attention(x, use_sparse=True)
 - Reduced memory footprint
 - Faster attention computation
 - Dynamic sparsity patterns
-- Better generalization
+- Better Generatelization
 
 ---
 
@@ -855,7 +855,7 @@ print(f"Active rookies per token: {routing_weights.sum(axis=-1).mean():.1f}")
 
 **Benefits:**
 - More parameter-efficient than standard MoE
-- Better generalization
+- Better Generatelization
 - Easier to train
 - Lower memory footprint
 
@@ -1183,18 +1183,28 @@ See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ##  License
 
-Part of the capibaraGPT-v2 project. See [LICENSE](../../LICENSE) for details.
+Part of the CapibaraGPT v3 project. See [LICENSE](../../LICENSE) for details.
 
 ---
 
 **Maintained by**: Capibara ML Team
 **Last Updated**: 2025-11-16
 
-## Ejemplo rápido
+## Example quick
 
-Ejemplo (pseudo-código) de uso de una capa:
+Example (pseudo-code) de uso de una capa:
 
 ```python
 # layer = SomeLayer(config)
 # output = layer(inputs)
 ```
+
+## Issues por hacer
+
+- [ ] # Fallback module factory (used when JAX/Flax missing) - `layers\jax_compat.py:34`
+- [ ] # For anything else, return a placeholder string so class bodies - `layers\jax_compat.py:122`
+- [ ] raise NotImplementedError("BitNet158 not implemented - JAX/Flax required") - `layers\sparsity\__init__.py:57`
+- [ ] raise NotImplementedError("Conv1DBlock not implemented - JAX/Flax required") - `layers\sparsity\__init__.py:61`
+- [ ] raise NotImplementedError("SparseCapibara not implemented - JAX/Flax required") - `layers\sparsity\__init__.py:66`
+- [ ] raise NotImplementedError("AffineQuantizer not implemented - JAX/Flax required") - `layers\sparsity\__init__.py:71`
+- [ ] raise NotImplementedError("MixtureOfRookies not implemented - JAX/Flax required") - `layers\sparsity\__init__.py:76`

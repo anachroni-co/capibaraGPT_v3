@@ -2,7 +2,7 @@
 
 ## Description
 
-Mamba (Selective State Space Model) implementation for CapibaraGPT-v2. Provides processing with **O(n)** complexity instead of O(n²) from traditional Transformers, ideal for long sequences.
+Mamba (Selective State Space Model) implementation for CapibaraGPT v3. Provides processing with **O(n)** complexity instead of O(n²) from traditional Transformers, ideal for long sequences.
 
 ## Features
 

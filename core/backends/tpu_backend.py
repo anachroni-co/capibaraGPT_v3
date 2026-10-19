@@ -324,13 +324,42 @@ class TPUBackend(ComputeBackend):
     def memory_allocated(self) -> int:
         """Return memory usage."""
         _ensure_jax()
-        # JAX doesn't provide direct memory stats like PyTorch
-        # Use jax.local_device_count() as proxy
-        return 0  # Placeholder
+        try:
+            devices = jax.devices("tpu") if self.is_available else jax.devices()
+            if not devices:
+                return 0
+            stats = {}
+            memory_stats_fn = getattr(devices[0], "memory_stats", None)
+            if callable(memory_stats_fn):
+                stats = memory_stats_fn() or {}
+            return int(
+                stats.get("bytes_in_use")
+                or stats.get("bytes_used")
+                or stats.get("allocated_bytes")
+                or 0
+            )
+        except Exception:
+            return 0
 
     def memory_reserved(self) -> int:
         """Return reserved memory."""
-        return 0  # Not directly available in JAX
+        _ensure_jax()
+        try:
+            devices = jax.devices("tpu") if self.is_available else jax.devices()
+            if not devices:
+                return 0
+            stats = {}
+            memory_stats_fn = getattr(devices[0], "memory_stats", None)
+            if callable(memory_stats_fn):
+                stats = memory_stats_fn() or {}
+            return int(
+                stats.get("bytes_limit")
+                or stats.get("memory_limit")
+                or stats.get("bytes_reserved")
+                or 0
+            )
+        except Exception:
+            return 0
 
     def empty_cache(self) -> None:
         """Clear JAX caches."""

@@ -1,5 +1,5 @@
 """
-TPU v6e Robust Trainer for CapibaraGPT-v2
+TPU v6e Robust Trainer for CapibaraGPT v3
 
 Specialized trainer for TPU v6e with 8x8 topology (64 chips) that handles:
 - Preemptible instance interruptions
@@ -68,6 +68,14 @@ except ImportError:
     setup_tpu_environment = None
     TPUOptimizer = None
 
+# MoE auxiliary loss (optional — only used when use_moe_aux_loss=True)
+try:
+    from core.moe.dynamic_moe import _compute_load_balance_loss as _moe_load_balance_loss
+    MOE_AUX_AVAILABLE = True
+except ImportError:
+    _moe_load_balance_loss = None  # type: ignore[assignment]
+    MOE_AUX_AVAILABLE = False
+
 @dataclass
 class TPUv6eConfig:
     """Configuration specific for TPU v6e 8x8."""
@@ -102,7 +110,32 @@ class TPUv6eConfig:
     retry_delay_base: float = 30.0  # Seconds
     health_check_interval: int = 10  # Steps between health checks
 
-@dataclass 
+    # MoE auxiliary loss — set use_moe_aux_loss=True when the model exposes
+    # expert_loads via Flax intermediates (self.sow('intermediates', 'expert_loads', ...))
+    use_moe_aux_loss: bool = False
+    moe_load_balance_weight: float = 0.01
+    moe_num_experts: int = 32
+
+    @classmethod
+    def from_toml(cls, path: str) -> "TPUv6eConfig":
+        """Build a config from a production TOML (config/configs_toml/production/training.toml).
+
+        Only recognised keys override dataclass defaults, so the TOML can hold
+        extra sections (validation, optimization) without breaking."""
+        import toml as _toml
+        data = _toml.load(path)
+        cfg = cls()
+        training = data.get("training", {})
+        distributed = data.get("distributed", {})
+        if "gradient_accumulation_steps" in distributed:
+            cfg.gradient_accumulation_steps = int(distributed["gradient_accumulation_steps"])
+        for section in (training, data.get("optimization", {})):
+            for key, value in section.items():
+                if hasattr(cfg, key):
+                    setattr(cfg, key, value)
+        return cfg
+
+@dataclass
 class CheckpointMetadata:
     """Checkpoint metadata for robust recovery."""
     step: int
@@ -420,31 +453,57 @@ class TPUv6eRobustTrainer:
 
         # Get batch
         batch = next(dataset)
-        
-        # Define training step with sharding
-        @jax.jit
-        def train_step(state, batch):
-            def loss_fn(params):
-                logits = state.apply_fn(params, batch['input_ids'])
-                loss = optax.softmax_cross_entropy_with_integer_labels(
-                    logits, batch['labels']
-                ).mean()
-                return loss
-            
-            loss, grads = jax.value_and_grad(loss_fn)(state.params)
-            
-            # Gradient clipping
-            grads = optax.clip_by_global_norm(1.0)(grads)
-            
-            # Update state
-            state = state.apply_gradients(grads=grads)
-            
-            return state, loss
-        
+
+        use_moe_aux = self.config.use_moe_aux_loss and MOE_AUX_AVAILABLE
+        moe_weight = self.config.moe_load_balance_weight
+        moe_num_experts = self.config.moe_num_experts
+
+        if use_moe_aux:
+            # Separate JIT path that calls apply() with mutable=['intermediates']
+            # so Flax models using self.sow('intermediates', 'expert_loads', ...)
+            # expose their expert routing loads for the auxiliary loss.
+            @jax.jit
+            def train_step(state, batch):
+                def loss_fn(params):
+                    model_out, mutables = state.apply_fn(
+                        params, batch['input_ids'], mutable=['intermediates']
+                    )
+                    # TPUOptimizedSSM returns (logits, recurrent_state); handle both
+                    logits = model_out[0] if isinstance(model_out, tuple) else model_out
+                    main_loss = optax.softmax_cross_entropy_with_integer_labels(
+                        logits, batch['labels']
+                    ).mean()
+                    # Add load-balance auxiliary loss when expert_loads are present
+                    expert_loads = mutables.get('intermediates', {}).get('expert_loads')
+                    if expert_loads is not None:
+                        aux = _moe_load_balance_loss(expert_loads, moe_num_experts)
+                        return main_loss + jnp.asarray(moe_weight, dtype=jnp.float32) * aux, main_loss
+                    return main_loss, main_loss
+
+                (loss, main_loss), grads = jax.value_and_grad(loss_fn, has_aux=True)(state.params)
+                grads = optax.clip_by_global_norm(1.0)(grads)
+                state = state.apply_gradients(grads=grads)
+                return state, loss, main_loss
+        else:
+            @jax.jit
+            def train_step(state, batch):
+                def loss_fn(params):
+                    result = state.apply_fn(params, batch['input_ids'])
+                    # TPUOptimizedSSM returns (logits, recurrent_state); handle both
+                    logits = result[0] if isinstance(result, tuple) else result
+                    return optax.softmax_cross_entropy_with_integer_labels(
+                        logits, batch['labels']
+                    ).mean()
+
+                loss, grads = jax.value_and_grad(loss_fn)(state.params)
+                grads = optax.clip_by_global_norm(1.0)(grads)
+                state = state.apply_gradients(grads=grads)
+                return state, loss, loss  # main_loss == total loss when no aux
+
         # Execute step
         with self.mesh:
-            state, loss = train_step(state, batch)
-        
+            state, loss, main_loss = train_step(state, batch)
+
         # Update training state for emergency checkpoints
         self.training_state = state
 
@@ -453,6 +512,8 @@ class TPUv6eRobustTrainer:
         # Step metrics
         metrics = {
             'loss': float(loss),
+            'main_loss': float(main_loss),
+            'moe_aux_loss': float(loss) - float(main_loss),
             'step_time': step_time,
             'tokens_per_second': batch['input_ids'].size / step_time,
             'learning_rate': float(state.opt_state.hyperparams['learning_rate']),
@@ -670,12 +731,16 @@ class TPUv6eRobustTrainer:
     
     def _log_progress(self, metrics: Dict[str, Any]):
         """Log training progress."""
+        moe_suffix = ""
+        if self.config.use_moe_aux_loss and metrics.get('moe_aux_loss', 0.0) != 0.0:
+            moe_suffix = f" | MoE-aux: {metrics['moe_aux_loss']:.4f}"
         logger.info(
             f"Step {self.current_step:>6} | "
             f"Loss: {metrics['loss']:.4f} | "
             f"LR: {metrics['learning_rate']:.2e} | "
             f"TPS: {metrics['tokens_per_second']:.0f} | "
             f"Time: {metrics['step_time']:.2f}s"
+            + moe_suffix
         )
         
         if self.use_wandb and wandb.run:
@@ -750,3 +815,35 @@ async def train_robust_tpu_v6e(
     )
 
     logger.info("TRAINING COMPLETED!")
+
+
+if __name__ == "__main__":
+    import argparse
+
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", force=True)
+
+    parser = argparse.ArgumentParser(
+        description="TPU v6e robust trainer — config validation entrypoint."
+    )
+    parser.add_argument(
+        "--config",
+        default="config/configs_toml/production/training.toml",
+        help="Production training TOML to load into TPUv6eConfig.",
+    )
+    parser.add_argument(
+        "--model-scale", default="300M", help="Model scale label (300M, 1B, 3B, 7B)."
+    )
+    args = parser.parse_args()
+
+    resolved = TPUv6eConfig.from_toml(args.config)
+    logger.info("Resolved TPUv6eConfig from %s:", args.config)
+    for field_name, field_value in vars(resolved).items():
+        logger.info("  %s = %s", field_name, field_value)
+    try:
+        devices = jax.devices()
+        logger.info("JAX devices: %d x %s", len(devices), devices[0].platform)
+    except Exception as exc:  # pragma: no cover - depends on host hardware
+        logger.warning("JAX devices unavailable: %s", exc)
+    logger.info(
+        "Config OK. Launch training programmatically with train_robust_tpu_v6e(model, dataset, ...)."
+    )

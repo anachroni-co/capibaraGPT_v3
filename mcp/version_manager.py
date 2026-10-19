@@ -1,3 +1,17 @@
+"""
+Version Manager - Model version control and management.
+
+This module provides version management functionality for the Model
+Control Plane (MCP), handling registration, activation, and tracking
+of model versions throughout their lifecycle.
+
+Key Components:
+    - ModelVersion: Data class for version information
+    - VersionManager: Main class for version management
+
+Author: Skydesk International Dev Team.
+"""
+
 import logging
 from datetime import datetime
 from dataclasses import dataclass

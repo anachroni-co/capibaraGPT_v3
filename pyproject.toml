@@ -107,9 +107,13 @@ all = [
 ]
 
 [project.scripts]
+# Minimal CLI available (info/health/demo).
 capibara = "capibara.cli:main"
-capibara-train = "capibara.training.cli:main"
-capibara-inference = "capibara.inference.cli:main"
+capibara-api = "capibara.mvp_api:run"
+# TODO(2026-02-05): Implement these CLIs in capibara/training/cli.py,
+# and capibara/inference/cli.py.
+# capibara-train = "capibara.training.cli:main"
+# capibara-inference = "capibara.inference.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/anachroni-co/capibaraGPT_v3"
@@ -118,7 +122,7 @@ Repository = "https://github.com/anachroni-co/capibaraGPT_v3"
 Issues = "https://github.com/anachroni-co/capibaraGPT_v3/issues"
 
 [tool.setuptools.packages.find]
-include = ["capibara*", "core*", "config*", "utils*", "training*", "benchmarks*"]
+include = ["capibara*", "core*", "config*", "utils*", "training*", "benchmarks*", "layers*", "sub_models*", "interfaces*", "modules*"]
 exclude = ["tests*", "docs*"]
 
 [tool.setuptools_scm]
@@ -132,12 +136,16 @@ pythonpath = ["."]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-asyncio_mode = "auto"
 addopts = [
     "-v",
     "--tb=short",
     "-ra",
     "--strict-markers",
+]
+filterwarnings = [
+    "ignore:Implicit None on return values is deprecated and will raise KeyErrors\\.:DeprecationWarning:importlib\\.metadata",
+    "ignore::pydantic.warnings.PydanticDeprecatedSince20",
+    "ignore:Type google\\._upb\\._message\\.(MessageMapContainer|ScalarMapContainer) uses PyType_Spec.*:DeprecationWarning",
 ]
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
@@ -200,11 +208,16 @@ exclude = '''
 '''
 
 [tool.coverage.run]
-source = ["capibara"]
+# BACKLOG-006: include core/ and training/ in coverage. The old single-source
+# "capibara" left the routers, cot module and consensus package invisible to
+# the CI gate, so regressions in those areas never failed coverage.
+source = ["capibara", "core", "training"]
 branch = true
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
+    "*/demo_*",
+    "*/_deprecated/*",
 ]
 
 [tool.coverage.report]

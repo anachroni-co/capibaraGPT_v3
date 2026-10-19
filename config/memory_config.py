@@ -1,3 +1,22 @@
+"""
+Memory Configuration - Memory and compute optimization settings.
+
+This module provides configuration dataclasses for memory optimization,
+mixed precision, and parallelism settings used across CapibaraGPT models.
+
+Key Components:
+    - MemoryOptimizationConfig: Main configuration dataclass
+
+Features:
+    - Gradient checkpointing and rematerialization
+    - Memory monitoring and thresholds
+    - Mixed precision (BF16/FP32)
+    - Model and data parallelism
+    - Dynamic batch sizing
+
+Author: Skydesk International Dev Team.
+"""
+
 from dataclasses import dataclass
 from typing import Tuple
 

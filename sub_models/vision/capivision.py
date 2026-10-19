@@ -8,7 +8,7 @@ import os
 import sys
 # Obtiene la path del directory current (scripts) -> /.../scripts
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Sube un level for obtain la raíz del proyecto -> /.../capibaraGPT-v2
+# Sube un level for obtain la raíz del proyecto -> /.../CapibaraGPT v3
 project_root = os.path.dirname(script_dir)
 # Añade la raíz del proyecto a sys.path
 if project_root not in sys.path:
@@ -16,13 +16,13 @@ if project_root not in sys.path:
 
 import logging
 import dataclasses #type: ignore
-from capibara.jax import jax #type: ignore
+import jax
 from flax import linen as nn #type: ignore
-from capibara.jax import numpy as jnp #type: ignore
+from jax import numpy as jnp #type: ignore
 from typing import Dict, Any, Optional, TypedDict #type: ignore
 
 try:
-    from capibara.jax.experimental import debugger #type: ignore
+    from jax.experimental import debugger #type: ignore
 except ImportError:
     class debugger:
         @staticmethod

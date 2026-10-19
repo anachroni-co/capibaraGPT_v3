@@ -1,5 +1,5 @@
 """
-Archaeology Data Service (ADS) Datasets Manager for CapibaraGPT v2
+Archaeology Data Service (ADS) Datasets Manager for CapibaraGPT v3
 
 Specialized manager for archaeological datasets from the UK's national digital archive including:
 - 4,852+ archaeological records and datasets

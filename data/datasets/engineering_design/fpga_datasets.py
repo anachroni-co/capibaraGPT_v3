@@ -1,5 +1,5 @@
 """
-FPGA and Hardware Programming Datasets for CapibaraGPT v2
+FPGA and Hardware Programming Datasets for CapibaraGPT v3
 
 Comprehensive collection of FPGA and hardware programming datasets for:
 - Verilog and VHDL code repositories

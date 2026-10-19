@@ -3,8 +3,6 @@ Chain-of-Thought enhanced module (mínimo para compatibilidad de imports).
 """
 from __future__ import annotations
 
-import os
-import sys
 import time
 import logging
 from enum import Enum
@@ -14,12 +12,6 @@ from string import Template
 from functools import partial
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Union, Tuple
-
-# This adds the project root folder to the Python search path
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-if project_root not in sys.path:
-    sys.path.append(project_root)
 
 logger = logging.getLogger(__name__)
 

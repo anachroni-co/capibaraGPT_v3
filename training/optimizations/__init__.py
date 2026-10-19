@@ -1,1 +1,1 @@
-"""Module placeholder."""
+"""Optimization module entry point."""

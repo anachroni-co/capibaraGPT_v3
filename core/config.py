@@ -30,6 +30,7 @@ from typing import Dict, Any, Optional, List
 from pathlib import Path
 import json
 import os
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -455,12 +456,17 @@ class ModularModelConfig:
         return None
 
 # TPU and distributed training utilities
-def distributed_jit(*args, **kwargs):
-    """Decorator placeholder for distributed JIT compilation.
+def _get_jax():
+    """Best-effort import for JAX."""
+    try:
+        import jax
+        return jax
+    except Exception:
+        return None
 
-    This decorator is a placeholder for distributed just-in-time compilation
-    functionality. In production, this would integrate with JAX's distributed
-    compilation features for multi-device training.
+
+def distributed_jit(*args, **kwargs):
+    """Decorator for distributed JIT compilation with safe fallback.
 
     Args:
         *args: Positional arguments for the decorator.
@@ -469,23 +475,22 @@ def distributed_jit(*args, **kwargs):
     Returns:
         Callable: The decorated function (currently returns function unchanged).
 
-    Note:
-        This is a placeholder implementation. Full functionality requires
-        JAX distributed runtime and TPU mesh configuration.
-
     Example:
         >>> @distributed_jit
         ... def train_step(params, batch):
         ...     return loss
     """
     def decorator(f):
-        return f
+        jax = _get_jax()
+        if jax is None:
+            return f
+        return jax.jit(f, **kwargs)
     if args and callable(args[0]):
         return args[0]  # Direct decoration without parentheses
     return decorator
 
 def model_sharded_jit(*args, **kwargs):
-    """Decorator placeholder for model-sharded JIT compilation.
+    """Decorator for model-sharded JIT compilation with safe fallback.
 
     Applies model parallelism sharding during JIT compilation. In production,
     this would distribute model parameters across multiple devices/TPUs.
@@ -497,23 +502,29 @@ def model_sharded_jit(*args, **kwargs):
     Returns:
         Callable: The decorated function (currently returns function unchanged).
 
-    Note:
-        Requires TPU mesh configuration and JAX sharding specifications.
-        This is a placeholder for the full implementation.
-
     Example:
         >>> @model_sharded_jit
         ... def forward_pass(params, inputs):
         ...     return outputs
     """
     def decorator(f):
-        return f
+        jax = _get_jax()
+        if jax is None:
+            return f
+        try:
+            from jax.experimental import pjit as pjit_mod
+            pjit = getattr(pjit_mod, "pjit", None)
+        except Exception:
+            pjit = None
+        if pjit is not None:
+            return pjit(f, **kwargs)
+        return jax.jit(f, **kwargs)
     if args and callable(args[0]):
         return args[0]
     return decorator
 
 def batch_sharded_jit(*args, **kwargs):
-    """Decorator placeholder for batch-sharded JIT compilation.
+    """Decorator for batch-sharded JIT compilation with safe fallback.
 
     Applies data parallelism by sharding batches across multiple devices.
     In production, this distributes batch processing for faster training.
@@ -525,17 +536,21 @@ def batch_sharded_jit(*args, **kwargs):
     Returns:
         Callable: The decorated function (currently returns function unchanged).
 
-    Note:
-        This is a placeholder. Full implementation requires JAX pmap
-        or xmap for distributed batch processing.
-
     Example:
         >>> @batch_sharded_jit
         ... def process_batch(batch):
         ...     return processed_batch
     """
     def decorator(f):
-        return f
+        jax = _get_jax()
+        if jax is None:
+            return f
+        axis_name = kwargs.pop("axis_name", "batch")
+        in_axes = kwargs.pop("in_axes", 0)
+        out_axes = kwargs.pop("out_axes", 0)
+        if len(jax.devices()) > 1:
+            return jax.pmap(f, axis_name=axis_name, in_axes=in_axes, out_axes=out_axes, **kwargs)
+        return jax.jit(f, **kwargs)
     if args and callable(args[0]):
         return args[0]
     return decorator
@@ -544,7 +559,6 @@ def create_unified_mesh(*args, **kwargs):
     """Create a unified device mesh for distributed training.
 
     Creates a mesh of TPU/GPU devices for distributed model training and inference.
-    This is a placeholder for JAX mesh creation functionality.
 
     Args:
         *args: Positional arguments for mesh configuration.
@@ -553,22 +567,53 @@ def create_unified_mesh(*args, **kwargs):
             - mesh_shape: Shape of the device mesh (e.g., (4, 2) for 4x2)
             - axis_names: Names for mesh axes (e.g., ('data', 'model'))
 
-    Returns:
-        None: Placeholder return value. Full implementation would return JAX Mesh object.
-
-    Note:
-        Requires JAX distributed runtime and proper device initialization.
-
     Example:
         >>> mesh = create_unified_mesh(devices=8, mesh_shape=(4, 2), axis_names=('data', 'model'))
     """
-    return None
+    if not args and not kwargs:
+        return None
+
+    jax = _get_jax()
+    if jax is None:
+        return None
+
+    try:
+        from jax.sharding import Mesh
+    except Exception:
+        return None
+
+    devices = kwargs.get("devices")
+    if devices is None:
+        devices = jax.devices()
+    elif isinstance(devices, int):
+        devices = jax.devices()[:devices]
+
+    mesh_shape = kwargs.get("mesh_shape")
+    if mesh_shape is None:
+        mesh_shape = (len(devices),)
+
+    axis_names = kwargs.get("axis_names")
+    if axis_names is None:
+        axis_names = tuple(f"axis_{i}" for i in range(len(mesh_shape)))
+
+    device_array = np.array(devices, dtype=object).reshape(mesh_shape)
+    return Mesh(device_array, axis_names)
 
 # TPU Sharding constants
-BATCH_SHARDING = None  # Placeholder for batch sharding specification
-MODEL_SHARDING = None  # Placeholder for model sharding specification
-HYBRID_SHARDING = None  # Placeholder for hybrid (data + model) sharding
-TPU_DTYPE = None  # Placeholder for TPU-optimized data type (typically bfloat16)
+try:
+    _jax = _get_jax()
+    if _jax is None:
+        raise ImportError("JAX not available")
+    from jax.sharding import PartitionSpec as P
+    BATCH_SHARDING = P("data")
+    MODEL_SHARDING = P("model")
+    HYBRID_SHARDING = P("data", "model")
+    TPU_DTYPE = _jax.numpy.bfloat16
+except Exception:
+    BATCH_SHARDING = None
+    MODEL_SHARDING = None
+    HYBRID_SHARDING = None
+    TPU_DTYPE = None
 
 def load_config(path: Optional[str] = None) -> Dict[str, Any]:
     """Load configuration from a JSON file or return current settings.

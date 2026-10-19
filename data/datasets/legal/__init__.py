@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Legal Datasets
+CapibaraGPT v3 Legal Datasets
 Datasets legales and jurídicos
 """
 

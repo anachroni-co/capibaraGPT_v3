@@ -128,9 +128,9 @@ class CapibaraGPT:
     async def _init_router(self):
         """Initialize the semantic router."""
         try:
-            from core.router import SemanticRouter
-            router = SemanticRouter()
-            logger.info("Semantic router initialized")
+            from core.router import EnhancedRouter
+            router = EnhancedRouter()
+            logger.info("Enhanced router initialized")
             return router
         except ImportError:
             logger.debug("Router module not available")
@@ -194,7 +194,7 @@ class CapibaraGPT:
         try:
             # Route input if router available
             if self.router:
-                route_result = await self.router.route(input_data)
+                route_result = await self.router.route_request(input_data)
                 return {
                     "success": True,
                     "route": route_result,

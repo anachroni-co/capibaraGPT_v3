@@ -1,5 +1,5 @@
 """
-Configuration for Capibara5 N8N Automation Service
+Configuration for CapibaraGPT v3 N8N Automation Service
 ==================================================
 
 Configuration management with environment variable support
@@ -125,7 +125,7 @@ class AutomationServiceConfig:
     performance: PerformanceConfig = field(default_factory=PerformanceConfig)
     
     # Service settings
-    service_name: str = "capibara5-n8n-automation"
+    service_name: str = "capibara-v3-n8n-automation"
     version: str = "1.0.0"
     environment: str = "development"
     debug: bool = False
@@ -328,7 +328,7 @@ def load_config(config_file: Optional[str] = None) -> AutomationServiceConfig:
 def get_example_config() -> str:
     """Get an example configuration file in YAML format."""
     return """
-# Capibara5 N8N Automation Service Configuration
+# CapibaraGPT v3 N8N Automation Service Configuration
 # =============================================
 
 n8n:

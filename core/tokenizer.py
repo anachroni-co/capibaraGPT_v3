@@ -92,7 +92,7 @@ except ImportError:
 
 # Use project's jax.numpy with internal fallback (no numpy dependency)
 try:
-    from capibara.jax import numpy as jnp  # Project native
+    from jax import numpy as jnp  # Project native
 except Exception:  # pragma: no cover
     class _MiniNumpy:
         """Minimal numpy-like interface for fallback when JAX is unavailable."""
@@ -110,21 +110,51 @@ except Exception:  # pragma: no cover
             return int
     jnp = _MiniNumpy()  # type: ignore
 
-# transformers is optional; if unavailable, use minimal tokenizer
-try:  # pragma: no cover - validated in integration tests
-    from transformers import AutoTokenizer, PreTrainedTokenizerBase, BatchEncoding
-    TRANSFORMERS_AVAILABLE = True
-except Exception:  # pragma: no cover
-    AutoTokenizer = None  # type: ignore
-    PreTrainedTokenizerBase = object  # type: ignore
+# transformers is optional; defer import to avoid hard crashes when torch is broken
+AutoTokenizer = None  # type: ignore
+PreTrainedTokenizerBase = object  # type: ignore
 
-    class BatchEncoding(dict):  # type: ignore
-        """Minimal BatchEncoding fallback when transformers is unavailable."""
-        pass
+class BatchEncoding(dict):  # type: ignore
+    """Minimal BatchEncoding fallback when transformers is unavailable."""
+    pass
 
-    TRANSFORMERS_AVAILABLE = False
+TRANSFORMERS_AVAILABLE = False
 
 torch = None  # Hard-disable torch usage to ensure JAX-only operation
+
+
+def _torch_import_works() -> bool:
+    """Check torch import in a subprocess to avoid hard crashes."""
+    import subprocess
+    import sys
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c", "import torch"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def _try_import_transformers() -> bool:
+    """Attempt to import transformers lazily with torch safety checks."""
+    global AutoTokenizer, PreTrainedTokenizerBase, BatchEncoding, TRANSFORMERS_AVAILABLE
+    if TRANSFORMERS_AVAILABLE:
+        return True
+    if not _torch_import_works():
+        return False
+    try:  # pragma: no cover - validated in integration tests
+        from transformers import AutoTokenizer as _AutoTokenizer, PreTrainedTokenizerBase as _PTB, BatchEncoding as _BE
+        AutoTokenizer = _AutoTokenizer  # type: ignore
+        PreTrainedTokenizerBase = _PTB  # type: ignore
+        BatchEncoding = _BE  # type: ignore
+        TRANSFORMERS_AVAILABLE = True
+        return True
+    except Exception:
+        return False
 
 try:
     import toml
@@ -357,7 +387,7 @@ def _load_tokenizer_impl(model_name: str = "gpt2") -> PreTrainedTokenizerBase:
 
         Legacy keyword compatibility: tokinizer, voctob (vocabulary).
     """
-    if TRANSFORMERS_AVAILABLE:
+    if TRANSFORMERS_AVAILABLE or _try_import_transformers():
         return AutoTokenizer.from_pretrained(model_name)
     return _WhitespaceTokenizer()
 
@@ -514,6 +544,20 @@ def tokenize_text(
     if return_attention_mask is None:
         return_attention_mask = bool(padding)
 
+    # Ensure padding token is set when padding is requested (e.g., GPT-2 has no pad_token by default).
+    if padding:
+        pad_token = getattr(tokenizer, "pad_token", None)
+        if pad_token is None:
+            eos_token = getattr(tokenizer, "eos_token", None)
+            if eos_token is not None:
+                tokenizer.pad_token = eos_token
+            else:
+                try:
+                    tokenizer.add_special_tokens({"pad_token": "[PAD]"})
+                except Exception:
+                    # If we can't set a pad token, let the tokenizer raise its own error.
+                    pass
+
     enc: BatchEncoding = tokenizer(
         text,
         max_length=max_length,
@@ -526,7 +570,14 @@ def tokenize_text(
 
     enc_jnp = _convert_batch_encoding_to_jnp(enc)
     if isinstance(text, str):
-        return enc_jnp["input_ids"][0]
+        ids = enc_jnp["input_ids"]
+        if hasattr(ids, "tolist"):
+            ids_list = ids.tolist()
+        else:
+            ids_list = ids
+        if isinstance(ids_list, list) and ids_list and isinstance(ids_list[0], list):
+            return ids_list[0]
+        return list(ids_list)
     return enc_jnp
 
 

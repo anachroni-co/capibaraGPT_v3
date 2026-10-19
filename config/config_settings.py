@@ -1,6 +1,6 @@
 # Settings content
 """
-CapibaraGPT v2 system setup.
+CapibaraGPT v3 system setup.
 """
 
 import os
@@ -14,7 +14,7 @@ except ImportError:
     yaml = None
 from pathlib import Path #type: ignore  
 from typing import Dict, Any, Optional, List
-from pydantic import BaseModel, Field, validator #type: ignore
+from pydantic import BaseModel, Field, field_validator #type: ignore
 
 class SecuritySettings(BaseModel):
     """Security configuration."""
@@ -89,13 +89,13 @@ class Settings(BaseModel):
     logging: LoggingSettings
     cache: CacheSettings
 
-    @validator("security")
+    @field_validator("security")
     def validate_security(cls, v):
         if len(v.api_key) < 32:
             raise ValueError("API key must have at least 32 characters")
         return v
 
-    @validator("database")
+    @field_validator("database")
     def validate_database(cls, v):
         if not v.password:
             raise ValueError("Database password is required")

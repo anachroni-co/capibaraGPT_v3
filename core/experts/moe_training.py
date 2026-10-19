@@ -8,10 +8,11 @@ import logging
 import time
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
+import numpy as np
 
 # JAX imports with fallbacks
 try:
-    from capibara.jax import numpy as jnp
+    from jax import numpy as jnp
 except ImportError:
     import numpy as jnp
 
@@ -63,6 +64,7 @@ class MoETrainingSystem:
         self.training_history = []
         self.best_metrics = None
         self.training_active = False
+        self._previous_specialization_loss: Dict[str, float] = {}
         
         logger.info("MoE Training System initialized")
         
@@ -185,37 +187,48 @@ class MoETrainingSystem:
         """Train a single epoch."""
         
         epoch_start_time = time.time()
-        
-        # Simulate training process
-        # In real implementation, this would:
-        # 1. Process training batches
-        # 2. Calculate losses (specialization, load balance, diversity)
-        # 3. Update expert parameters
-        # 4. Adjust routing weights
-        
-        # Simulate realistic training metrics
-        base_loss = 1.0 - (epoch * 0.05)  # Decreasing loss
-        noise = (hash(str(epoch)) % 20 - 10) / 100  # Random variation
-        
-        total_loss = max(0.1, base_loss + noise)
-        specialization_loss = total_loss * 0.6
-        load_balance_loss = total_loss * 0.3
-        diversity_loss = total_loss * 0.1
-        
-        # Simulate routing entropy (should increase with better routing)
-        routing_entropy = 2.0 + (epoch * 0.1) + noise
-        
-        # Simulate expert utilization
-        num_experts = 32
-        expert_utilization = []
-        for i in range(num_experts):
-            base_util = 0.5 + (i % 8) * 0.05  # Varied utilization
-            epoch_factor = min(1.0, epoch * 0.1)  # Improves over time
-            util = base_util * epoch_factor + (hash(f"{epoch}_{i}") % 20) / 200
-            expert_utilization.append(max(0.0, min(1.0, util)))
-            
+
+        # Iterate through data and run real MoE forward passes
+        total_loss = 0.0
+        specialization_loss = 0.0
+        load_balance_loss = 0.0
+        diversity_loss = 0.0
+        routing_entropy_values: List[float] = []
+        utilization_values: List[float] = []
+
+        for expert_type, samples in training_data.items():
+            for sample in samples:
+                input_tensor = self._encode_sample(sample)
+                for moe_layer in self.moe_layers.values():
+                    try:
+                        result = moe_layer(input_tensor, training=True)
+                        moe_metrics = result.get("moe_metrics", {})
+                        expert_stats = result.get("expert_stats", [])
+
+                        routing_entropy = float(moe_metrics.get("routing_entropy", 0.0))
+                        routing_entropy_values.append(routing_entropy)
+
+                        expert_util = self._expert_utilization(expert_stats)
+                        utilization_values.extend(expert_util)
+
+                        specialization_loss += self._specialization_loss(
+                            expert_type, expert_stats
+                        )
+                        load_balance_loss += float(moe_metrics.get("load_balance_loss", 0.0))
+                        diversity_loss += max(0.0, 1.0 - float(moe_metrics.get("utilization_efficiency", 0.0)))
+
+                        self._apply_specialization_updates(expert_type, expert_stats, config.learning_rate)
+                    except Exception as e:
+                        logger.warning(f"MoE layer forward failed: {e}")
+                        continue
+
+        # Aggregate losses
+        total_loss = specialization_loss + load_balance_loss + diversity_loss
+        routing_entropy = sum(routing_entropy_values) / max(len(routing_entropy_values), 1)
+        expert_utilization = self._normalize_utilization(utilization_values)
+
         processing_time = time.time() - epoch_start_time
-        
+
         return TrainingMetrics(
             epoch=epoch,
             total_loss=total_loss,
@@ -233,25 +246,14 @@ class MoETrainingSystem:
         metrics: TrainingMetrics
     ) -> float:
         """Calculate specialization improvement for an expert type."""
-        
-        # Simulate improvement based on training progress
-        base_improvement = 0.02 + (metrics.epoch * 0.01)
-        
-        # Different expert types improve at different rates
-        type_multipliers = {
-            'reasoning': 1.2, 'coding': 1.3, 'mathematics': 1.4,
-            'creative': 1.0, 'factual': 0.9, 'multimodal': 1.1,
-            'linguistic': 1.1, 'scientific': 1.2, 'technical': 1.2,
-            'analytical': 1.3, 'conversational': 0.8, 'general': 1.0
-        }
-        
-        multiplier = type_multipliers.get(expert_type, 1.0)
-        improvement = base_improvement * multiplier
-        
-        # Add some noise
-        noise = (hash(f"{expert_type}_{metrics.epoch}") % 20 - 10) / 1000
-        
-        return max(0.0, improvement + noise)
+        previous = self._previous_specialization_loss.get(expert_type)
+        current = metrics.specialization_loss
+        if previous is None:
+            self._previous_specialization_loss[expert_type] = current
+            return 0.0
+        improvement = max(0.0, previous - current) / max(previous, 1e-6)
+        self._previous_specialization_loss[expert_type] = current
+        return improvement
         
     def _calculate_final_training_metrics(
         self, 
@@ -344,6 +346,78 @@ class MoETrainingSystem:
             adjustments["error"] = str(e)
             
         return adjustments
+
+    def _encode_sample(self, sample: Any) -> "jnp.ndarray":
+        """Encode a sample into a tensor compatible with MoE layers."""
+        hidden_size = None
+        for moe_layer in self.moe_layers.values():
+            if hasattr(moe_layer, "config") and hasattr(moe_layer.config, "hidden_size"):
+                hidden_size = moe_layer.config.hidden_size
+                break
+        hidden_size = hidden_size or 768
+
+        if hasattr(sample, "shape"):
+            vec = jnp.asarray(sample).reshape(-1)
+        elif isinstance(sample, (list, tuple)):
+            vec = jnp.asarray(sample).reshape(-1)
+        else:
+            seed = abs(hash(str(sample))) % (2 ** 32)
+            rng = np.random.default_rng(seed)
+            vec = jnp.asarray(rng.normal(size=(hidden_size,)))
+
+        if vec.shape[0] < hidden_size:
+            padding = jnp.zeros((hidden_size - vec.shape[0],))
+            vec = jnp.concatenate([vec, padding], axis=0)
+        elif vec.shape[0] > hidden_size:
+            vec = vec[:hidden_size]
+
+        return vec.reshape(1, 1, hidden_size)
+
+    def _expert_utilization(self, expert_stats: List[Dict[str, Any]]) -> List[float]:
+        """Compute utilization ratios from expert stats."""
+        counts = [float(stat.get("usage_count", 0)) for stat in expert_stats]
+        total = sum(counts)
+        if total <= 0:
+            return [0.0 for _ in counts]
+        return [c / total for c in counts]
+
+    def _normalize_utilization(self, utilization_values: List[float]) -> List[float]:
+        """Normalize utilization values for metrics output."""
+        if not utilization_values:
+            return []
+        total = sum(utilization_values)
+        if total <= 0:
+            return utilization_values
+        return [v / total for v in utilization_values]
+
+    def _specialization_loss(self, expert_type: str, expert_stats: List[Dict[str, Any]]) -> float:
+        """Compute specialization loss based on expert type usage."""
+        if not expert_stats:
+            return 0.0
+        matching = [stat for stat in expert_stats if stat.get("expert_type") == expert_type]
+        if not matching:
+            return 0.0
+        utilization = self._expert_utilization(expert_stats)
+        match_indices = [
+            i for i, stat in enumerate(expert_stats)
+            if stat.get("expert_type") == expert_type
+        ]
+        match_util = sum(utilization[i] for i in match_indices)
+        return max(0.0, 1.0 - match_util)
+
+    def _apply_specialization_updates(
+        self,
+        expert_type: str,
+        expert_stats: List[Dict[str, Any]],
+        learning_rate: float
+    ) -> None:
+        """Apply lightweight specialization updates."""
+        for moe_layer in self.moe_layers.values():
+            experts = getattr(moe_layer, "experts", [])
+            for expert in experts:
+                if getattr(expert, "expert_type", None) == expert_type:
+                    current = getattr(expert, "specialization_weight", 1.0)
+                    setattr(expert, "specialization_weight", current + learning_rate * 0.1)
         
     def _calculate_variance(self, values: List[float]) -> float:
         """Calculate variance of a list of values."""
@@ -374,22 +448,12 @@ class MoETrainingSystem:
                 # Evaluate each expert
                 experts = getattr(moe_layer, 'experts', [])
                 for i, expert in enumerate(experts):
-                    # Simulate expert performance evaluation
                     expert_type = getattr(expert, 'expert_type', 'general')
                     usage_count = getattr(expert, 'usage_count', 0)
-                    
-                    # Calculate performance score
-                    base_score = 0.7
-                    type_bonus = {
-                        'reasoning': 0.15, 'coding': 0.18, 'mathematics': 0.20,
-                        'creative': 0.10, 'factual': 0.08, 'multimodal': 0.12,
-                        'linguistic': 0.12, 'scientific': 0.16, 'technical': 0.16,
-                        'analytical': 0.17, 'conversational': 0.05, 'general': 0.00
-                    }.get(expert_type, 0.0)
-                    
-                    usage_bonus = min(0.1, usage_count / 1000)  # Usage-based bonus
-                    
-                    performance_score = base_score + type_bonus + usage_bonus
+                    avg_time = getattr(expert, "total_processing_time", 0.0) / max(usage_count, 1)
+                    specialization_weight = getattr(expert, "specialization_weight", 1.0)
+                    usage_score = usage_count / max(1, max(len(experts), 1))
+                    performance_score = specialization_weight * (usage_score + 1.0) / (avg_time + 1e-6)
                     
                     layer_performance["expert_scores"].append({
                         "expert_id": i,

@@ -1,5 +1,5 @@
 """"
-CapibaraGPT-v2 Datasets Management - Sistema completo con Entrenamiento en Cascada =================================================================================
+CapibaraGPT v3 Datasets Management - Sistema completo con Entrenamiento en Cascada =================================================================================
 
 Datasets premium organizados por categorías especializadas + nuevo Pipeline en Cascada.
 
@@ -34,111 +34,51 @@ total: 2,074GB de datasets curados para pipeline más avanzado del mundo.
 + nuevo: 35.1TB adicionales en advanced robotics (Unitree Official, AgiBot World, Humanoid-X)
 ."""
 
-# Temporarily disabled due to corruption - need to fix individual modules
-# from .legal import *
-# from .vision import *
-# from .genomic import *
-# from .systems import *
-# from .physics import *
-# from .academic import *
-# from .economics import *
-# from .multimodal import *
-# from .historical import *
-from .mathematics import math_datasets
-from .robotics import (
-    RoboticsDatasetLoader,
-    get_robotics_loader,
-    list_available_robotics_datasets,
-    ROBOTICS_DATASETS,
-)
-from .engineering_design import (
-    ElectronicsDatasets,
-    get_electronics_datasets,
-    FPGADatasets,
-    get_fpga_datasets,
-)
-from .humor import (
-    spanish_jokes_datasets,
-    humor_analysis_datasets,
-    load_chistes_spanish_jokes,
-    load_barcenas_humor_negro,
-    load_humor_qa,
-    get_humor_categories,
-    analyze_humor_type,
-)
+import importlib
+from typing import Any
 
-#  NEW: Cascade Training System
-from .cascade_dataset_manager import (
-    CascadeDatasetManager,
-    DatasetConfig,
-    StageConfig,
-    create_cascade_dataset_manager,
-    download_stage_datasets,
-    download_all_stages
-)
+_LAZY_ATTRS = {
+    "math_datasets": ("data.datasets.mathematics", "math_datasets"),
+    "RoboticsDatasetLoader": ("data.datasets.robotics", "RoboticsDatasetLoader"),
+    "get_robotics_loader": ("data.datasets.robotics", "get_robotics_loader"),
+    "list_available_robotics_datasets": ("data.datasets.robotics", "list_available_robotics_datasets"),
+    "ROBOTICS_DATASETS": ("data.datasets.robotics", "ROBOTICS_DATASETS"),
+    "ElectronicsDatasets": ("data.datasets.engineering_design", "ElectronicsDatasets"),
+    "get_electronics_datasets": ("data.datasets.engineering_design", "get_electronics_datasets"),
+    "FPGADatasets": ("data.datasets.engineering_design", "FPGADatasets"),
+    "get_fpga_datasets": ("data.datasets.engineering_design", "get_fpga_datasets"),
+    "spanish_jokes_datasets": ("data.datasets.humor", "spanish_jokes_datasets"),
+    "humor_analysis_datasets": ("data.datasets.humor", "humor_analysis_datasets"),
+    "load_chistes_spanish_jokes": ("data.datasets.humor", "load_chistes_spanish_jokes"),
+    "load_barcenas_humor_negro": ("data.datasets.humor", "load_barcenas_humor_negro"),
+    "load_humor_qa": ("data.datasets.humor", "load_humor_qa"),
+    "get_humor_categories": ("data.datasets.humor", "get_humor_categories"),
+    "analyze_humor_type": ("data.datasets.humor", "analyze_humor_type"),
+    "CascadeDatasetManager": ("data.datasets.cascade_dataset_manager", "CascadeDatasetManager"),
+    "DatasetConfig": ("data.datasets.cascade_dataset_manager", "DatasetConfig"),
+    "StageConfig": ("data.datasets.cascade_dataset_manager", "StageConfig"),
+    "create_cascade_dataset_manager": ("data.datasets.cascade_dataset_manager", "create_cascade_dataset_manager"),
+    "download_stage_datasets": ("data.datasets.cascade_dataset_manager", "download_stage_datasets"),
+    "download_all_stages": ("data.datasets.cascade_dataset_manager", "download_all_stages"),
+}
 
-__all__ = [
-    # Genomic datasets
-    'genomic_datasets',
-    'alphagenome_integration',
-    'alphagenome_training_generator',
-    'setup_alphagenome',
-    'run_alphagenome',
-    
-    # Academic datasets
-    'academic_code_datasets',
-    'institutional_datasets',
-    'wiki_datasets',
-    'psychology_datasets',
-    
-    # Systems datasets
-    'systems_logs_datasets',
-    'linux_datasets',
-    
-    # Multimodal datasets
-    'multimodal_conversation_datasets',
-    'emotional_audio_datasets',
-    'vision_datasets',
-    
-    # Legal datasets
-    'legal_datasets',
-    
-    # Economics datasets
-    'european_economic_datasets',
-    'political_media_datasets',
-    
-    # Physics datasets
-    'physics_datasets',
-    
-    # Mathematics datasets
-    'math_datasets',
-    
-    # Historical datasets
-    'historical_cultural_datasets',
-    
-    # Robotics datasets
-    'robotics_datasets',
-    
-    # Engineering design datasets
-    'engineering_design_datasets',
-    
-    # Humor datasets
-    'spanish_jokes_datasets',
-    'humor_analysis_datasets',
-    'load_chistes_spanish_jokes',
-    'load_barcenas_humor_negro',
-    'load_humor_qa',
-    'get_humor_categories',
-    'analyze_humor_type',
-    
-    # Cascade training system
-    'CascadeDatasetManager',
-    'DatasetConfig', 
-    'StageConfig',
-    'create_cascade_dataset_manager',
-    'download_stage_datasets',
-    'download_all_stages'
+__all__ = list(_LAZY_ATTRS.keys()) + [
+    "get_available_categories",
+    "get_robotics_summary",
+    "get_cascade_training_summary",
+    "get_humor_summary",
+    "get_complete_datasets_overview",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name in _LAZY_ATTRS:
+        module_name, attr_name = _LAZY_ATTRS[name]
+        module = importlib.import_module(module_name)
+        value = getattr(module, attr_name)
+        globals()[name] = value
+        return value
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 def get_available_categories():
     """Get list of available dataset categories."""

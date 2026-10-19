@@ -22,6 +22,8 @@ class TPUv4Kernels:
     """
     API estable y clara for operations aceleradas en TPU v4.
     """
+    def __init__(self) -> None:
+        self._metrics: Dict[str, List[float]] = {"attention": []}
 
     def flash_attention(
         self,
@@ -39,6 +41,9 @@ class TPUv4Kernels:
         - value: tensor V de forma [..., K, D]
         - mask: máscara booleana/broadcastable donde False indica posiciones a enmascarar
         """
+        import time as _time
+        start = _time.perf_counter()
+
         q = query
         k = key
         v = value
@@ -69,11 +74,14 @@ class TPUv4Kernels:
 
         # Salida = pesos @ V -> [..., Q, D]
         output = jnp.einsum("...qk,...kd->...qd", attn_weights, v)
+        duration_ms = (_time.perf_counter() - start) * 1000.0
+        self._metrics["attention"].append(duration_ms)
+        if len(self._metrics["attention"]) > 100:
+            self._metrics["attention"] = self._metrics["attention"][-100:]
         return output
 
     def get_performance_metrics(self) -> Dict[str, List[float]]:
-        # Placeholder para mantener la interfaz estable
-        return {"attention": [1.0]}
+        return {"attention": list(self._metrics.get("attention", []))}
 
 
 class TPUKernelWrapper:

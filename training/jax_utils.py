@@ -15,17 +15,17 @@ optax = None
 
 # Try JAX first
 try:
-    import capibara.jax as jax
-    import capibara.jax.numpy as jnp
-    from capibara.jax import random, grad, jit, vmap
-    from capibara.jax.nn import softmax, relu, sigmoid
-    from capibara.jax.tree_util import tree_map
+    import jax as jax
+    import jax.numpy as jnp
+    from jax import random, grad, jit, vmap
+    from jax.nn import softmax, relu, sigmoid
+    from jax.tree_util import tree_map
     import optax
     np = jnp
     JAX_AVAILABLE = True
     logger.debug("Using capibara.jax with optax")
-except ImportError:
-    pass
+except ImportError as exc:
+    logger.debug("JAX/optax not available, will use numpy fallback: %s", exc)
 
 # Fallback to numpy
 if not JAX_AVAILABLE:
@@ -80,7 +80,9 @@ if not JAX_AVAILABLE:
                 return {"lr": learning_rate}
             @staticmethod
             def apply_updates(params, updates):
-                return params
+                if isinstance(params, dict) and isinstance(updates, dict):
+                    return {k: params[k] + updates.get(k, 0) for k in params}
+                return params + updates
             @staticmethod
             def chain(*args):
                 return {}
@@ -165,7 +167,12 @@ if not JAX_AVAILABLE:
                 return {}
             @staticmethod
             def apply_updates(params, updates):
-                return params
+                if isinstance(params, dict) and isinstance(updates, dict):
+                    return {k: params[k] + updates.get(k, 0) for k in params}
+                try:
+                    return params + updates
+                except TypeError:
+                    return params
             @staticmethod
             def chain(*args):
                 return {}
@@ -175,15 +182,15 @@ if not JAX_AVAILABLE:
 
 # ARM optimizations (optional)
 try:
-    from capibara.core.arm_optimizations import ARMAxionInferenceOptimizer
-    ARM_OPTIMIZATIONS_AVAILABLE = True
+    from capibara.core.arm_optimizations import ARMAxionInferenceOptimizer, ARM_CAPABILITIES
+    ARM_OPTIMIZATIONS_AVAILABLE = bool(ARM_CAPABILITIES.get("total_features", 0))
 except ImportError:
     ARM_OPTIMIZATIONS_AVAILABLE = False
 
     class ARMAxionInferenceOptimizer:
-        """Dummy ARM optimizer for compatibility."""
+        """Compatibility stub when ARM optimizations are not installed."""
         def __init__(self, *args, **kwargs):
-            pass
+            self.enabled = False
         def optimize_inference(self, *args, **kwargs):
             return args[0] if args else None
 

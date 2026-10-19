@@ -118,37 +118,36 @@ class SpikeSSM(nn.Module):
         """
         batch_size, seq_len, _ = inputs.shape
 
-        def step(carry: jnp.ndarray, x: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-            """Single step of the spiking SSM."""
-            membrane_potential = carry
+        # Project the whole sequence OUTSIDE the scan: calling Flax
+        # submodules inside a raw jax.lax.scan body leaks tracers. The
+        # per-step recurrence below is pure elementwise math.
+        driven = self.linear_in(inputs)  # [batch, seq_len, state_dim]
+        decay = self.decay
+        threshold = self.threshold
 
-            # Update membrane potential with input and decay
-            membrane_potential = (
-                membrane_potential * self.decay +
-                self.linear_in(x)
-            )
+        def step(carry: jnp.ndarray, u_t: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
+            """Single step of the spiking SSM (parameter-free math only)."""
+            membrane_potential = carry * decay + u_t
 
             # Generate spikes using surrogate gradient
             spikes = self.surrogate_spike(membrane_potential)
 
             # Reset membrane potential where spikes occurred
-            membrane_potential = membrane_potential - spikes * self.threshold
+            membrane_potential = membrane_potential - spikes * threshold
 
-            # Generate output from spikes
-            y = self.linear_out(spikes)
-
-            return membrane_potential, y
+            return membrane_potential, spikes
 
         # Initialize membrane potential
         membrane_0 = jnp.zeros((batch_size, self.state_dim))
 
-        # Apply scan over sequence dimension
-        _, outputs = jax.lax.scan(step, membrane_0, jnp.transpose(inputs, (1, 0, 2)))
+        # Apply scan over sequence dimension (spikes only)
+        _, spikes_seq = jax.lax.scan(step, membrane_0, jnp.transpose(driven, (1, 0, 2)))
 
-        # Transpose back to [batch, seq, hidden]
-        outputs = jnp.transpose(outputs, (1, 0, 2))
+        # Transpose back to [batch, seq, state_dim]
+        spikes_seq = jnp.transpose(spikes_seq, (1, 0, 2))
 
-        return outputs
+        # Output projection outside the scan (same math, no tracer leak)
+        return self.linear_out(spikes_seq)
 
 
 class AdaptiveSpikeSSM(nn.Module):

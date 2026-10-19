@@ -1,3 +1,28 @@
+"""
+Configuration Manager - Centralized configuration management.
+
+This module provides a unified interface for loading and managing
+configuration files in TOML format. It supports hierarchical configuration
+with fallback to JSON when TOML parsing is unavailable.
+
+Key Components:
+    - ConfigManager: Main class for configuration loading and access
+
+Features:
+    - TOML configuration file loading
+    - Hierarchical key path access (e.g., "section.subsection.key")
+    - Configuration caching for performance
+    - Fallback support for systems without tomli
+
+Example:
+    >>> from config.config_manager import ConfigManager
+    >>> manager = ConfigManager("config")
+    >>> config = manager.load_config("training")
+    >>> lr = manager.get_value("training", "optimizer.lr", default=1e-4)
+
+Author: Skydesk International Dev Team.
+"""
+
 import os
 import sys
 import logging

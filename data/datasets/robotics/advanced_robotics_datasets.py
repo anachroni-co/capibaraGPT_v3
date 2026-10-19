@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Advanced Robotics Datasets - CapibaraGPT-v2 Premium Collection
+Advanced Robotics Datasets - CapibaraGPT v3 Premium Collection
 
 Premium robotics datasets including:
 - Unitree Robotics Official Datasets (Hugging Face)

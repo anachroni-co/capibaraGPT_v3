@@ -1,0 +1,71 @@
+# Capibara Slim — Google Axion ARM64 training config
+# VM: c4a-standard-32 (32 vCPU, 128 GB RAM, Neoverse V2)
+# Backend: JAX CPU (no TPU/GPU required)
+
+[hardware]
+vm_type         = "c4a-standard-32"
+cpu_arch        = "ARM64"
+cpu_family      = "Google Axion (Neoverse V2)"
+vcpus           = 32
+ram_gb          = 128
+backend         = "cpu"
+
+[hardware.threads]
+omp_num_threads         = 32
+intra_op_parallelism    = 32
+inter_op_parallelism    = 2
+eigen_num_threads       = 32
+
+[hardware.xla]
+# XLA flags optimised for ARM Neoverse V2
+enable_multi_thread_eigen               = true
+cpu_enable_vector_instructions          = true    # SVE/NEON
+cpu_enable_fast_math                    = true
+
+[model]
+# ~50M params — practical for CPU smoke-testing the full loop
+# Switch to 200M for overnight / multi-day runs
+vocab_size  = 512    # byte-level
+hidden_size = 512
+num_layers  = 8
+num_heads   = 8
+max_seq_len = 512
+ffn_mult    = 4      # ffn_dim = hidden_size × ffn_mult = 2048
+dropout     = 0.0
+
+[model.presets]
+# Available presets — pass --preset to launch_axion_training.py
+smoke  = { hidden_size = 256, num_layers = 4,  num_heads = 4,  max_seq_len = 256  }   # ~3M  — runs in seconds
+small  = { hidden_size = 512, num_layers = 8,  num_heads = 8,  max_seq_len = 512  }   # ~50M — smoke loop
+medium = { hidden_size = 768, num_layers = 12, num_heads = 12, max_seq_len = 1024 }   # ~125M — overnight
+full   = { hidden_size = 1024, num_layers = 12, num_heads = 16, max_seq_len = 2048 }  # ~202M — multi-day
+
+[training]
+batch_size                  = 32     # 32 vCPUs → 1 example/core
+gradient_accumulation_steps = 8      # effective batch = 256
+max_steps                   = 5000   # smoke: 5k; full run: 100k+
+learning_rate               = 3e-4
+warmup_steps                = 200
+weight_decay                = 0.1
+grad_clip_norm              = 1.0
+dtype                       = "float32"   # safe on all CPUs; bfloat16 supported on Axion but less tested
+
+[training.schedule]
+type        = "cosine"
+min_lr_ratio = 0.1    # final LR = learning_rate × min_lr_ratio
+
+[checkpointing]
+checkpoint_every_steps      = 500
+keep_last_n                 = 3
+output_dir                  = "checkpoints/axion"   # override with gs:// for GCS
+
+[logging]
+log_every_steps     = 10
+wandb               = false    # set true + wandb login for experiment tracking
+wandb_project       = "capibara-axion"
+
+[data]
+seq_len             = 512     # must match model.max_seq_len
+shuffle_shards      = true
+seed                = 42
+drop_last           = true

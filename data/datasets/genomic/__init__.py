@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Genomic Datasets
+CapibaraGPT v3 Genomic Datasets
 Specialized datasets in genomics and bioinformatics
 """
 

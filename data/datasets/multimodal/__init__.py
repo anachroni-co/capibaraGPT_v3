@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Vision Datasets
+CapibaraGPT v3 Vision Datasets
 Computer vision specific datasets
 Prepared for future expansions
 """

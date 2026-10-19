@@ -1,3 +1,17 @@
+"""
+Resource Manager - Resource allocation and tracking for models.
+
+This module provides resource management functionality for the Model
+Control Plane (MCP), handling allocation, release, and tracking of
+computational resources (CPU, memory, GPU) across model instances.
+
+Key Components:
+    - ResourceAllocation: Data class for resource allocation records
+    - ResourceManager: Main class for resource management
+
+Author: Skydesk International Dev Team.
+"""
+
 import asyncio
 import logging
 from datetime import datetime

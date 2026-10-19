@@ -26,7 +26,9 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install flake8 pytest
+        # BACKLOG-006: pytest-cov is required by the coverage gate below.
+        # numpy is required by tests/conftest.py (shared fixtures).
+        pip install flake8 pytest pytest-cov fastapi uvicorn numpy
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
     - name: Validate syntax and imports
       run: |
@@ -43,6 +45,68 @@ jobs:
     - name: Factorization guardrails
       run: |
         pytest tests/unit/test_factorization.py -v
+    - name: Observability schema gate
+      run: |
+        pytest tests/unit/test_observability_schema.py -v
     - name: Test with pytest
       run: |
         pytest
+    - name: Coverage gate - unit (BACKLOG-006)
+      # Raised from 35% -> 55% after BACKLOG-006 expanded tests for
+      # core/routers (AdaptiveRouter, BaseRouterV2, FallbackConfig) and
+      # core/cot (EnhancedCoTModule CPU fallback, CapibaraEnhancedCoT,
+      # CoTConfig edge cases). Intentionally avoids heavy ML deps.
+      run: |
+        pytest \
+          tests/unit/test_routers_bto.py \
+          tests/unit/test_cot_module.py \
+          --cov=core/routers \
+          --cov=core/cot \
+          --cov-report=term-missing \
+          --cov-fail-under=55
+    - name: Coverage gate - backends (BACKLOG-006)
+      # Pure-stdlib / numpy tests for core/backends utilities and registry.
+      # GPU/TPU backend files are excluded from the gate because they require
+      # hardware that CI does not have; the 40% threshold covers cpu_backend,
+      # utils, registry, module_gate, lazy_import, and base.
+      run: |
+        pytest \
+          tests/unit/test_backends_utils.py \
+          --cov=core/backends \
+          --cov-report=term-missing \
+          --cov-fail-under=40
+    - name: Surface gate - consensus + data_lineage (BACKLOG-006)
+      # AST-level non-regression tests. No coverage threshold because these modules
+      # cannot be imported in CI without heavy ML deps; AST parse + structural
+      # assertions are the right tool (BACKLOG-002/004/005 regression guards).
+      run: |
+        pytest \
+          tests/integration/test_training_consensus_surface.py \
+          tests/integration/test_meta_consensus_no_mocks.py \
+          tests/integration/test_automation_no_simulation.py \
+          tests/integration/test_engines_no_mock_params.py \
+          tests/integration/test_data_lineage_demo_isolated.py \
+          -v
+
+  docker-smoke:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build and start MVP API container
+      run: |
+        docker compose up -d --build
+    - name: Run MVP API smoke test
+      run: |
+        bash scripts/smoke_mvp_api.sh
+    - name: Run MVP API happy-path smoke test
+      run: |
+        bash scripts/smoke_mvp_api_happy.sh
+    - name: Dump container logs on failure
+      if: failure()
+      run: |
+        docker compose logs --no-color
+    - name: Stop containers
+      if: always()
+      run: |
+        docker compose down -v

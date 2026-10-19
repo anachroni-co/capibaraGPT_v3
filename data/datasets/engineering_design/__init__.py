@@ -1,5 +1,5 @@
 """
-CapibaraGPT-v2 Engineering Design Datasets
+CapibaraGPT v3 Engineering Design Datasets
 
 Specialized datasets for engineering design including:
 - CAD designs (houses, parts, mechanical components)

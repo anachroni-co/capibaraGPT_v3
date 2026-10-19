@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Validation Script - CapibaraGPT-v2 Data Reorganization
+Validation Script - CapibaraGPT v3 Data Reorganization
 Verifies that the new structure works correctly
 """
 
@@ -197,7 +197,7 @@ def generate_report() -> Dict[str, Any]:
 
     if passed_tests == total_tests:
         logger.info("REORGANIZATION SUCCESSFUL!")
-        logger.info("CapibaraGPT-v2 data structure optimized")
+        logger.info("CapibaraGPT v3 data structure optimized")
         status = "SUCCESS"
     else:
         logger.info("Reorganization incomplete")

@@ -1,5 +1,5 @@
 """
-Genomic Datasets for CapibaraGPT v2
+Genomic Datasets for CapibaraGPT v3
 
 This module provides access to specialized genomic datasets for
 training in bioinformatics and genetic analysis.

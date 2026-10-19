@@ -124,8 +124,10 @@ class CPUBackend(ComputeBackend):
         return x_norm
 
     def gelu(self, x: TensorLike) -> TensorLike:
-        # Approximate GELU: 0.5 * x * (1 + tanh(sqrt(2/pi) * (x + 0.044715 * x^3)))
-        return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x ** 3)))
+        # Numerically stable GELU approximation with input clipping.
+        x = np.asarray(x)
+        x_clip = np.clip(x, -10.0, 10.0)
+        return 0.5 * x * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (x_clip + 0.044715 * x_clip ** 3)))
 
     def silu(self, x: TensorLike) -> TensorLike:
         return x * (1 / (1 + np.exp(-x)))

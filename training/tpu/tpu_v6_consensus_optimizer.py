@@ -12,6 +12,7 @@ This module implements TPU v6-64 specific optimizations for the meta-consensus s
 
 import logging
 import asyncio
+import hashlib
 import time
 from datetime import datetime
 from pathlib import Path
@@ -37,9 +38,30 @@ except ImportError:
     JAX_AVAILABLE = False
     jnp = None
 
-# Import base components
-from .meta_consensus_system import MetaConsensusSystem, MetaConsensusConfig
-from .optimized_meta_consensus import OptimizedMetaConsensusSystem, OptimizationLevel
+# Import base components.
+#
+# Previously these imports used a `.meta_consensus_system` / `.optimized_meta_consensus`
+# spec which resolves against `training/tpu/` — where the modules do not exist
+# (they live under `training/research/consensus/`). That made the module unimportable,
+# which in turn is why the file had never been covered by a real test. We
+# now use the correct `..consensus.*` path and wrap it in `try/except` so the
+# optimizer degrades gracefully if the consensus package is stripped down.
+try:
+    from ..research.consensus.meta_consensus_system import (
+        MetaConsensusSystem,
+        MetaConsensusConfig,
+    )
+    from ..research.consensus.optimized_meta_consensus import (
+        OptimizedMetaConsensusSystem,
+        OptimizationLevel,
+    )
+    _BASE_COMPONENTS_AVAILABLE = True
+except ImportError:
+    MetaConsensusSystem = None  # type: ignore[assignment]
+    MetaConsensusConfig = None  # type: ignore[assignment]
+    OptimizedMetaConsensusSystem = None  # type: ignore[assignment]
+    OptimizationLevel = None  # type: ignore[assignment]
+    _BASE_COMPONENTS_AVAILABLE = False
 
 # Import TPU-specific optimizations from comp branch
 try:
@@ -93,6 +115,25 @@ class TPUv6ConsensusConfig:
     memory_fraction: float = 0.9
     prefetch_size: int = 4
 
+    # Embedding resolution
+    #
+    # Previously the optimizer used `jax.random.normal` seeded by
+    # `hash(text) % 2**32` as a "mock embedding", which was non-reproducible
+    # across Python sessions (hash randomization) and silently hid the fact
+    # that no real embedder was wired in. The fields below make the
+    # embedding source explicit:
+    #
+    # - `embedding_dim`: target dimensionality (previously hardcoded to 768).
+    # - `query_embedder`: optional callable `str -> array` producing the query
+    #   embedding. When `None`, a deterministic SHA256-derived fallback is
+    #   used (reproducible, no randomness).
+    # - `expert_embedder`: optional callable `dict -> array` producing an
+    #   expert embedding. If an expert entry already carries an `embedding`
+    #   field, that pre-computed vector is used directly.
+    embedding_dim: int = 768
+    query_embedder: Optional[Callable[[str], Any]] = None
+    expert_embedder: Optional[Callable[[Dict[str, Any]], Any]] = None
+
 @dataclass
 class TPUConsensusMetrics:
     """Metrics for TPU consensus operations."""
@@ -116,6 +157,42 @@ class TPUConsensusMetrics:
     distributed_consensus_accuracy: float = 0.0
     cross_core_agreement: float = 0.0
     mesh_synchronization_efficiency: float = 0.0
+
+def _deterministic_embedding(text: str, dim: int = 768) -> Any:
+    """Reproducible fallback embedding derived from the input text.
+
+    This is **not** a semantic embedding. It is a stable fingerprint computed
+    from a SHA256 digest of the UTF-8 encoded `text`, expanded to `dim`
+    float32 components and L2-normalized. It exists to replace the previous
+    random PRNG-based "mock embedding" while preserving shape/dtype contracts.
+
+    Key guarantees:
+
+    - **Deterministic**: the same text always produces the same vector, in
+      any process, on any machine. No dependency on Python's `hash()` salt
+      or on JAX PRNG state.
+    - **Shape/dtype stable**: always returns `(dim,)` float32 (as a JAX array
+      when JAX is available, else a NumPy array).
+    - **Not trainable or learned**: callers that need a semantic embedding
+      must inject a real model via
+      `TPUv6ConsensusConfig.query_embedder` / `expert_embedder`.
+    """
+    digest = hashlib.sha256(text.encode("utf-8")).digest()
+    needed_bytes = dim * 4
+    repeats = (needed_bytes // len(digest)) + 1
+    raw = (digest * repeats)[:needed_bytes]
+    # Interpret the byte stream as uint32 and map into a roughly centered
+    # float32 vector in [-0.5, 0.5]. Any monotonic decoding works here; the
+    # important property is that it is a pure function of `text`.
+    arr = np.frombuffer(raw, dtype=np.uint32).astype(np.float32)
+    arr = arr / np.float32(2 ** 32) - np.float32(0.5)
+    norm = float(np.linalg.norm(arr))
+    if norm > 0:
+        arr = arr / norm
+    if JAX_AVAILABLE:
+        return jnp.asarray(arr)
+    return arr
+
 
 class TPUv6ConsensusOptimizer:
     """
@@ -332,72 +409,131 @@ class TPUv6ConsensusOptimizer:
             logger.error(f"TPU v6 consensus optimization failed: {e}")
             return await self._fallback_consensus(query, expert_pool)
     
-    async def _generate_tpu_query_embedding(self, query: str) -> jnp.ndarray:
-        """Generates query embedding optimized for TPU."""
-        
-        # Mock embedding generation - in real implementation, use TPU-optimized model
-        key = random.PRNGKey(hash(query) % 2**32)
-        
-        # Generate embedding with appropriate shape for TPU
-        embedding = random.normal(key, (768,))
-        
-        # Normalize for better numerical stability
-        embedding = embedding / jnp.linalg.norm(embedding)
-        
+    async def _generate_tpu_query_embedding(self, query: str) -> "jnp.ndarray":
+        """Generate the query embedding for TPU-side consensus.
+
+        Resolution order:
+
+        1. ``self.config.query_embedder`` if a real embedder callable was
+           injected via configuration.
+        2. A deterministic SHA256-derived fallback (see
+           :func:`_deterministic_embedding`).
+
+        The previous implementation used ``jax.random.normal`` seeded by
+        ``hash(query) % 2**32``. That path was functionally a silent mock:
+        values depended on Python hash randomization and on the JAX PRNG,
+        which made it impossible for callers to tell whether a real embedder
+        was ever wired in. The two-step resolution above removes that
+        ambiguity: either a real model is configured, or the fallback is
+        reproducible and clearly labeled.
+        """
+        if self.config.query_embedder is not None:
+            embedding = jnp.asarray(self.config.query_embedder(query))
+        else:
+            # `_deterministic_embedding` already returns a JAX array when JAX
+            # is importable (this method is only reachable when it is, since
+            # `optimize_consensus_for_tpu_v6` short-circuits to the fallback
+            # otherwise).
+            embedding = jnp.asarray(
+                _deterministic_embedding(query, self.config.embedding_dim)
+            )
+
+        # Re-normalize to guard against embedders that skip this step.
+        norm = jnp.linalg.norm(embedding)
+        embedding = embedding / (norm + 1e-8)
         return embedding
     
-    async def _prepare_expert_data_for_tpu(self, expert_pool: List[Dict[str, Any]]) -> Dict[str, jnp.ndarray]:
-        """Prepare expert data for efficient TPU processing."""
-        
+    async def _prepare_expert_data_for_tpu(self, expert_pool: List[Dict[str, Any]]) -> Dict[str, "jnp.ndarray"]:
+        """Assemble the expert-side tensors consumed by the TPU pipeline.
+
+        Expert embedding resolution order, per pool entry:
+
+        1. ``expert["embedding"]`` if the caller already pre-computed it
+           (any array-like coerced to a JAX array).
+        2. ``self.config.expert_embedder(expert)`` when a real embedder is
+           injected via configuration.
+        3. Deterministic SHA256-derived fallback keyed by the expert's
+           ``name`` / ``id`` / index (see :func:`_deterministic_embedding`).
+
+        The previous implementation always used ``jax.random.normal`` seeded
+        by ``hash(name)``, which hid missing embedders behind values that
+        looked plausible but were not reproducible across processes. This
+        rewrite preserves the original tensor contract (shapes, dtypes, and
+        padding to ``tpu_cores``) while making the data provenance explicit.
+        """
         num_experts = len(expert_pool)
-        
-        # Create expert embeddings (mock - in real implementation, load actual embeddings)
-        expert_embeddings = []
-        expert_weights = []
-        expert_quality_scores = []
-        expert_costs = []
-        
-        for expert in expert_pool:
-            # Mock embedding
-            expert_key = random.PRNGKey(hash(expert.get("name", "expert")) % 2**32)
-            embedding = random.normal(expert_key, (768,))
-            embedding = embedding / jnp.linalg.norm(embedding)
-            
+        embedding_dim = self.config.embedding_dim
+
+        expert_embeddings: List["jnp.ndarray"] = []
+        expert_weights: List[float] = []
+        expert_quality_scores: List[float] = []
+        expert_costs: List[float] = []
+
+        for idx, expert in enumerate(expert_pool):
+            raw_embedding = expert.get("embedding")
+            if raw_embedding is not None:
+                embedding = jnp.asarray(raw_embedding)
+            elif self.config.expert_embedder is not None:
+                embedding = jnp.asarray(self.config.expert_embedder(expert))
+            else:
+                key_text = str(
+                    expert.get("name")
+                    or expert.get("id")
+                    or f"expert_{idx}"
+                )
+                # `_deterministic_embedding` already returns a JAX array when
+                # JAX is importable, which is the only case this method is
+                # invoked in (see `optimize_consensus_for_tpu_v6`).
+                embedding = jnp.asarray(
+                    _deterministic_embedding(key_text, embedding_dim)
+                )
+
+            if embedding.shape[-1] != embedding_dim:
+                raise ValueError(
+                    f"Expert embedding dim mismatch for expert {idx}: "
+                    f"got {embedding.shape[-1]}, expected {embedding_dim}"
+                )
+
+            # Normalize for numerical stability; harmless if already normalized.
+            embedding = embedding / (jnp.linalg.norm(embedding) + 1e-8)
+
             expert_embeddings.append(embedding)
-            expert_weights.append(expert.get("weight", 1.0))
-            expert_quality_scores.append(expert.get("quality_score", 8.0))
-            expert_costs.append(expert.get("cost_per_1k_tokens", 0.001))
-        
-        # Convert to JAX arrays
-        expert_data = {
+            expert_weights.append(float(expert.get("weight", 1.0)))
+            expert_quality_scores.append(float(expert.get("quality_score", 8.0)))
+            expert_costs.append(float(expert.get("cost_per_1k_tokens", 0.001)))
+
+        expert_data: Dict[str, Any] = {
             "embeddings": jnp.stack(expert_embeddings),
             "weights": jnp.array(expert_weights),
             "quality_scores": jnp.array(expert_quality_scores),
             "costs": jnp.array(expert_costs),
-            "metadata": expert_pool
+            "metadata": expert_pool,
         }
-        
-        # Pad to make divisible by TPU cores if needed
+
+        # Pad to a multiple of `tpu_cores` so the mesh partitioning in
+        # `_distribute_experts_on_mesh` and `_process_experts_on_mesh` never
+        # has to handle ragged last batches. Padding uses zero vectors,
+        # zero weights, zero quality (so they lose the argsort), and zero
+        # cost (so they do not inflate budgets).
         if num_experts % self.config.tpu_cores != 0:
             padding_needed = self.config.tpu_cores - (num_experts % self.config.tpu_cores)
-            
             expert_data["embeddings"] = jnp.concatenate([
                 expert_data["embeddings"],
-                jnp.zeros((padding_needed, 768))
+                jnp.zeros((padding_needed, embedding_dim)),
             ])
             expert_data["weights"] = jnp.concatenate([
                 expert_data["weights"],
-                jnp.zeros(padding_needed)
+                jnp.zeros(padding_needed),
             ])
             expert_data["quality_scores"] = jnp.concatenate([
                 expert_data["quality_scores"],
-                jnp.zeros(padding_needed)
+                jnp.zeros(padding_needed),
             ])
             expert_data["costs"] = jnp.concatenate([
                 expert_data["costs"],
-                jnp.zeros(padding_needed)
+                jnp.zeros(padding_needed),
             ])
-        
+
         return expert_data
     
     async def _distribute_experts_on_mesh(
@@ -614,6 +750,7 @@ class TPUv6ConsensusOptimizer:
         
         return {
             "selected_expert_indices": [int(idx) for idx in top_indices],
+            "selected_similarities": [float(s) for s in selected_similarities],
             "consensus_confidence": consensus_confidence,
             "expected_quality": expected_quality,
             "total_cost": total_cost,
@@ -637,47 +774,121 @@ class TPUv6ConsensusOptimizer:
         }
     
     async def _update_tpu_metrics(self, consensus_result: Dict[str, Any], processing_time: float):
-        """Update TPU-specific metrics."""
-        
-        # Update performance metrics
-        self.metrics.consensus_operations_per_second = 1.0 / processing_time if processing_time > 0 else 0
-        
-        # Mock TPU utilization metrics
-        self.metrics.core_utilization = [np.random.uniform(0.7, 0.95) for _ in range(self.config.tpu_cores)]
-        self.metrics.memory_utilization_per_core = [np.random.uniform(0.3, 0.8) for _ in range(self.config.tpu_cores)]
-        self.metrics.flops_utilization = np.random.uniform(0.8, 0.95)
-        self.metrics.memory_bandwidth_utilization = np.random.uniform(0.6, 0.9)
-        
-        # Consensus-specific metrics
-        self.metrics.distributed_consensus_accuracy = consensus_result.get("consensus_confidence", 0.8)
-        self.metrics.cross_core_agreement = np.random.uniform(0.85, 0.98)
-        self.metrics.mesh_synchronization_efficiency = np.random.uniform(0.9, 0.99)
+        """Populate :class:`TPUConsensusMetrics` from the last run.
+
+        All values are derived from the runtime state of this call. Fields
+        that cannot be observed without a real TPU profiler (per-core FLOPS,
+        memory bandwidth, network bandwidth) are reported as ``0.0`` rather
+        than filled with synthetic noise. Callers that need those numbers
+        must wire them in from an external profiler.
+
+        The previous implementation filled most of these fields with
+        ``np.random.uniform`` samples, which made every call produce
+        different "metrics" even for identical inputs and masked missing
+        instrumentation.
+        """
+        # --- Throughput ---------------------------------------------------
+        self.metrics.consensus_operations_per_second = (
+            1.0 / processing_time if processing_time > 0 else 0.0
+        )
+
+        # --- Live devices -------------------------------------------------
+        try:
+            live_devices = list(jax.devices()) if JAX_AVAILABLE else []
+        except Exception:  # pragma: no cover - JAX backend discovery edge cases
+            live_devices = []
+        num_live = len(live_devices)
+
+        # Core utilization proxy: 1.0 for each live device we can actually
+        # place work on, 0.0 for nominal cores that do not exist on the
+        # current host. This is a coarse occupancy indicator, not real
+        # per-core utilization; a true value requires TPU hardware counters.
+        occupied = min(num_live, self.config.tpu_cores)
+        self.metrics.core_utilization = (
+            [1.0] * occupied + [0.0] * max(0, self.config.tpu_cores - occupied)
+        )
+
+        # --- Memory utilization ------------------------------------------
+        memory_util: List[float] = []
+        for dev in live_devices[: self.config.tpu_cores]:
+            stats_fn = getattr(dev, "memory_stats", None)
+            if not callable(stats_fn):
+                memory_util.append(0.0)
+                continue
+            try:
+                info = stats_fn() or {}
+                used = float(info.get("bytes_in_use", 0) or 0)
+                limit = float(
+                    info.get("bytes_limit")
+                    or info.get("bytes_reservable_limit")
+                    or 0
+                )
+                memory_util.append(used / limit if limit > 0 else 0.0)
+            except Exception:  # pragma: no cover - backend-specific failures
+                memory_util.append(0.0)
+        while len(memory_util) < self.config.tpu_cores:
+            memory_util.append(0.0)
+        self.metrics.memory_utilization_per_core = memory_util
+
+        # --- Hardware counters we cannot measure without a profiler ------
+        self.metrics.flops_utilization = 0.0
+        self.metrics.memory_bandwidth_utilization = 0.0
+        self.metrics.network_bandwidth_utilization = 0.0
+        self.metrics.compilation_time_ms = 0.0
+
+        # --- Consensus quality from the real result ----------------------
+        self.metrics.distributed_consensus_accuracy = float(
+            consensus_result.get("consensus_confidence", 0.0)
+        )
+
+        # Cross-core agreement: inverse of the spread across the selected
+        # experts' similarity scores. Values clamped to [0, 1].
+        selected = consensus_result.get("selected_similarities") or []
+        if selected:
+            arr = np.asarray(selected, dtype=np.float32)
+            spread = float(arr.max() - arr.min()) if arr.size > 1 else 0.0
+            self.metrics.cross_core_agreement = max(0.0, min(1.0, 1.0 - spread))
+        else:
+            self.metrics.cross_core_agreement = self.metrics.distributed_consensus_accuracy
+
+        # Mesh synchronization efficiency: 1.0 when the mesh is up, 0.0 otherwise.
+        # A finer-grained value would require XLA collective profiling.
+        self.metrics.mesh_synchronization_efficiency = (
+            1.0 if self.mesh is not None else 0.0
+        )
     
     def _get_tpu_metrics_snapshot(self) -> Dict[str, Any]:
-        """Get snapshot of current TPU metrics."""
-        
+        """Return a JSON-friendly snapshot of the most recently observed metrics.
+
+        Uses ``0.0`` for aggregates whose underlying list is empty (i.e. the
+        optimizer has not executed a consensus round yet) instead of letting
+        NumPy emit a ``RuntimeWarning`` and return NaN.
+        """
+        core_util = self.metrics.core_utilization or [0.0]
+        mem_util = self.metrics.memory_utilization_per_core or [0.0]
+
         return {
             "core_utilization": {
-                "avg": np.mean(self.metrics.core_utilization),
-                "min": np.min(self.metrics.core_utilization),
-                "max": np.max(self.metrics.core_utilization),
-                "std": np.std(self.metrics.core_utilization)
+                "avg": float(np.mean(core_util)),
+                "min": float(np.min(core_util)),
+                "max": float(np.max(core_util)),
+                "std": float(np.std(core_util)),
             },
             "memory_utilization": {
-                "avg_per_core": np.mean(self.metrics.memory_utilization_per_core),
-                "total_used_gb": np.sum(self.metrics.memory_utilization_per_core) * self.config.memory_per_core_gb,
-                "efficiency": np.mean(self.metrics.memory_utilization_per_core)
+                "avg_per_core": float(np.mean(mem_util)),
+                "total_used_gb": float(np.sum(mem_util)) * self.config.memory_per_core_gb,
+                "efficiency": float(np.mean(mem_util)),
             },
             "performance": {
                 "consensus_ops_per_sec": self.metrics.consensus_operations_per_second,
                 "flops_utilization": self.metrics.flops_utilization,
                 "memory_bandwidth_utilization": self.metrics.memory_bandwidth_utilization,
-                "mesh_efficiency": self.metrics.mesh_synchronization_efficiency
+                "mesh_efficiency": self.metrics.mesh_synchronization_efficiency,
             },
             "consensus_quality": {
                 "distributed_accuracy": self.metrics.distributed_consensus_accuracy,
-                "cross_core_agreement": self.metrics.cross_core_agreement
-            }
+                "cross_core_agreement": self.metrics.cross_core_agreement,
+            },
         }
     
     async def benchmark_tpu_consensus(
@@ -772,8 +983,8 @@ class TPUv6ConsensusOptimizer:
             },
             "performance_status": {
                 "consensus_ops_per_sec": self.metrics.consensus_operations_per_second,
-                "avg_core_utilization": np.mean(self.metrics.core_utilization) if self.metrics.core_utilization else 0.0,
-                "memory_efficiency": np.mean(self.metrics.memory_utilization_per_core) if self.metrics.memory_utilization_per_core else 0.0,
+                "avg_core_utilization": float(np.mean(self.metrics.core_utilization)) if self.metrics.core_utilization else 0.0,
+                "memory_efficiency": float(np.mean(self.metrics.memory_utilization_per_core)) if self.metrics.memory_utilization_per_core else 0.0,
                 "flops_utilization": self.metrics.flops_utilization,
                 "mesh_efficiency": self.metrics.mesh_synchronization_efficiency
             },
@@ -824,13 +1035,16 @@ if __name__ == "__main__":
             consensus_mode=TPUConsensusMode.MESH_DISTRIBUTED
         )
         
-        # Mock expert pool
+        # Deterministic example expert pool. Values are spread across a
+        # reproducible range so successive runs and machines see identical
+        # inputs (previously this block used np.random which defeated the
+        # purpose of a demo).
         expert_pool = [
             {
                 "name": f"Expert_{i}",
-                "weight": 1.0 + np.random.random() * 0.5,
-                "quality_score": 8.0 + np.random.random() * 2.0,
-                "cost_per_1k_tokens": np.random.uniform(0.001, 0.01)
+                "weight": 1.0 + (i % 5) * 0.1,
+                "quality_score": 8.0 + (i % 10) * 0.2,
+                "cost_per_1k_tokens": 0.001 + (i % 7) * 0.001,
             }
             for i in range(20)
         ]

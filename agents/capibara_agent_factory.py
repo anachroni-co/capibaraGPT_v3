@@ -1,11 +1,30 @@
-## capibara/agents/capibara_agent_factory.py - Enhanced Factory Pattern Implementation
+"""
+Capibara Agent Factory - Enhanced Factory Pattern Implementation.
+
+This module provides factory classes for creating and configuring Capibara
+agents with various LLM providers, tools, and behaviors. It implements
+the Factory and Strategy design patterns for flexible agent instantiation.
+
+Key Components:
+    - BaseLLMProvider: Abstract base class for LLM providers
+    - OllamaProvider: Local Ollama LLM integration
+    - OpenAIProvider: OpenAI API integration
+    - AnthropicProvider: Anthropic Claude API integration
+    - CapibaraAgentFactory: Main factory for creating agents
+    - TPU v4-32 optimizations throughout
+
+Example:
+    >>> from agents.capibara_agent_factory import CapibaraAgentFactory
+    >>> factory = CapibaraAgentFactory()
+    >>> agent = factory.create_agent("assistant", {"provider": "ollama"})
+
+Author: Skydesk International Dev Team.
+"""
 
 import os
 import sys
 import logging
-from capibara.jax.numpy import jnp
-
-# Safe imports for Factory and Strategy patterns
+import jax.numpy as jnp
 try:
     from ..interfaces.iagent import (
         IAgentFactory, IAgent, AgentBehaviorType, AgentContext, AgentResult
@@ -25,26 +44,26 @@ except ImportError:
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(script_dir)
 
-from capibara.jax import jax
+import jax
 from typing import Optional, List, Dict, Any, Union
-from capibara.jax.experimental import mesh_utils
-from capibara.jax.sharding import Mesh, PartitionSpec 
+from jax.experimental import mesh_utils
+from jax.sharding import Mesh, PartitionSpec 
 
 # Importaciones de tpu v4-32
-from capibara.jax.tpu_v4.backend import (
+from capibara.jax_ext.tpu_v4.backend import (
     TpuV4LinalgOps,
     TpuV4SparseOps,
     TpuV4NeuralOps,
     TpuV4RandomOps,
     TpuV4PerformanceUtils,
 )
-from capibara.jax.tpu_v4.optimizations import (
+from capibara.jax_ext.tpu_v4.optimizations import (
     create_tpu_mesh,
     TpuMemoryMonitor,
     tpu_optimized_gemm,
     create_jitted_forward,
 )
-from capibara.jax.tpu_v4.profiling import (
+from capibara.jax_ext.tpu_v4.profiling import (
     TpuProfiler,
     _uniform_fallback_weights,
     _expert_weights_with_cache,

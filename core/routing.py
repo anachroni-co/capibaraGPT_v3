@@ -98,7 +98,7 @@ class CoreHttpRouter:
         >>>
         >>> # Add routes
         >>> router.add_route("/health", lambda: {"status": "ok"})
-        >>> router.add_route("/version", lambda: {"version": "4.0"})
+        >>> router.add_route("/version", lambda: {"version": "3.0"})
         >>>
         >>> # Route requests
         >>> result = router.route("/health")
@@ -266,9 +266,9 @@ def create_router() -> CoreHttpRouter:
         same path. This allows customization of default behavior if needed.
 
         System info includes:
-        - version: "4.0" (CapibaraGPT version)
+        - version: "3.0" (CapibaraGPT version)
         - name: "CapibaraGPT"
-        - mesh: "v6e-64" (TPU mesh configuration)
+        - mesh: "v4-32" (TPU mesh configuration)
         - dtype: "bf16" (default dtype)
     """
     router = CoreHttpRouter()
@@ -276,9 +276,9 @@ def create_router() -> CoreHttpRouter:
     # Add default routes
     router.add_route("/health", lambda: {"status": "healthy"})
     router.add_route("/info", lambda: {
-        "version": "4.0",
+        "version": "3.0",
         "name": "CapibaraGPT",
-        "mesh": "v6e-64",
+        "mesh": "v4-32",
         "dtype": "bf16"
     })
 

@@ -670,7 +670,7 @@ class BiasAndSafetyFilter:
             filtered_content = "[Content blocked due to safety concerns]"
             filtering_applied = True
         elif assessment.recommended_action == "filter":
-            # Replace flagged content with placeholders
+            # Replace flagged content with redactions
             for flagged_term in assessment.flagged_content:
                 if flagged_term.lower() in content.lower():
                     replacement = "[FILTERED]"

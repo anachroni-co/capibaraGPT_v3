@@ -19,22 +19,23 @@ from typing import Any, Dict, Optional, Tuple
 
 # Obtiene la path del directory current (scripts) -> /.../scripts
 script_dir = os.path.dirname(os.path.abspath(__file__))
-# Sube un level for obtain la raíz del proyecto -> /.../capibaraGPT-v2
+# Sube un level for obtain la raíz del proyecto -> /.../CapibaraGPT v3
 project_root = os.path.dirname(script_dir)
 # Añade la raíz del proyecto a sys.path
 if project_root not in sys.path:
     pass  # Using proper imports instead of sys.path manipulation
 
-from capibara.jax import jax
+import jax
 from flax import linen as nn
-from capibara.jax import numpy as jnp
-from capibara.jax.sharding import PartitionSpec as P
+from jax import numpy as jnp
+from jax.sharding import PartitionSpec as P
 from flax.linen.partitioning import with_sharding_constraint
 
 # Imports with fallbacks
 try:
     from capibara.vq.vqbit.wrapper import AdaptiveWrapper
 except ImportError:
+    logging.warning("AdaptiveWrapper unavailable; using fallback stub.")
     class AdaptiveWrapper:
         def __init__(self, config):
             self.config = config
@@ -42,6 +43,7 @@ except ImportError:
 try:
     from capibara.config.adaptive_config import AdaptiveConfig
 except ImportError:
+    logging.warning("AdaptiveConfig unavailable; using fallback stub.")
     class AdaptiveConfig:
         def __init__(self, **kwargs):
             for k, v in kwargs.items():
@@ -50,6 +52,7 @@ except ImportError:
 try:
     from capibara.vq.vqbit.multimodal_vqbit import VQbitModule
 except ImportError:
+    logging.warning("VQbitModule unavailable; using fallback stub.")
     class VQbitModule(nn.Module):
         def __call__(self, x, **kwargs):
             return x
@@ -57,6 +60,7 @@ except ImportError:
 try:
     from capibara.sub_models.semiotic.mnemosyne_semio_module import MnemosyneSemioModule
 except ImportError:
+    logging.warning("MnemosyneSemioModule unavailable; using fallback stub.")
     class MnemosyneSemioModule(nn.Module):
         def __call__(self, x, **kwargs):
             return x

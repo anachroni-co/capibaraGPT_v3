@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main script to run Capibara6 N8N Automation Service
+Main script to run CapibaraGPT v3 N8N Automation Service
 
 This script can be used to run the automation service as a standalone application
 with configuration from environment variables and optional config file.
@@ -59,7 +59,7 @@ async def run_service(config):
         # Start the service
         await service.startup()
         
-        logging.info(f"Capibara6 N8N Automation Service started successfully")
+        logging.info(f"CapibaraGPT v3 N8N Automation Service started successfully")
         logging.info(f"API server running on {config.api.host}:{config.api.port}")
         logging.info(f"Environment: {config.environment}")
         logging.info(f"Debug mode: {config.debug}")
@@ -96,7 +96,7 @@ async def run_service(config):
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Capibara6 N8N Automation Service",
+        description="CapibaraGPT v3 N8N Automation Service",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

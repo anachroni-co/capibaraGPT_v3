@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 class AccessType(str, Enum):
     """Dataset access types."""
@@ -17,10 +17,10 @@ class AccessType(str, Enum):
 class DatasetAccess:
     """Access information for a dataset."""
     name: str
-    category: str
     access_type: AccessType
     url: str
     requires_auth: bool
+    category: str = "unknown"
     api_key_env: Optional[str] = None
     preprocessing_required: bool = False
     preprocessing_steps: List[str] = None
@@ -28,6 +28,7 @@ class DatasetAccess:
     size_gb: Optional[float] = None
     update_frequency: str = "static"
     rate_limits: Optional[Dict] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 # Psychology Datasets
 PSYCHOLOGY_DATASETS = {

@@ -18,41 +18,46 @@ logger = logging.getLogger(__name__)
 try:
     from .SSM_TPU import SSMTPU
     SSM_AVAILABLE = True
-except ImportError:
+except Exception as e:
     SSM_AVAILABLE = False
     SSMTPU = None
+    logger.debug("SSM_TPU unavailable: %s", e)
 
 # Byte TPU
 try:
     from .Byte_TPU import ByteTPU
     BYTE_AVAILABLE = True
-except ImportError:
+except Exception as e:
     BYTE_AVAILABLE = False
     ByteTPU = None
+    logger.debug("Byte_TPU unavailable: %s", e)
 
 # CSA Expert
 try:
     from .csa_expert import CSAExpert
     CSA_AVAILABLE = True
-except ImportError:
+except Exception as e:
     CSA_AVAILABLE = False
     CSAExpert = None
+    logger.debug("CSA expert unavailable: %s", e)
 
 # Deep Dialog
 try:
     from .deep_dialog import DeepDialog
     DIALOG_AVAILABLE = True
-except ImportError:
+except Exception as e:
     DIALOG_AVAILABLE = False
     DeepDialog = None
+    logger.debug("Deep dialog unavailable: %s", e)
 
 # Reasoning Enhancement
 try:
-    from .reasoning_enhancement import ReasoningEnhancement
+    from .reasoning_enhancement import ReasoningEnhancementExpert as ReasoningEnhancement
     REASONING_AVAILABLE = True
-except ImportError:
+except Exception as e:
     REASONING_AVAILABLE = False
     ReasoningEnhancement = None
+    logger.debug("Reasoning enhancement unavailable: %s", e)
 
 # Ultra Orchestrator
 try:
@@ -61,10 +66,11 @@ try:
         create_ultra_submodel_system,
     )
     ORCHESTRATOR_AVAILABLE = True
-except ImportError:
+except Exception as e:
     ORCHESTRATOR_AVAILABLE = False
     UltraSubModelOrchestrator = None
     create_ultra_submodel_system = None
+    logger.debug("Ultra submodel orchestrator unavailable: %s", e)
 
 
 __all__ = [

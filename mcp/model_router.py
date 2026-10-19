@@ -1,3 +1,17 @@
+"""
+Model Router - Request routing and model execution.
+
+This module provides routing functionality for model requests, handling
+version resolution, resource accounting, and request execution within
+the Model Control Plane (MCP).
+
+Key Components:
+    - ModelRequest: Data class for model request parameters
+    - ModelRouter: Main router class for request handling
+
+Author: Skydesk International Dev Team.
+"""
+
 from typing import Dict, Optional, List, Any
 from dataclasses import dataclass, field
 import asyncio

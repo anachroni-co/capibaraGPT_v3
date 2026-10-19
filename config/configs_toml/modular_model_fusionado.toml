@@ -1,8 +1,8 @@
-# Configuración unificada para CapibaraGPT-v2
+# Configuración unificada para CapibaraGPT v3
 # Todas las configuraciones están consolidadas aquí
 
 [model]
-name = "CapibaraGPT-v2"
+name = "CapibaraGPT v3"
 version = "3.3.0"
 description = "Modelo modular con optimizaciones TPU v4"
 

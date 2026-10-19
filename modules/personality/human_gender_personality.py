@@ -12,20 +12,23 @@ human gender expression. Ready for production use with:
  Simplified API: Automatic initialization + error handling
 """
 
-import os
+import logging
+import math
+import time
+from collections import defaultdict
+from dataclasses import dataclass, field
 from functools import partial
 from typing import Dict, Any, Optional, Tuple, NamedTuple, List, Union
 
-# Path setup for capibara
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-if project_root not in sys.path:
-    # Fixed: Using proper imports instead of sys.path manipulation
-    pass
-
-# Native capibara imports
+import jax
+import jax.numpy as jnp
 from flax import linen as nn
-from capibara.jax import numpy as jnp
+
+try:
+    from capibara.interfaces.imodules import IModule
+except Exception:
+    class IModule:  # type: ignore
+        pass
 
 logger = logging.getLogger(__name__)
 
@@ -1212,7 +1215,7 @@ class ProductionHumanGenderPersonality(nn.Module):
 
 def register_human_gender_personality():
     """Registra el módulo de personalidad de género humano en el sistema."""
-    from capibara.core.model import ThreadSafeRegistry
+    from core.model import ThreadSafeRegistry
     
     registry = ThreadSafeRegistry()
     registry.register(

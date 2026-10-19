@@ -136,9 +136,9 @@ quantized, indices = vq_opt.optimize_vq_forward(x, codebook)
 
 MIT License - See main repository for details.
 
-## Ejemplo rápido
+## Example quick
 
-Ejemplo (pseudo-código) de uso del paquete principal:
+Example (pseudo-code) de uso del paquete principal:
 
 ```python
 from capibara.cli import main

@@ -3,21 +3,11 @@ Optimized Quantum Router for CapibaraGPT - TPU v4-32
 Optimized version with JAX JIT, full differentiability and TPU efficiency.
 """
 
-import os
-import sys
-# Get the path of the current directory (scripts) -> /.../scripts
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Go up one level to obtain the project root -> /.../capibaraGPT-v2
-project_root = os.path.dirname(script_dir)
-# Add the project root to sys.path
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
 import logging
 from flax import linen as nn
 import jax
 import jax.numpy as jnp
-from jax import partial
+from functools import partial
 from typing import Dict, List, Optional, Any, Tuple
 
 # Relative imports with fallbacks
@@ -401,3 +391,7 @@ def create_router_for_tpu_v4_32(
         vocab_size=vocab_size,
         activation_threshold=0.5
     )
+
+
+# Backwards-compatible alias used across docs/imports.
+AdaptiveRouter = ContextualRouterOptimized

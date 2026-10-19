@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 # JAX imports with fallbacks
 try:
-    from capibara.jax import jax, numpy as jnp
+    import jax
+    import jax.numpy as jnp
     JAX_AVAILABLE = True
 except ImportError:
     logger.warning("JAX not available - using NumPy fallbacks")
@@ -57,6 +58,29 @@ class QuantizedInferenceConfig:
     # Performance monitoring
     enable_profiling: bool = False
     benchmark_iterations: int = 100
+
+
+
+def _unflatten_param_tree(flat: Dict[str, Any]) -> Dict[str, Any]:
+    """Turn a flat {"layer.sub.weight": arr} dict into a nested dict.
+
+    ``np.load``/``safetensors`` both yield a flat dict. Our consumers
+    (quantizer + attention / MLP kernels) expect a nested structure with
+    ``embedding``, ``transformer_layer_N``, ``output`` groups. This helper
+    splits keys on ``.`` and builds the nested tree; leaves are numpy
+    arrays, so ``astype(np.float32)`` is applied for consistency.
+    """
+    nested: Dict[str, Any] = {}
+    for key, arr in flat.items():
+        parts = key.split(".")
+        cursor = nested
+        for part in parts[:-1]:
+            cursor = cursor.setdefault(part, {})
+        value = np.asarray(arr)
+        if value.dtype != np.float32:
+            value = value.astype(np.float32)
+        cursor[parts[-1]] = value
+    return nested
 
 
 class QuantizedInferenceEngine:
@@ -174,38 +198,61 @@ class QuantizedInferenceEngine:
         return await self._dynamic_batched_inference(batch_inputs, batch_masks)
     
     async def _load_model_params(self, model_path: str) -> Dict[str, Any]:
-        """Load model parameters from file."""
-        # Mock implementation - in real scenario, load from checkpoint
-        logger.info(" Loading model parameters...")
-        
-        # Simulate loading different layer types
-        params = {}
-        
-        # Embedding layers
-        params['embedding'] = {
-            'weight': np.random.randn(50000, 768).astype(np.float32)
-        }
-        
-        # Transformer layers
-        for layer_idx in range(12):
-            layer_name = f'transformer_layer_{layer_idx}'
-            params[layer_name] = {
-                'attention_weight': np.random.randn(768, 768).astype(np.float32),
-                'attention_bias': np.random.randn(768).astype(np.float32),
-                'mlp_weight': np.random.randn(768, 3072).astype(np.float32),
-                'mlp_bias': np.random.randn(3072).astype(np.float32),
-                'layer_norm_weight': np.random.randn(768).astype(np.float32),
-                'layer_norm_bias': np.random.randn(768).astype(np.float32)
-            }
-        
-        # Output layer
-        params['output'] = {
-            'weight': np.random.randn(768, 50000).astype(np.float32),
-            'bias': np.random.randn(50000).astype(np.float32)
-        }
-        
-        await asyncio.sleep(0.1)  # Simulate I/O delay
-        return params
+        """Load model parameters from a real checkpoint.
+
+        Supported formats, tried in order:
+
+        - ``<model_path>`` as ``.npz`` (numpy archive, preferred).
+        - ``<model_path>`` as ``.safetensors`` when ``safetensors`` is
+          importable.
+        - ``<model_path>`` as a pickle (only when the caller marks it
+          trusted by passing a ``.pkl`` extension).
+
+        The previous implementation hard-coded a 12-layer transformer with
+        ``np.random.randn(...)`` tensors regardless of the requested path,
+        which meant quantization calibration and inference ran on purely
+        synthetic weights. That fallback has been removed - missing
+        checkpoints now raise ``FileNotFoundError`` so callers can decide
+        whether to download, train, or abort.
+        """
+        logger.info("Loading model parameters from %s", model_path)
+        path = Path(model_path)
+        if not path.exists():
+            raise FileNotFoundError(
+                f"Model checkpoint not found at {model_path!r}. "
+                "Refusing to fabricate random parameters."
+            )
+
+        suffix = path.suffix.lower()
+        if suffix == ".npz":
+            with np.load(path, allow_pickle=False) as archive:
+                params = {name: archive[name] for name in archive.files}
+            return _unflatten_param_tree(params)
+
+        if suffix == ".safetensors":
+            try:
+                from safetensors.numpy import load_file  # type: ignore
+            except ImportError as exc:
+                raise RuntimeError(
+                    "safetensors checkpoint requested but the "
+                    "safetensors package is not installed."
+                ) from exc
+            flat = load_file(str(path))
+            return _unflatten_param_tree(flat)
+
+        if suffix == ".pkl":
+            import pickle
+            logger.warning(
+                "Loading pickle checkpoint %s - ensure trusted source",
+                path,
+            )
+            with open(path, "rb") as f:
+                return pickle.load(f)  # nosec B301 - opt-in by extension
+
+        raise ValueError(
+            f"Unsupported checkpoint format {suffix!r} for {model_path!r}. "
+            "Use .npz, .safetensors or .pkl."
+        )
     
     async def _generate_calibration_data(self) -> np.ndarray:
         """Generate calibration data for quantization."""
@@ -218,8 +265,7 @@ class QuantizedInferenceEngine:
             seq_len = np.random.randint(128, self.config.max_sequence_length)
             sample = np.random.randint(0, 50000, size=(1, seq_len))
             calibration_samples.append(sample)
-        
-        await asyncio.sleep(0.1)  # Simulate processing delay
+
         return np.concatenate(calibration_samples, axis=0)
     
     async def _quantized_forward_pass(self, input_tokens: np.ndarray,
@@ -229,13 +275,16 @@ class QuantizedInferenceEngine:
         
         # Embedding lookup with quantized weights
         embeddings = await self._quantized_embedding_lookup(input_tokens)
-        
-        # Transformer layers
+
+        # Transformer layers — count derived from loaded params, not hardcoded
         hidden_states = embeddings
         attention_weights_list = []
-        
-        for layer_idx in range(12):  # 12 layers
-            layer_name = f'transformer_layer_{layer_idx}'
+
+        layer_names = sorted(
+            [k for k in self.quantized_params if k.startswith('transformer_layer_')],
+            key=lambda k: int(k.split('_')[-1]),
+        )
+        for layer_name in layer_names:
             
             # Self-attention with quantized weights
             attn_output, attn_weights = await self._quantized_attention(
@@ -439,26 +488,23 @@ class QuantizedInferenceEngine:
         return results
     
     async def _optimize_for_tpu_v6(self):
-        """Apply TPU v6 specific optimizations."""
-        logger.info(" Applying TPU v6 optimizations...")
-        
-        # TPU-specific optimizations would go here
-        # - Reshape tensors for optimal TPU utilization
-        # - Apply TPU-specific quantization schemes
-        # - Configure memory layouts
-        
-        await asyncio.sleep(0.1)  # Simulate optimization time
-    
+        """Apply TPU v6 specific optimizations.
+
+        Hardware-specific layout tuning (bfloat16 tile alignment, HBM
+        prefetch) requires the orbax/libtpu runtime that is only present on
+        a real TPU pod.  When running elsewhere this is intentionally a
+        no-op so load_model() still succeeds on developer machines.
+        """
+        logger.info("TPU v6 hardware optimizations skipped (libtpu not available)")
+
     async def _optimize_for_arm_axion(self):
-        """Apply ARM Axion specific optimizations."""
-        logger.info(" Applying ARM Axion optimizations...")
-        
-        # ARM-specific optimizations would go here
-        # - Vectorization optimizations
-        # - NEON instruction utilization
-        # - Cache-friendly memory layouts
-        
-        await asyncio.sleep(0.1)  # Simulate optimization time
+        """Apply ARM Axion specific optimizations.
+
+        NEON/SVE vectorization and cache-layout tuning require the
+        Axion SDK.  This is a no-op outside of Axion VMs so that
+        load_model() can complete on any machine.
+        """
+        logger.info("ARM Axion hardware optimizations skipped (Axion SDK not available)")
     
     def _softmax(self, x: np.ndarray, axis: int = -1) -> np.ndarray:
         """Numerically stable softmax."""
@@ -471,9 +517,21 @@ class QuantizedInferenceEngine:
         return 0.5 * x * (1 + np.tanh(np.sqrt(2 / np.pi) * (x + 0.044715 * x**3)))
     
     def _get_memory_usage(self) -> float:
-        """Get current memory usage in MB."""
-        # Mock implementation - in real scenario, measure actual memory usage
-        return 512.0  # MB
+        """Return the current RSS of this process in MB via psutil.
+
+        Returns ``-1.0`` when psutil is not installed so callers can tell
+        real measurements apart from the previous hard-coded ``512.0``
+        placeholder.
+        """
+        try:
+            import psutil  # type: ignore
+        except ImportError:  # pragma: no cover - optional dep
+            return -1.0
+        try:
+            rss_bytes = psutil.Process().memory_info().rss
+        except Exception:  # pragma: no cover - platform edge
+            return -1.0
+        return float(rss_bytes) / (1024.0 * 1024.0)
     
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get comprehensive performance statistics."""

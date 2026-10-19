@@ -275,7 +275,7 @@ class TestTPUBackend:
     def backend(self):
         try:
             backend = get_backend(BackendType.TPU)
-            if backend.name != "tpu":
+            if backend.name != "tpu" or not backend.is_available:
                 pytest.skip("TPU not available (fallback to CPU)")
             return backend
         except Exception:

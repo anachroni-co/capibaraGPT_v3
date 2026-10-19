@@ -45,12 +45,39 @@ except ImportError:
     tracemalloc = None
     HAS_TRACEMALLOC = False
 
-try:
-    import torch
-    HAS_TORCH = True
-except ImportError:
-    torch = None
-    HAS_TORCH = False
+torch = None  # type: ignore
+HAS_TORCH = False
+_TORCH_IMPORT_ATTEMPTED = False
+
+def _ensure_torch() -> None:
+    """Lazily import torch only when needed.
+
+    This avoids hard failures in CPU-only environments where torch (or its CUDA
+    DLLs) may be missing.
+    """
+    global torch, HAS_TORCH, _TORCH_IMPORT_ATTEMPTED
+    if _TORCH_IMPORT_ATTEMPTED:
+        return
+    _TORCH_IMPORT_ATTEMPTED = True
+    try:
+        import subprocess
+        result = subprocess.run(
+            [sys.executable, "-c", "import torch"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        if result.returncode != 0:
+            torch = None
+            HAS_TORCH = False
+            return
+
+        import torch as _torch  # type: ignore
+        torch = _torch
+        HAS_TORCH = True
+    except Exception:
+        torch = None
+        HAS_TORCH = False
 
 try:
     import numpy as np
@@ -261,6 +288,7 @@ class MemoryProfiler:
             heap_bytes = current
 
         # GPU memory
+        _ensure_torch()
         if HAS_TORCH and torch.cuda.is_available():
             try:
                 gpu_bytes = torch.cuda.memory_allocated()
@@ -306,6 +334,7 @@ class MemoryProfiler:
             shape = ()
             device = "cpu"
 
+            _ensure_torch()
             if HAS_TORCH and isinstance(tensor, torch.Tensor):
                 size_bytes = tensor.element_size() * tensor.nelement()
                 dtype = str(tensor.dtype)
@@ -387,6 +416,7 @@ class MemoryProfiler:
                 ))
 
         # Check GPU memory separately
+        _ensure_torch()
         if HAS_TORCH and torch.cuda.is_available():
             gpu_values = [s.gpu_bytes for s in self._snapshots]
             gpu_growth = gpu_values[-1] - gpu_values[0] if gpu_values else 0

@@ -6,12 +6,14 @@ Provides comprehensive control and monitoring capabilities for the Dynamic MoE s
 
 import logging
 import time
+import math
+import os
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass
 
 # JAX imports with fallbacks
 try:
-    from capibara.jax import numpy as jnp
+    from jax import numpy as jnp
 except ImportError:
     import numpy as jnp
 
@@ -59,6 +61,7 @@ class MoEControlAPI:
         self.monitoring_enabled = True
         self.last_health_check = time.time()
         self.performance_history = []
+        self._last_layer_snapshots = {}
         
         logger.info("MoE Control API initialized")
         
@@ -80,7 +83,7 @@ class MoEControlAPI:
             
             for layer_name, moe_layer in self.moe_layers.items():
                 try:
-                    # Simulate health check (in real implementation would check actual metrics)
+                    # Compute health check from layer stats
                     layer_metrics = self._get_layer_health_metrics(layer_name, moe_layer)
                     layer_health[layer_name] = layer_metrics
                     
@@ -127,33 +130,53 @@ class MoEControlAPI:
             }
             
     def _get_layer_health_metrics(self, layer_name: str, moe_layer) -> Dict[str, Any]:
-        """Get health metrics for a specific layer."""
+        """Get health metrics for a specific layer from real stats."""
         
         try:
-            # Simulate layer health metrics
             current_time = time.time()
-            layer_hash = hash(layer_name) % 1000
-            
-            # Simulate realistic metrics
-            routing_efficiency = 0.75 + (layer_hash % 20) / 100
-            load_balance = 0.8 + (layer_hash % 15) / 100
-            memory_usage = 120 + (layer_hash % 80)  # MB
-            
-            # Determine status based on metrics
+            layer_stats = self._get_layer_stats(moe_layer)
+            expert_stats = layer_stats.get("expert_stats", [])
+            expert_count = len(expert_stats) or getattr(moe_layer, 'config', {}).get('num_experts', 0)
+
+            total_usage = sum(stat.get("usage_count", 0) for stat in expert_stats)
+            usage_probs = []
+            if total_usage > 0:
+                usage_probs = [stat.get("usage_count", 0) / total_usage for stat in expert_stats]
+            elif expert_stats:
+                usage_probs = [1.0 / len(expert_stats)] * len(expert_stats)
+
+            routing_efficiency = 0.0
+            load_balance = 0.0
+            if usage_probs:
+                entropy = -sum(p * math.log(p + 1e-12) for p in usage_probs)
+                max_entropy = math.log(len(usage_probs)) if len(usage_probs) > 1 else 1.0
+                routing_efficiency = entropy / max_entropy if max_entropy > 0 else 0.0
+
+                mean_usage = sum(usage_probs) / len(usage_probs)
+                variance = sum((p - mean_usage) ** 2 for p in usage_probs) / len(usage_probs)
+                load_balance = max(0.0, 1.0 - variance * len(usage_probs))
+
+            memory_usage_mb = 0.0
+            try:
+                import psutil
+                memory_usage_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 ** 2)
+            except Exception:
+                memory_usage_mb = 0.0
+
             if routing_efficiency > 0.8 and load_balance > 0.75:
                 status = "healthy"
             elif routing_efficiency > 0.6 and load_balance > 0.6:
                 status = "degraded"
             else:
                 status = "unhealthy"
-                
+
             return {
                 "status": status,
                 "routing_efficiency": routing_efficiency,
                 "load_balance": load_balance,
-                "memory_usage_mb": memory_usage,
+                "memory_usage_mb": memory_usage_mb,
                 "last_update": current_time,
-                "expert_count": getattr(moe_layer, 'config', {}).get('num_experts', 32)
+                "expert_count": expert_count
             }
             
         except Exception as e:
@@ -181,24 +204,24 @@ class MoEControlAPI:
                 }
                 
                 # Analyze each expert in the layer
-                experts = getattr(moe_layer, 'experts', [])
-                for i, expert in enumerate(experts):
-                    # Get expert type
-                    expert_type = getattr(expert, 'expert_type', 'general')
+                layer_stats = self._get_layer_stats(moe_layer)
+                expert_stats = layer_stats.get("expert_stats", [])
+                total_usage = sum(stat.get("usage_count", 0) for stat in expert_stats) or 1
+
+                max_weight = max(
+                    (stat.get("specialization_weight", 1.0) for stat in expert_stats),
+                    default=1.0
+                )
+
+                for stat in expert_stats:
+                    expert_type = stat.get("expert_type", "general")
                     layer_report["expert_types"].append(expert_type)
-                    
-                    # Simulate utilization metrics
-                    utilization = 0.4 + (hash(f"{layer_name}_{i}") % 40) / 100
+
+                    utilization = stat.get("usage_count", 0) / total_usage
                     layer_report["utilization"].append(utilization)
-                    
-                    # Specialization scores based on type
-                    specialization_scores = {
-                        'reasoning': 0.85, 'coding': 0.78, 'mathematics': 0.92,
-                        'creative': 0.73, 'multimodal': 0.81, 'linguistic': 0.79,
-                        'scientific': 0.87, 'technical': 0.83, 'analytical': 0.86,
-                        'conversational': 0.71, 'factual': 0.75, 'general': 0.65
-                    }
-                    score = specialization_scores.get(expert_type, 0.65)
+
+                    weight = stat.get("specialization_weight", 1.0)
+                    score = min(1.0, max(0.0, weight / max_weight))
                     layer_report["specialization_scores"].append(score)
                     
                 # Calculate layer efficiency metrics
@@ -356,17 +379,60 @@ class MoEControlAPI:
             current_time = time.time()
             
             for layer_name, moe_layer in self.moe_layers.items():
-                # Simulate real-time metrics
-                layer_hash = hash(layer_name) % 1000
-                
+                layer_stats = self._get_layer_stats(moe_layer)
+                expert_stats = layer_stats.get("expert_stats", [])
+                total_usage = sum(stat.get("usage_count", 0) for stat in expert_stats)
+
+                usage_probs = []
+                if total_usage > 0 and expert_stats:
+                    usage_probs = [stat.get("usage_count", 0) / total_usage for stat in expert_stats]
+
+                routing_efficiency = 0.0
+                expert_balance = 0.0
+                if usage_probs:
+                    entropy = -sum(p * math.log(p + 1e-12) for p in usage_probs)
+                    max_entropy = math.log(len(usage_probs)) if len(usage_probs) > 1 else 1.0
+                    routing_efficiency = entropy / max_entropy if max_entropy > 0 else 0.0
+
+                    mean_usage = sum(usage_probs) / len(usage_probs)
+                    variance = sum((p - mean_usage) ** 2 for p in usage_probs) / len(usage_probs)
+                    expert_balance = max(0.0, 1.0 - variance * len(usage_probs))
+
+                avg_processing_time = 0.0
+                if expert_stats:
+                    avg_processing_time = sum(
+                        stat.get("avg_processing_time", 0.0) for stat in expert_stats
+                    ) / len(expert_stats)
+
+                memory_usage_mb = 0.0
+                try:
+                    import psutil
+                    memory_usage_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 ** 2)
+                except Exception:
+                    memory_usage_mb = 0.0
+
+                total_tokens = layer_stats.get("total_tokens_processed", 0)
+                previous = self._last_layer_snapshots.get(layer_name)
+                if previous:
+                    delta_time = max(current_time - previous["timestamp"], 1e-6)
+                    delta_tokens = total_tokens - previous["total_tokens"]
+                    current_load = max(0.0, delta_tokens / delta_time)
+                else:
+                    current_load = 0.0
+
+                self._last_layer_snapshots[layer_name] = {
+                    "timestamp": current_time,
+                    "total_tokens": total_tokens
+                }
+
                 layer_metrics = {
                     "active": True,
-                    "current_load": 0.5 + (layer_hash % 40) / 100,
-                    "routing_efficiency": 0.7 + (layer_hash % 25) / 100,
-                    "expert_balance": 0.65 + (layer_hash % 30) / 100,
-                    "memory_usage_mb": 120 + (layer_hash % 100),
-                    "tokens_processed": 1000 + (layer_hash % 5000),
-                    "avg_response_time_ms": 2.5 + (layer_hash % 50) / 10,
+                    "current_load": current_load,
+                    "routing_efficiency": routing_efficiency,
+                    "expert_balance": expert_balance,
+                    "memory_usage_mb": memory_usage_mb,
+                    "tokens_processed": total_tokens,
+                    "avg_response_time_ms": avg_processing_time * 1000.0,
                     "last_update": current_time
                 }
                 
@@ -375,12 +441,16 @@ class MoEControlAPI:
             # Calculate system-wide metrics
             system_metrics = self._calculate_system_metrics(metrics)
             
-            return {
+            snapshot = {
                 "layer_metrics": metrics,
                 "system_metrics": system_metrics,
                 "system_health": self._assess_system_health(metrics),
                 "timestamp": current_time
             }
+            self.performance_history.append(snapshot)
+            if len(self.performance_history) > 2000:
+                self.performance_history = self.performance_history[-2000:]
+            return snapshot
             
         except Exception as e:
             logger.error(f"Error getting real-time metrics: {e}")
@@ -468,40 +538,65 @@ class MoEControlAPI:
     def get_performance_history(self, hours: int = 24) -> Dict[str, Any]:
         """Get performance history for the specified time period."""
         
-        # In a real implementation, this would query stored metrics
-        # For now, we'll simulate historical data
-        
         current_time = time.time()
         start_time = current_time - (hours * 3600)
-        
-        # Generate simulated historical data
-        history_points = []
-        time_interval = 300  # 5 minutes
-        
-        for i in range(0, hours * 12):  # 12 points per hour
-            timestamp = start_time + (i * time_interval)
-            
-            # Simulate realistic performance trends
-            base_efficiency = 0.75 + 0.1 * jnp.sin(i * 0.1)  # Cyclical pattern
-            noise = (hash(str(timestamp)) % 20 - 10) / 100  # Random noise
-            
-            history_points.append({
-                "timestamp": timestamp,
-                "routing_efficiency": max(0.5, min(0.95, base_efficiency + noise)),
-                "system_load": 0.6 + 0.2 * jnp.sin(i * 0.05) + noise * 0.5,
-                "memory_usage_gb": 8.5 + 2.0 * jnp.sin(i * 0.03) + noise,
-                "tokens_per_second": 1500 + 300 * jnp.sin(i * 0.08) + noise * 100
-            })
-            
+        history_points = [
+            point for point in self.performance_history
+            if point.get("timestamp", 0) >= start_time
+        ]
+
+        if not history_points:
+            return {
+                "time_period_hours": hours,
+                "data_points": 0,
+                "history": [],
+                "summary": {}
+            }
+
+        efficiencies = []
+        loads = []
+        memory_usages = []
+        throughputs = []
+
+        for point in history_points:
+            system_metrics = point.get("system_metrics", {})
+            efficiencies.append(system_metrics.get("avg_routing_efficiency", 0.0))
+            loads.append(system_metrics.get("total_system_load", 0.0))
+            memory_usages.append(system_metrics.get("total_memory_usage_mb", 0.0))
+            throughputs.append(system_metrics.get("throughput_tokens_per_second", 0.0))
+
         return {
             "time_period_hours": hours,
             "data_points": len(history_points),
             "history": history_points,
             "summary": {
-                "avg_efficiency": sum(p["routing_efficiency"] for p in history_points) / len(history_points),
-                "peak_throughput": max(p["tokens_per_second"] for p in history_points),
-                "avg_memory_usage": sum(p["memory_usage_gb"] for p in history_points) / len(history_points)
+                "avg_efficiency": sum(efficiencies) / max(len(efficiencies), 1),
+                "peak_throughput": max(throughputs) if throughputs else 0.0,
+                "avg_memory_usage_mb": sum(memory_usages) / max(len(memory_usages), 1),
+                "avg_system_load": sum(loads) / max(len(loads), 1)
             }
+        }
+
+    def _get_layer_stats(self, moe_layer) -> Dict[str, Any]:
+        """Safely collect stats from a MoE layer."""
+        if hasattr(moe_layer, "get_layer_stats"):
+            try:
+                return moe_layer.get_layer_stats()
+            except Exception:
+                pass
+
+        experts = getattr(moe_layer, "experts", [])
+        expert_stats = []
+        for expert in experts:
+            if hasattr(expert, "get_stats"):
+                expert_stats.append(expert.get_stats())
+            else:
+                expert_stats.append({})
+
+        return {
+            "layer_id": getattr(moe_layer, "layer_id", None),
+            "total_tokens_processed": getattr(moe_layer, "total_tokens_processed", 0),
+            "expert_stats": expert_stats
         }
         
     def enable_monitoring(self) -> Dict[str, Any]:

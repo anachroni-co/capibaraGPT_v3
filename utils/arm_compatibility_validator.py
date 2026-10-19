@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import numpy as np
-from capibara.jax import numpy as jnp
+from jax import numpy as jnp
 from capibara.core.arm_optimizations import ARMOptimizationSuite
 from capibara.utils.system_info import SystemMonitor
 

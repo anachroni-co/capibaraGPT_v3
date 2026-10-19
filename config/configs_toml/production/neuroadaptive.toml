@@ -1,4 +1,4 @@
-# Configuración Neuroadaptativa para CapibaraGPT-v2
+# Configuración Neuroadaptativa para CapibaraGPT v3
 
 [core]
 enable_neuroadaptive = true

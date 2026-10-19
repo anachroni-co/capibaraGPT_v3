@@ -1,0 +1,522 @@
+#!/usr/bin/env bash
+# ============================================================
+# Capibara Legal — Full training pipeline
+# Google Axion c4a-standard-32 (32 vCPU · 128 GB RAM)
+#
+# Usage:
+#   bash scripts/run_full_training.sh            # all phases
+#   bash scripts/run_full_training.sh 3          # from phase 3
+#   bash scripts/run_full_training.sh 3 5        # phases 3 to 5
+#
+# Phases:
+#   0  Download + tokenize legal corpus
+#   1  Small  34M  phase 2  (resume from soup, 10k steps, ~14 h)
+#   2  Medium 114M          (10k steps, ~29 h)
+#   3  Large  474M phase 1  (general corpus, 35k steps, ~6 d)
+#   4  Large  474M phase 2  (legal DAPT, 10k steps, ~2 d)
+#   5  Soup all models
+#   6  Distillation: large→medium (~10h), large→small chain (~6h),
+#                    large→small direct / Cerebro (~8h, best alignment)
+#   7  LoRA fine-tuning: legal specialties + resumen + instruccion/qa/extraccion/
+#                        redaccion/dialogo/razonamiento/traduccion
+# ============================================================
+
+set -euo pipefail
+
+# ── Config ────────────────────────────────────────────────────────────────────
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$REPO_DIR"
+
+VENV="${HOME}/.venv/capibara"
+PYTHON="${VENV}/bin/python"
+
+DATA_DIR="data/tokenized"
+LEGAL_RAW="data/raw/legal"
+LEGAL_TOK="data/tokenized/legal"
+
+CKPT_SMALL1="checkpoints/axion_mixed"           # small phase 1 (done)
+CKPT_SMALL2="checkpoints/axion_small_phase2"
+CKPT_MEDIUM="checkpoints/axion_medium_bf16"
+CKPT_LARGE1="checkpoints/axion_large_phase1"
+CKPT_LARGE2="checkpoints/axion_large_legal"
+
+THREADS=32
+
+# Optimisation flags (all optimisations on)
+OPT_FLAGS="--dtype bf16 --grad-checkpoint --compile-cache cache/jax_compile --n-devices 4"
+
+START_PHASE=${1:-0}
+END_PHASE=${2:-7}
+
+RAG_INDEX="data/rag_index"
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+
+log()  { echo -e "${CYAN}[$(date '+%H:%M:%S')]${NC} $*"; }
+ok()   { echo -e "${GREEN}[OK]${NC} $*"; }
+skip() { echo -e "${YELLOW}[SKIP]${NC} $*"; }
+
+run_phase() {
+    local phase=$1
+    [[ $phase -ge $START_PHASE && $phase -le $END_PHASE ]]
+}
+
+latest_ckpt() {
+    # Returns path of latest ckpt_step_*.pkl in a directory, or ""
+    ls -1 "${1}/ckpt_step_"*.pkl 2>/dev/null | sort | tail -1 || true
+}
+
+soup_exists() { [[ -f "${1}/soup_uniform.pkl" ]]; }
+
+# ── Phase 0: Legal corpus ─────────────────────────────────────────────────────
+
+if run_phase 0; then
+    log "═══ Phase 0: Download + tokenise legal corpus ═══"
+
+    if [[ -d "$LEGAL_TOK" && $(find "$LEGAL_TOK" -name "*.npy" 2>/dev/null | wc -l) -gt 0 ]]; then
+        skip "Legal corpus already tokenised in $LEGAL_TOK"
+    else
+        log "Downloading legal sources → $LEGAL_RAW"
+        "$PYTHON" scripts/download_legal_corpus.py \
+            --source all \
+            --output "$LEGAL_RAW" \
+            --year-from 2000          # TC sentencias from 2000 (~1 h vs 4 h)
+
+        log "Tokenising legal corpus → $LEGAL_TOK"
+        "$PYTHON" scripts/prepare_corpus.py \
+            --input  "$LEGAL_RAW" \
+            --output "$LEGAL_TOK" \
+            --extensions .md .txt .adoc
+    fi
+    ok "Phase 0 done"
+fi
+
+# ── Phase 0b: Build RAG index ─────────────────────────────────────────────────
+
+if run_phase 0; then
+    log "═══ Phase 0b: Build RAG index ═══"
+
+    if [[ -f "${RAG_INDEX}/meta.json" ]]; then
+        skip "RAG index already built at $RAG_INDEX"
+    elif [[ ! -d "$LEGAL_RAW" ]]; then
+        log "Legal raw corpus not found ($LEGAL_RAW) — run phase 0 first"
+    else
+        log "Building RAG index → $RAG_INDEX"
+        "$PYTHON" scripts/rag_indexer.py \
+            --input-dir "$LEGAL_RAW" \
+            --output    "$RAG_INDEX" \
+            --chunk-size 300 \
+            --chunk-overlap 50
+    fi
+    ok "Phase 0b done"
+fi
+
+# ── Phase 1: Small 34M phase 2 ────────────────────────────────────────────────
+
+if run_phase 1; then
+    log "═══ Phase 1: Small 34M — phase 2 (resume + refine) ═══"
+
+    SOUP1="${CKPT_SMALL1}/soup_uniform.pkl"
+    if [[ ! -f "$SOUP1" ]]; then
+        log "Running soup on small phase 1 checkpoints…"
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_SMALL1" --n 3
+    fi
+
+    if soup_exists "$CKPT_SMALL2"; then
+        skip "Small phase 2 soup already exists — skipping"
+    else
+        RESUME_FROM="$SOUP1"
+        LAST=$(latest_ckpt "$CKPT_SMALL2")
+        [[ -n "$LAST" ]] && RESUME_FROM="$LAST" && log "Resuming from $LAST"
+
+        log "Training small phase 2 → $CKPT_SMALL2"
+        "$PYTHON" scripts/launch_axion_training.py \
+            --data-dir "$DATA_DIR" \
+            --preset small \
+            --batch-size 32 --grad-accum 8 \
+            --lr 1e-4 --steps 10000 \
+            --threads $THREADS \
+            $OPT_FLAGS \
+            --output "$CKPT_SMALL2" \
+            --resume "$RESUME_FROM"
+
+        log "Soupe small phase 2…"
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_SMALL2" --n 3
+    fi
+    ok "Phase 1 done"
+fi
+
+# ── Phase 2: Medium 114M ──────────────────────────────────────────────────────
+
+if run_phase 2; then
+    log "═══ Phase 2: Medium 114M ═══"
+
+    if soup_exists "$CKPT_MEDIUM"; then
+        skip "Medium soup already exists — skipping"
+    else
+        LAST=$(latest_ckpt "$CKPT_MEDIUM")
+        RESUME_ARG=""
+        [[ -n "$LAST" ]] && RESUME_ARG="--resume $LAST" && log "Resuming from $LAST"
+
+        log "Training medium → $CKPT_MEDIUM"
+        "$PYTHON" scripts/launch_axion_training.py \
+            --data-dir "$DATA_DIR" \
+            --preset medium \
+            --batch-size 16 --grad-accum 8 \
+            --steps 10000 \
+            --threads $THREADS \
+            $OPT_FLAGS \
+            --output "$CKPT_MEDIUM" \
+            $RESUME_ARG
+
+        log "Soup medium…"
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_MEDIUM" --n 3
+    fi
+    ok "Phase 2 done"
+fi
+
+# ── Phase 3: Large 474M — general pre-training ────────────────────────────────
+
+if run_phase 3; then
+    log "═══ Phase 3: Large 474M — general pre-training (~6 d) ═══"
+
+    if soup_exists "$CKPT_LARGE1"; then
+        skip "Large phase 1 soup already exists — skipping"
+    else
+        LAST=$(latest_ckpt "$CKPT_LARGE1")
+        RESUME_ARG=""
+        [[ -n "$LAST" ]] && RESUME_ARG="--resume $LAST" && log "Resuming from $LAST"
+
+        log "Training large phase 1 → $CKPT_LARGE1"
+        # batch=16 with --grad-checkpoint allows 2x batch vs batch=8
+        # --n-devices 4: 4 virtual JAX devices × 8 cores each
+        "$PYTHON" scripts/launch_axion_training.py \
+            --data-dir "$DATA_DIR" \
+            --preset large \
+            --batch-size 16 --grad-accum 16 \
+            --steps 35000 \
+            --threads $THREADS \
+            $OPT_FLAGS \
+            --output "$CKPT_LARGE1" \
+            $RESUME_ARG
+
+        log "Soup large phase 1…"
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_LARGE1" --n 3
+    fi
+    ok "Phase 3 done"
+fi
+
+# ── Phase 4: Large 474M — legal DAPT ─────────────────────────────────────────
+
+if run_phase 4; then
+    log "═══ Phase 4: Large 474M — legal DAPT (~2 d) ═══"
+
+    SOUP_LARGE1="${CKPT_LARGE1}/soup_uniform.pkl"
+    if [[ ! -f "$SOUP_LARGE1" ]]; then
+        log "No large phase 1 soup found at $SOUP_LARGE1 — running soup first"
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_LARGE1" --n 3
+    fi
+
+    if soup_exists "$CKPT_LARGE2"; then
+        skip "Large legal soup already exists — skipping"
+    else
+        LAST=$(latest_ckpt "$CKPT_LARGE2")
+        RESUME_FROM="$SOUP_LARGE1"
+        [[ -n "$LAST" ]] && RESUME_FROM="$LAST" && log "Resuming from $LAST"
+
+        if [[ ! -d "$LEGAL_TOK" || $(find "$LEGAL_TOK" -name "*.npy" | wc -l) -eq 0 ]]; then
+            log "Legal corpus not tokenised — run phase 0 first"
+            exit 1
+        fi
+
+        log "Training large legal DAPT → $CKPT_LARGE2"
+        "$PYTHON" scripts/launch_axion_training.py \
+            --data-dir "$LEGAL_TOK" \
+            --preset large \
+            --batch-size 16 --grad-accum 16 \
+            --lr 5e-5 --steps 10000 \
+            --threads $THREADS \
+            $OPT_FLAGS \
+            --output "$CKPT_LARGE2" \
+            --resume "$RESUME_FROM"
+
+        log "Soup large legal…"
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_LARGE2" --n 3
+    fi
+    ok "Phase 4 done"
+fi
+
+CKPT_DISTIL_MEDIUM="checkpoints/distil_medium_legal"
+CKPT_DISTIL_SMALL="checkpoints/distil_small_legal"
+CKPT_CEREBRO="checkpoints/distil_cerebro"   # Large→Small direct (best alignment for speculative decoding)
+LORA_DIR="checkpoints/lora"
+FINETUNE_DATA="${FINETUNE_DATA:-data/finetune/legal_qa.jsonl}"
+FINETUNE_BASE="data/finetune"
+
+# ── Phase 5: Soup inventory ───────────────────────────────────────────────────
+
+if run_phase 5; then
+    log "═══ Phase 5: Final base model inventory ═══"
+    echo ""
+    for entry in \
+        "Small-34M-phase1-soup|34M|${CKPT_SMALL1}/soup_uniform.pkl" \
+        "Small-34M-phase2-soup|34M|${CKPT_SMALL2}/soup_uniform.pkl" \
+        "Medium-114M-soup|114M|${CKPT_MEDIUM}/soup_uniform.pkl" \
+        "Large-474M-general-soup|474M|${CKPT_LARGE1}/soup_uniform.pkl" \
+        "Large-474M-legal-soup|474M|${CKPT_LARGE2}/soup_uniform.pkl"
+    do
+        name=$(echo "$entry" | cut -d'|' -f1)
+        path=$(echo "$entry" | cut -d'|' -f3)
+        if [[ -f "$path" ]]; then
+            size=$(du -sh "$path" 2>/dev/null | cut -f1)
+            ok "  %-30s %s (%s)" "$name" "$path" "$size"
+        else
+            echo -e "  ${YELLOW}MISSING${NC}  $name → $path"
+        fi
+    done
+    echo "  • Instruction SFT + DPO alignment"
+    ok "Phase 5 done"
+fi
+
+# ── Phase 6: Distillation large→medium→small ──────────────────────────────────
+
+if run_phase 6; then
+    log "═══ Phase 6: Distillation ═══"
+
+    TEACHER="${CKPT_LARGE2}/soup_uniform.pkl"
+    if [[ ! -f "$TEACHER" ]]; then
+        log "Teacher not ready ($TEACHER) — run phases 4+5 first"; exit 1
+    fi
+
+    # large (474M) → medium (114M)
+    if [[ -f "${CKPT_DISTIL_MEDIUM}/ckpt_step_0010000.pkl" ]]; then
+        skip "Distil large→medium already done"
+    else
+        LAST=$(latest_ckpt "$CKPT_DISTIL_MEDIUM")
+        RESUME_ARG="--student-resume ${CKPT_MEDIUM}/soup_uniform.pkl"
+        [[ -n "$LAST" ]] && RESUME_ARG="--student-resume $LAST"
+        log "Distilling large→medium (~10h)"
+        "$PYTHON" scripts/distil.py \
+            --teacher         "$TEACHER" \
+            --teacher-preset  large \
+            --student-preset  medium \
+            $RESUME_ARG \
+            --data-dir        "$LEGAL_TOK" \
+            --output          "$CKPT_DISTIL_MEDIUM" \
+            --steps 10000 --batch-size 16 --grad-accum 8 \
+            --temperature 4.0 --alpha 0.7 \
+            --dtype bf16 --threads $THREADS
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_DISTIL_MEDIUM" --n 3
+    fi
+
+    # distilled medium (114M) → small (34M)  [chain distillation path]
+    TEACHER_M="${CKPT_DISTIL_MEDIUM}/soup_uniform.pkl"
+    if [[ -f "${CKPT_DISTIL_SMALL}/ckpt_step_0010000.pkl" ]]; then
+        skip "Distil medium→small already done"
+    else
+        LAST=$(latest_ckpt "$CKPT_DISTIL_SMALL")
+        RESUME_ARG="--student-resume ${CKPT_SMALL2}/soup_uniform.pkl"
+        [[ -n "$LAST" ]] && RESUME_ARG="--student-resume $LAST"
+        log "Distilling medium→small (~6h)"
+        "$PYTHON" scripts/distil.py \
+            --teacher         "$TEACHER_M" \
+            --teacher-preset  medium \
+            --student-preset  small \
+            $RESUME_ARG \
+            --data-dir        "$LEGAL_TOK" \
+            --output          "$CKPT_DISTIL_SMALL" \
+            --steps 10000 --batch-size 32 --grad-accum 8 \
+            --temperature 4.0 --alpha 0.7 \
+            --dtype bf16 --threads $THREADS
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_DISTIL_SMALL" --n 3
+    fi
+
+    # large (474M) → small (34M) DIRECT  → Cerebro
+    # Direct distillation gives p_cerebro ≈ p_large which maximises acceptance
+    # rate in speculative decoding (~87%) versus the chain path (~65%).
+    if [[ -f "${CKPT_CEREBRO}/soup_uniform.pkl" ]]; then
+        skip "Cerebro (large→small direct) already done"
+    else
+        LAST=$(latest_ckpt "$CKPT_CEREBRO")
+        RESUME_ARG="--student-resume ${CKPT_SMALL2}/soup_uniform.pkl"
+        [[ -n "$LAST" ]] && RESUME_ARG="--student-resume $LAST"
+        log "Distilling large→small direct / Cerebro (~8h)"
+        "$PYTHON" scripts/distil.py \
+            --teacher         "$TEACHER" \
+            --teacher-preset  large \
+            --student-preset  small \
+            $RESUME_ARG \
+            --data-dir        "$LEGAL_TOK" \
+            --output          "$CKPT_CEREBRO" \
+            --steps 10000 --batch-size 32 --grad-accum 8 \
+            --temperature 4.0 --alpha 0.7 \
+            --dtype bf16 --threads $THREADS
+        "$PYTHON" scripts/soup_checkpoints.py "$CKPT_CEREBRO" --n 3
+    fi
+
+    ok "Phase 6 done"
+fi
+
+# ── Phase 7: LoRA fine-tuning per specialty ────────────────────────────────────
+
+if run_phase 7; then
+    log "═══ Phase 7: LoRA specialty fine-tuning ═══"
+
+    BASE="${CKPT_LARGE2}/soup_uniform.pkl"
+    if [[ ! -f "$BASE" ]]; then
+        log "Base model not ready ($BASE) — run phases 4+5 first"; exit 1
+    fi
+    if [[ ! -f "$FINETUNE_DATA" ]]; then
+        log "Fine-tuning data not found: $FINETUNE_DATA"
+        log "Create data/finetune/legal_qa.jsonl with {prompt, response} lines"
+        log "Skipping legal LoRA fine-tuning — set FINETUNE_DATA env var to override path"
+    else
+        for SPECIALTY in penal civil laboral constitucional administrativo; do
+            LORA_OUT="${LORA_DIR}/large_${SPECIALTY}"
+            if [[ -f "${LORA_OUT}/lora_final.pkl" ]]; then
+                skip "LoRA $SPECIALTY already done"
+                continue
+            fi
+            log "LoRA fine-tuning: $SPECIALTY (~2h)"
+            "$PYTHON" scripts/lora_finetune.py \
+                --base-ckpt  "$BASE" \
+                --preset     large \
+                --data       "$FINETUNE_DATA" \
+                --specialty  "$SPECIALTY" \
+                --output     "$LORA_OUT" \
+                --steps 2000 --batch-size 4 \
+                --rank 16 --lora-alpha 32 \
+                --dtype bf16 --threads $THREADS
+        done
+    fi
+
+    # Summarization LoRA adapter (DACSA + MLSUM + arXiv + PQAI)
+    SUMM_DATA="data/finetune/summarization.jsonl"
+    LORA_SUMM="${LORA_DIR}/large_resumen"
+    if [[ -f "${LORA_SUMM}/lora_final.pkl" ]]; then
+        skip "LoRA resumen already done"
+    elif [[ ! -f "$SUMM_DATA" ]]; then
+        log "Summarization data not found: $SUMM_DATA"
+        log "Run: python scripts/download_summarization_data.py --source all --merge"
+    else
+        log "LoRA fine-tuning: resumen (~2h)"
+        "$PYTHON" scripts/lora_finetune.py \
+            --base-ckpt  "$BASE" \
+            --preset     large \
+            --data       "$SUMM_DATA" \
+            --specialty  resumen \
+            --output     "$LORA_SUMM" \
+            --steps 2000 --batch-size 4 \
+            --rank 16 --lora-alpha 32 \
+            --dtype bf16 --threads $THREADS
+    fi
+
+    # ── Habilidades básicas (Tier 1 + Tier 2) ─────────────────────────────────
+    # Download all instruction datasets if not already present
+    NEEDS_DOWNLOAD=false
+    for ADAPTER in instruccion qa extraccion redaccion dialogo razonamiento traduccion; do
+        [[ ! -f "${FINETUNE_BASE}/${ADAPTER}.jsonl" ]] && NEEDS_DOWNLOAD=true && break
+    done
+    if $NEEDS_DOWNLOAD; then
+        log "Downloading instruction datasets → $FINETUNE_BASE"
+        "$PYTHON" scripts/download_instruction_data.py \
+            --source all \
+            --finetune-dir "$FINETUNE_BASE"
+    fi
+
+    # Herramientas LoRA adapter (tool use training)
+    TOOL_DATA="${FINETUNE_BASE}/herramientas.jsonl"
+    LORA_TOOLS="${LORA_DIR}/large_herramientas"
+    if [[ -f "${LORA_TOOLS}/lora_final.pkl" ]]; then
+        skip "LoRA herramientas already done"
+    else
+        if [[ ! -f "$TOOL_DATA" ]]; then
+            log "Generating tool use training data → $TOOL_DATA"
+            "$PYTHON" scripts/download_tool_data.py \
+                --output "$TOOL_DATA" \
+                --count 1000
+        fi
+        log "LoRA fine-tuning: herramientas (~2h)"
+        "$PYTHON" scripts/lora_finetune.py \
+            --base-ckpt  "$BASE" \
+            --preset     large \
+            --data       "$TOOL_DATA" \
+            --specialty  herramientas \
+            --output     "$LORA_TOOLS" \
+            --steps 2000 --batch-size 4 \
+            --rank 16 --lora-alpha 32 \
+            --dtype bf16 --threads $THREADS
+    fi
+
+    # Fine-tune one adapter per skill
+    for ADAPTER in instruccion qa extraccion redaccion dialogo razonamiento traduccion; do
+        DATA_FILE="${FINETUNE_BASE}/${ADAPTER}.jsonl"
+        LORA_OUT="${LORA_DIR}/large_${ADAPTER}"
+        if [[ -f "${LORA_OUT}/lora_final.pkl" ]]; then
+            skip "LoRA $ADAPTER already done"
+            continue
+        fi
+        if [[ ! -f "$DATA_FILE" ]]; then
+            log "Data missing for $ADAPTER ($DATA_FILE) — skipping"
+            continue
+        fi
+        log "LoRA fine-tuning: $ADAPTER (~2h)"
+        "$PYTHON" scripts/lora_finetune.py \
+            --base-ckpt  "$BASE" \
+            --preset     large \
+            --data       "$DATA_FILE" \
+            --specialty  "$ADAPTER" \
+            --output     "$LORA_OUT" \
+            --steps 2000 --batch-size 4 \
+            --rank 16 --lora-alpha 32 \
+            --dtype bf16 --threads $THREADS
+    done
+
+    ok "Phase 7 done"
+fi
+
+# ── Final inventory ───────────────────────────────────────────────────────────
+
+if run_phase 5 || run_phase 6 || run_phase 7; then
+    log "═══ Full model inventory ═══"
+    echo ""
+    for entry in \
+        "Small-34M-phase2-soup|${CKPT_SMALL2}/soup_uniform.pkl" \
+        "Medium-114M-soup|${CKPT_MEDIUM}/soup_uniform.pkl" \
+        "Large-474M-general|${CKPT_LARGE1}/soup_uniform.pkl" \
+        "Large-474M-legal|${CKPT_LARGE2}/soup_uniform.pkl" \
+        "Distil-Medium-legal|${CKPT_DISTIL_MEDIUM}/soup_uniform.pkl" \
+        "Distil-Small-legal (chain)|${CKPT_DISTIL_SMALL}/soup_uniform.pkl" \
+        "Cerebro (large→small direct)|${CKPT_CEREBRO}/soup_uniform.pkl" \
+        "LoRA-large-penal|${LORA_DIR}/large_penal/lora_final.pkl" \
+        "LoRA-large-civil|${LORA_DIR}/large_civil/lora_final.pkl" \
+        "LoRA-large-laboral|${LORA_DIR}/large_laboral/lora_final.pkl" \
+        "LoRA-large-constitucional|${LORA_DIR}/large_constitucional/lora_final.pkl" \
+        "LoRA-large-administrativo|${LORA_DIR}/large_administrativo/lora_final.pkl" \
+        "LoRA-large-mercantil|${LORA_DIR}/large_mercantil/lora_final.pkl" \
+        "LoRA-large-resumen|${LORA_DIR}/large_resumen/lora_final.pkl" \
+        "LoRA-large-instruccion|${LORA_DIR}/large_instruccion/lora_final.pkl" \
+        "LoRA-large-qa|${LORA_DIR}/large_qa/lora_final.pkl" \
+        "LoRA-large-extraccion|${LORA_DIR}/large_extraccion/lora_final.pkl" \
+        "LoRA-large-redaccion|${LORA_DIR}/large_redaccion/lora_final.pkl" \
+        "LoRA-large-dialogo|${LORA_DIR}/large_dialogo/lora_final.pkl" \
+        "LoRA-large-razonamiento|${LORA_DIR}/large_razonamiento/lora_final.pkl" \
+        "LoRA-large-traduccion|${LORA_DIR}/large_traduccion/lora_final.pkl" \
+        "LoRA-large-herramientas|${LORA_DIR}/large_herramientas/lora_final.pkl" \
+        "RAG-index|${RAG_INDEX}/meta.json"
+    do
+        name=$(echo "$entry" | cut -d'|' -f1)
+        path=$(echo "$entry" | cut -d'|' -f2)
+        if [[ -f "$path" ]]; then
+            size=$(du -sh "$path" 2>/dev/null | cut -f1)
+            ok "  %-35s %s (%s)" "$name" "$path" "$size"
+        else
+            echo -e "  ${YELLOW}pending${NC}  $name"
+        fi
+    done
+fi
+
+log "Pipeline complete."

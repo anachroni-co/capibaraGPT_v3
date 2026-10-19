@@ -815,6 +815,10 @@ def get_global_processor_manager() -> SpecializedProcessorManager:
         create_default_processors(_global_processor_manager)
     return _global_processor_manager
 
+
+# Backwards-compatible alias used across docs/imports.
+SpecializedProcessor = SpecializedProcessorManager
+
 def main():
     """Main function for testing."""
     logger.info(" Specialized Processors Module - Testing Mode")

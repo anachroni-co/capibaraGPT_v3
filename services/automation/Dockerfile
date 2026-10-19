@@ -1,10 +1,10 @@
-# Capibara6 N8N Automation Service Dockerfile
+# CapibaraGPT v3 N8N Automation Service Dockerfile
 # ==========================================
 
 FROM python:3.11-slim
 
-LABEL maintainer="Capibara6 Team"
-LABEL description="Capibara6 N8N Automation Service - AI-powered workflow automation"
+LABEL maintainer="CapibaraGPT v3 Team"
+LABEL description="CapibaraGPT v3 N8N Automation Service - AI-powered workflow automation"
 LABEL version="1.0.0"
 
 # Set environment variables

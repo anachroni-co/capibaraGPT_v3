@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-CapibaraGPT-v2 ARM Optimized Inference Engine
+CapibaraGPT v3 ARM Optimized Inference Engine
 ==============================================
 
 Optimización específica para Google Cloud ARM Axion VMs:
@@ -423,7 +423,7 @@ def main():
     """Interfaz de line de comandos"""
     import argparse
     
-    parser = argparse.ArgumentParser(description="CapibaraGPT-v2 ARM Optimized Inference")
+    parser = argparse.ArgumentParser(description="CapibaraGPT v3 ARM Optimized Inference")
     parser.add_argument("model_path", help="Path to model directory")
     parser.add_argument("--prompt", default="Hello! How are you?", help="Prompt for generation")
     parser.add_argument("--max-tokens", type=int, default=100, help="Maximum tokens to generate")

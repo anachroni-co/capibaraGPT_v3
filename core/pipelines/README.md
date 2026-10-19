@@ -60,7 +60,7 @@ rag_result = rag_pipeline.process_with_extended_context(
     query=query,
     documents=context_docs,
     use_episodic_memory=True,
-    generate_hypothetical_questions=True,
+    Generate_hypothetical_questions=True,
     semantic_reranking=True
 )
 
@@ -91,8 +91,8 @@ semantic_chunks = rag_pipeline.semantic_chunking(
     preserve_metadata=True
 )
 
-# Hypothetical question generation
-hypothetical_questions = rag_pipeline.generate_hypothetical_questions(
+# Hypothetical question Generation
+hypothetical_questions = rag_pipeline.Generate_hypothetical_questions(
     chunks=semantic_chunks,
     num_questions_per_chunk=3,
     question_diversity=True,
@@ -410,7 +410,7 @@ quality_metrics = {
         "mrr": evaluation_results["mrr"],
         "ndcg": evaluation_results["ndcg@10"]
     },
-    "generation_metrics": {
+    "Generation_metrics": {
         "faithfulness": evaluation_results["faithfulness"],
         "answer_relevance": evaluation_results["answer_relevance"],
         "context_precision": evaluation_results["context_precision"],
@@ -439,7 +439,7 @@ for category, metrics in quality_metrics.items():
 streaming_pipeline = rag_pipeline.create_streaming_version(
     chunk_size=50,  # tokens per chunk
     streaming_retrieval=True,
-    incremental_generation=True,
+    incremental_Generation=True,
     real_time_reranking=True
 )
 
@@ -450,7 +450,7 @@ def process_streaming_query(query):
     for chunk in stream:
         if chunk.type == "retrieval_result":
             print(f" Found relevant document: {chunk.title}")
-        elif chunk.type == "generation_chunk":
+        elif chunk.type == "Generation_chunk":
             print(chunk.text, end="", flush=True)
         elif chunk.type == "final_metadata":
             print(f"\n\n Sources: {len(chunk.sources)}")

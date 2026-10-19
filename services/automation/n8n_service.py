@@ -1,16 +1,21 @@
-import sys
 """
-Main N8N Automation Service for Capibara6
+Main N8N Automation Service for CapibaraGPT v3.
 
-# This module provides functionality for n8n_service.
+This module provides a FastAPI service that can optionally talk to n8n and E2B.
+Some execution paths are simulated when external services are unavailable.
 """
 
 import os
-
+import sys
+import asyncio
 import logging
+import uuid
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-# Add project root to path for imports
+logger = logging.getLogger(__name__)
+
+# Add project root to path for imports (useful when executed directly)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(script_dir)))
 if project_root not in sys.path:
@@ -18,7 +23,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
 
 def main():
-    # Main function for this module.
+    """Main function for this module."""
     logger.info("Module n8n_service.py starting")
     return True
 
@@ -33,12 +38,26 @@ except ImportError:
     FASTAPI_AVAILABLE = False
     logging.warning("FastAPI not available. Install with: pip install fastapi uvicorn")
 
+# aiohttp for n8n API calls (optional)
+try:
+    import aiohttp
+    AIOHTTP_AVAILABLE = True
+except ImportError:
+    aiohttp = None  # type: ignore
+    AIOHTTP_AVAILABLE = False
+    logging.warning("aiohttp not available. Install with: pip install aiohttp")
+
 # Pydantic for request/response models
 try:
     from pydantic import BaseModel
     PYDANTIC_AVAILABLE = True
 except ImportError:
     PYDANTIC_AVAILABLE = False
+
+from .workflow_builder import WorkflowBuilder, WorkflowSpec
+from .agent_executor import AgentExecutor
+from .e2b_manager import E2bSandboxManager
+from .models import AutomationRequest, ExecutionResult, ExecutionMode
 
 
 class CapibaraN8nAutomationService:
@@ -94,7 +113,7 @@ class CapibaraN8nAutomationService:
         }
         
         # HTTP client for n8n API
-        self._http_session: Optional[aiohttp.ClientSession] = None
+        self._http_session: Optional[Any] = None
         
         # FastAPI app if available
         self.app: Optional[FastAPI] = None
@@ -104,19 +123,22 @@ class CapibaraN8nAutomationService:
     async def startup(self):
         """Initialize the service and start background tasks."""
         self.logger.info("Starting Capibara N8N Automation Service...")
-        
-        # Initialize HTTP session
-        self._http_session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=30),
-            headers=self._get_n8n_headers()
-        )
-        
-        # Test n8n connection
-        try:
-            await self._test_n8n_connection()
-            self.logger.info("N8N connection established successfully")
-        except Exception as e:
-            self.logger.warning(f"Could not connect to n8n: {e}")
+
+        # Initialize HTTP session (optional)
+        if AIOHTTP_AVAILABLE:
+            self._http_session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=30),
+                headers=self._get_n8n_headers()
+            )
+
+            # Test n8n connection
+            try:
+                await self._test_n8n_connection()
+                self.logger.info("N8N connection established successfully")
+            except Exception as e:
+                self.logger.warning(f"Could not connect to n8n: {e}")
+        else:
+            self.logger.warning("aiohttp not available; n8n API calls are disabled.")
         
         # Start background cleanup tasks
         asyncio.create_task(self._cleanup_expired_sessions())
@@ -548,39 +570,119 @@ class CapibaraN8nAutomationService:
         input_data: Dict[str, Any],
         session_id: Optional[str]
     ) -> ExecutionResult:
-        """Execute workflow using standard n8n API."""
-        try:
-            # This would execute via n8n API
-            # For now, simulate execution
-            
-            execution_id = f"n8n_{uuid.uuid4().hex[:8]}"
-            start_time = datetime.utcnow()
-            
-            # Simulate processing time
-            await asyncio.sleep(0.1)
-            
+        """Execute workflow using the real n8n REST API.
+
+        Previously this method returned a fabricated success result after
+        ``asyncio.sleep(0.1)``. That hid real connectivity issues with n8n
+        and made the ``workflows_executed`` counters meaningless.
+
+        The new behaviour:
+
+        - If no aiohttp session is configured (aiohttp missing or the
+          service never ran ``startup``), the call fails fast with an
+          explicit ``n8n_api_not_configured`` marker.
+        - Otherwise we create the workflow in n8n (if it is not already
+          registered) and trigger it via
+          ``POST /api/v1/workflows/{id}/execute`` with the provided
+          ``input_data``.
+        - The HTTP status code drives the ``ExecutionResult.status`` field
+          so callers can distinguish transport/API failures from in-
+          workflow failures.
+        """
+        start_time = datetime.utcnow()
+        execution_id = f"n8n_{uuid.uuid4().hex[:8]}"
+
+        if self._http_session is None:
             end_time = datetime.utcnow()
-            duration = (end_time - start_time).total_seconds() * 1000
-            
             return ExecutionResult(
                 workflow_id=workflow_spec.name,
                 execution_id=execution_id,
-                status="success",
-                output_data={"message": "Executed via n8n", "nodes_executed": len(workflow_spec.nodes)},
+                status="failed",
+                output_data={
+                    "reason": "n8n_api_not_configured",
+                    "nodes_executed": 0,
+                },
+                error_message=(
+                    "n8n HTTP session not initialised. Ensure aiohttp is "
+                    "installed and CapibaraN8nAutomationService.startup() has "
+                    "been awaited before executing workflows in standard mode."
+                ),
                 started_at=start_time,
                 finished_at=end_time,
-                duration_ms=int(duration)
+                duration_ms=int((end_time - start_time).total_seconds() * 1000),
             )
-            
-        except Exception as e:
+
+        try:
+            # Make sure the workflow exists on the n8n side - if creation
+            # fails (e.g. because the server rejects the payload) we surface
+            # that as the execution error rather than faking success.
+            n8n_workflow_id = await self._create_n8n_workflow(workflow_spec)
+            if not n8n_workflow_id:
+                end_time = datetime.utcnow()
+                return ExecutionResult(
+                    workflow_id=workflow_spec.name,
+                    execution_id=execution_id,
+                    status="failed",
+                    output_data={"reason": "workflow_registration_failed"},
+                    error_message="Could not create workflow on the n8n server.",
+                    started_at=start_time,
+                    finished_at=end_time,
+                    duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                )
+
+            base_url = self.n8n_config.get("base_url", "").rstrip("/")
+            execute_url = f"{base_url}/api/v1/workflows/{n8n_workflow_id}/execute"
+            payload = {"workflowData": {"input": input_data or {}}}
+
+            async with self._http_session.post(execute_url, json=payload) as response:
+                try:
+                    body = await response.json()
+                except Exception:
+                    body = {"raw": await response.text()}
+
+                end_time = datetime.utcnow()
+                duration = (end_time - start_time).total_seconds() * 1000
+                ok = 200 <= response.status < 300
+
+                return ExecutionResult(
+                    workflow_id=workflow_spec.name,
+                    execution_id=body.get("executionId", execution_id) if isinstance(body, dict) else execution_id,
+                    status="success" if ok else "failed",
+                    output_data={
+                        "n8n_workflow_id": n8n_workflow_id,
+                        "http_status": response.status,
+                        "nodes_executed": len(workflow_spec.nodes),
+                        "response": body,
+                    },
+                    error_message=None if ok else f"n8n API returned HTTP {response.status}",
+                    started_at=start_time,
+                    finished_at=end_time,
+                    duration_ms=int(duration),
+                )
+
+        except asyncio.TimeoutError:
+            end_time = datetime.utcnow()
             return ExecutionResult(
                 workflow_id=workflow_spec.name,
-                execution_id=f"failed_{uuid.uuid4().hex[:8]}",
+                execution_id=execution_id,
                 status="failed",
+                output_data={"reason": "n8n_api_timeout"},
+                error_message="Timed out while calling the n8n execute endpoint.",
+                started_at=start_time,
+                finished_at=end_time,
+                duration_ms=int((end_time - start_time).total_seconds() * 1000),
+            )
+        except Exception as e:
+            end_time = datetime.utcnow()
+            return ExecutionResult(
+                workflow_id=workflow_spec.name,
+                execution_id=execution_id,
+                status="failed",
+                output_data={"reason": "n8n_api_error"},
                 error_message=str(e),
-                started_at=datetime.utcnow(),
-                finished_at=datetime.utcnow(),
-                duration_ms=0
+                started_at=start_time,
+                finished_at=end_time,
+                duration_ms=int((end_time - start_time).total_seconds() * 1000),
             )
     
     async def _create_n8n_workflow(self, workflow_spec: WorkflowSpec) -> Optional[str]:
@@ -735,7 +837,7 @@ class CapibaraN8nAutomationService:
             return
         
         self.app = FastAPI(
-            title="Capibara6 N8N Automation API",
+            title="CapibaraGPT v3 N8N Automation API",
             description="AI-powered workflow automation with n8n integration",
             version="1.0.0"
         )

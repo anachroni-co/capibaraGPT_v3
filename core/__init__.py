@@ -5,7 +5,6 @@ Central integration point for model construction, training, and inference:
 - config: Model and training configuration
 - modular_model: Dynamic model composition
 - router/routing: Intelligent module routing
-- optimization: Training state and metrics
 - encoders: Vision, video, multimodal encoders
 - cot: Chain of Thought reasoning
 - ultra_core_integration: SSM-hybrid layers and orchestration
@@ -44,12 +43,6 @@ ENHANCED_ROUTER_AVAILABLE = EnhancedRouter is not None
 SimpleRouter, create_router = safe_import("core.routing", "Router", "create_router")
 SIMPLE_ROUTER_AVAILABLE = SimpleRouter is not None
 
-# Optimization
-TrainingMetrics, TrainingState = safe_import(
-    "core.optimization", "TrainingMetrics", "TrainingState"
-)
-OPTIMIZATION_AVAILABLE = TrainingMetrics is not None
-
 # Legacy routers
 BaseRouter, BaseRouterV2 = safe_import("core.routers.base", "BaseRouter", "BaseRouterV2")
 AdaptiveRouter = safe_import("core.routers.adaptive_router", "AdaptiveRouter")
@@ -58,12 +51,6 @@ LEGACY_ROUTERS_AVAILABLE = BaseRouter is not None
 # TTS Router
 TTSRouter = safe_import("core.routers.tts_router", "TTSRouter")
 TTS_ROUTER_AVAILABLE = TTSRouter is not None
-
-# Optimizers
-OptimizerConfig, create_optimizer = safe_import(
-    "core.optimizers.optimizer", "OptimizerConfig", "create_optimizer"
-)
-OPTIMIZER_AVAILABLE = OptimizerConfig is not None
 
 # Encoders
 (VisionEncoder, VisionEncoderConfig, VideoEncoder,
@@ -118,16 +105,12 @@ __all__ = [
     "SimpleRouter",
     "create_router",
     # Optimization
-    "TrainingMetrics",
-    "TrainingState",
     # Legacy routers
     "BaseRouter",
     "BaseRouterV2",
     "AdaptiveRouter",
     "TTSRouter",
     # Optimizers
-    "OptimizerConfig",
-    "create_optimizer",
     # Encoders
     "VisionEncoder",
     "VisionEncoderConfig",
@@ -155,10 +138,8 @@ __all__ = [
     "MODULAR_AVAILABLE",
     "ENHANCED_ROUTER_AVAILABLE",
     "SIMPLE_ROUTER_AVAILABLE",
-    "OPTIMIZATION_AVAILABLE",
     "LEGACY_ROUTERS_AVAILABLE",
     "TTS_ROUTER_AVAILABLE",
-    "OPTIMIZER_AVAILABLE",
     "ENCODERS_AVAILABLE",
     "COT_AVAILABLE",
     "MODEL_AVAILABLE",

@@ -22,7 +22,8 @@ logger = logging.getLogger(__name__)
 
 # JAX imports with fallbacks
 try:
-    from capibara.jax import jax, numpy as jnp
+    import jax
+    import jax.numpy as jnp
     JAX_AVAILABLE = True
     logger.info("JAX available for TPU optimizations")
 except ImportError:
@@ -413,12 +414,12 @@ class TPUOptimizedProcessor:
         return optimized_docs
     
     def _get_current_tpu_core(self) -> int:
-        """Get current TPU core ID (placeholder)."""
+        """Get current TPU core ID."""
         if JAX_AVAILABLE:
             try:
                 return jax.process_index()
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Could not get JAX process index: %s", exc)
         
         # Fallback to simple modulo
         return self.stats['total_processed'] % self.config.tpu_cores
@@ -440,11 +441,7 @@ class TPUOptimizedProcessor:
     def _clear_processing_cache(self):
         """Clear processing caches to free memory."""
         if JAX_AVAILABLE:
-            try:
-                # Clear JAX compilation cache
-                logger.debug("Clearing JAX compilation cache")
-            except Exception:
-                pass
+            logger.debug("Clearing JAX compilation cache")
         
         logger.debug("Processing cache cleared")
     

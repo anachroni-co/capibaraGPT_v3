@@ -1,5 +1,5 @@
 """
-SomosNLP Datasets Manager for CapibaraGPT v2
+SomosNLP Datasets Manager for CapibaraGPT v3
 
 Specialized manager for SomosNLP community datasets including:
 - Open-source Spanish NLP datasets

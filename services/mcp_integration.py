@@ -1,16 +1,8 @@
 """
-MCP (Model Context Protocol) Integration for CapibaraGPT
+MCP (Model Context Protocol) integration for CapibaraGPT.
 
-This module implements integration with the MCP protocol to enable
-communication and coordination between different model instances and
-external services.
-
-Features:
-- Standard communication protocol
-- Context synchronization between models
-- Training information exchange
-- Distributed coordination
-- Remote monitoring and control
+This implementation is an in-process message bus intended for local
+testing and coordination. It does not provide a real network transport.
 """
 
 import logging
@@ -146,7 +138,7 @@ class MCPClient:
         """Send a message."""
         try:
             # In real implementation, this would be sent over network
-            # For now, simulate local sending
+            # In-process queue (no network transport)
             self.message_queue.append(message)
             self.messages_sent += 1
             
@@ -292,7 +284,7 @@ class MCPCoordinator:
                 # Send to specific node
                 logger.debug(f" Routing to {message.recipient_id}: {message.message_type.value}")
             else:
-                logger.warning(f"️ Unknown recipient: {message.recipient_id}")
+                logger.warning(f"WARNING: Unknown recipient: {message.recipient_id}")
         else:
             # Broadcast
             await self.broadcast_message(message)
@@ -311,7 +303,7 @@ class MCPCoordinator:
                         inactive_nodes.append(node_id)
 
                 for node_id in inactive_nodes:
-                    logger.warning(f"️ Removing inactive node: {node_id}")
+                    logger.warning(f"WARNING: Removing inactive node: {node_id}")
                     self.unregister_node(node_id)
 
                 # Clean up old message history

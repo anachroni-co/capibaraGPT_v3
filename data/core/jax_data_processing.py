@@ -1,10 +1,10 @@
 """
-Data processor optimized with JAX for CapibaraGPT-v2.
+Data processor optimized with JAX for CapibaraGPT v3.
 """
 
 import numpy as np
-from capibara.jax import jit, vmap
-from capibara.jax import numpy as jnp
+from jax import jit, vmap
+from jax import numpy as jnp
 from .data_processing import DataProcessor
 from typing import Any, Dict, List, Optional, Union
 

@@ -4,8 +4,8 @@ import logging
 from typing import Dict, Any, Tuple
 
 from flax import linen as nn
-from capibara.jax import jax
-from capibara.jax.numpy import jnp
+import jax
+import jax.numpy as jnp
 from capibara.interfaces.isub_models import ISubModel
 from capibara.core.arm_optimizations import HARDWARE_INFO
 

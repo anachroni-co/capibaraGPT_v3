@@ -1,5 +1,5 @@
 """
-Data models for Capibara5 N8N Automation Service
+Data models for CapibaraGPT v3 N8N Automation Service
 ================================================
 
 Pydantic models for workflow specification, execution results, 
