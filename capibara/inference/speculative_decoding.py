@@ -11,7 +11,7 @@ This provides exact sampling from the target distribution (no quality loss)
 while achieving significant speedup when draft acceptance rate is high.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, List, Tuple, Any, Callable, Dict
 from enum import Enum
 import logging

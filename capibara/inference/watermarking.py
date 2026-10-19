@@ -546,7 +546,7 @@ class WatermarkProcessor:
         """
         if tokenizer is None:
             # Mock tokenization
-            tokens = [hash(w) % self.vocab_size for w in text.split()]
+            tokens = [abs(hash(w)) % self.vocab_size for w in text.split()]
         else:
             tokens = tokenizer.encode(text)
 

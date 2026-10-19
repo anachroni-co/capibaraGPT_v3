@@ -12,10 +12,9 @@ Enables 128K+ context on consumer GPUs (RTX 4090, 24GB).
 """
 
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple, Any, Dict, Callable
+from typing import Optional, List, Tuple, Any, Dict
 from enum import Enum
 import logging
-import math
 
 logger = logging.getLogger(__name__)
 
@@ -522,7 +521,7 @@ class KVCache:
         total_bytes = 0
 
         for layer_idx in range(self.num_layers):
-            if self.keys[layer_idx] is not None:
+            if self.keys[layer_idx] is not None and self.values[layer_idx] is not None:
                 if hasattr(self.keys[layer_idx], 'nbytes'):
                     total_bytes += self.keys[layer_idx].nbytes
                     total_bytes += self.values[layer_idx].nbytes
