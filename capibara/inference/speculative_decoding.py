@@ -17,7 +17,20 @@ from enum import Enum
 import logging
 import time
 
+try:
+    from capibara.utils.backends import get_backend
+except ImportError:
+    import sys
+    from pathlib import Path
+    _utils_path = Path(__file__).parent.parent / 'utils'
+    if str(_utils_path) not in sys.path:
+        sys.path.insert(0, str(_utils_path))
+    from backends import get_backend
+
 logger = logging.getLogger(__name__)
+
+# Shared tensor backend
+_backend = get_backend()
 
 
 class DraftModelType(Enum):
@@ -208,17 +221,16 @@ class DraftModel:
         num_tokens: int
     ) -> Tuple[Any, Any]:
         """Mock generation for testing."""
-        try:
-            import numpy as np
-            batch_size = input_ids.shape[0] if hasattr(input_ids, 'shape') else 1
-            vocab_size = 32000
-
-            candidate_ids = np.random.randint(0, vocab_size, (batch_size, num_tokens))
-            candidate_logits = np.random.randn(batch_size, num_tokens, vocab_size)
-
-            return candidate_ids, candidate_logits
-        except ImportError:
+        if not _backend.has_numpy and not _backend.has_torch:
             return None, None
+
+        batch_size = input_ids.shape[0] if hasattr(input_ids, 'shape') else 1
+        vocab_size = 32000
+
+        candidate_ids = _backend.randint(0, vocab_size, (batch_size, num_tokens))
+        candidate_logits = _backend.randn(batch_size, num_tokens, vocab_size)
+
+        return candidate_ids, candidate_logits
 
 
 class SpeculativeDecoder:
@@ -482,47 +494,44 @@ class SpeculativeDecoder:
         max_new_tokens: int
     ) -> Tuple[Any, SpeculativeStats]:
         """Mock generation for testing without models."""
-        try:
-            import numpy as np
-
-            batch_size = input_ids.shape[0] if hasattr(input_ids, 'shape') else 1
-            seq_len = input_ids.shape[1] if hasattr(input_ids, 'shape') else 10
-            vocab_size = 32000
-
-            # Simulate speculative decoding behavior
-            k = self.config.num_speculative_tokens
-            generated = 0
-            acceptance_rate = 0.75  # Simulated
-
-            while generated < max_new_tokens:
-                # Simulate draft + verify cycle
-                accepted = int(k * acceptance_rate) + 1
-                generated += accepted
-
-                self.stats.total_draft_tokens += k
-                self.stats.total_accepted_tokens += min(accepted - 1, k)
-                self.stats.total_target_calls += 1
-                self.stats.total_draft_calls += 1
-
-            self.stats.total_tokens_generated = min(generated, max_new_tokens)
-            self.stats.total_time_ms = max_new_tokens * 10  # 10ms per token simulated
-
-            # Generate random output
-            new_tokens = np.random.randint(0, vocab_size, (batch_size, max_new_tokens))
-
-            if hasattr(input_ids, 'shape'):
-                result = np.concatenate([
-                    input_ids if isinstance(input_ids, np.ndarray) else np.array([[0] * seq_len]),
-                    new_tokens
-                ], axis=1)
-            else:
-                result = new_tokens
-
-            return result, self.stats
-
-        except ImportError:
+        if not _backend.has_numpy and not _backend.has_torch:
             self.stats.total_tokens_generated = max_new_tokens
             return None, self.stats
+
+        batch_size = input_ids.shape[0] if hasattr(input_ids, 'shape') else 1
+        seq_len = input_ids.shape[1] if hasattr(input_ids, 'shape') else 10
+        vocab_size = 32000
+
+        # Simulate speculative decoding behavior
+        k = self.config.num_speculative_tokens
+        generated = 0
+        acceptance_rate = 0.75  # Simulated
+
+        while generated < max_new_tokens:
+            # Simulate draft + verify cycle
+            accepted = int(k * acceptance_rate) + 1
+            generated += accepted
+
+            self.stats.total_draft_tokens += k
+            self.stats.total_accepted_tokens += min(accepted - 1, k)
+            self.stats.total_target_calls += 1
+            self.stats.total_draft_calls += 1
+
+        self.stats.total_tokens_generated = min(generated, max_new_tokens)
+        self.stats.total_time_ms = max_new_tokens * 10  # 10ms per token simulated
+
+        # Generate random output
+        new_tokens = _backend.randint(0, vocab_size, (batch_size, max_new_tokens))
+
+        if hasattr(input_ids, 'shape'):
+            input_arr = _backend.to_numpy(input_ids)
+            if input_arr is None:
+                input_arr = _backend.randint(0, vocab_size, (batch_size, seq_len))
+            result = _backend.concatenate([input_arr, new_tokens], axis=1)
+        else:
+            result = new_tokens
+
+        return result, self.stats
 
     def reset_stats(self) -> None:
         """Reset statistics for new generation session."""

@@ -180,6 +180,45 @@ class TensorBackend:
 
         return modified
 
+    def randint(
+        self, low: int, high: int, shape: tuple, device: str = 'cpu'
+    ) -> Optional[Any]:
+        """Generate random integers in range [low, high)."""
+        if self.has_numpy:
+            return self._np.random.randint(low, high, shape)
+        elif self.has_torch:
+            return self._torch.randint(low, high, shape, device=device)
+        return None
+
+    def randn(self, *shape, device: str = 'cpu') -> Optional[Any]:
+        """Generate random normal values."""
+        if self.has_numpy:
+            return self._np.random.randn(*shape)
+        elif self.has_torch:
+            return self._torch.randn(*shape, device=device)
+        return None
+
+    def concatenate(self, arrays: List[Any], axis: int = 0) -> Optional[Any]:
+        """Concatenate arrays along axis."""
+        if not arrays:
+            return None
+        first = arrays[0]
+        if self.is_numpy(first):
+            return self._np.concatenate(arrays, axis=axis)
+        elif self.is_torch(first):
+            return self._torch.cat(arrays, dim=axis)
+        return None
+
+    def to_numpy(self, tensor: Any) -> Optional[Any]:
+        """Convert tensor to numpy array."""
+        if self.is_numpy(tensor):
+            return tensor
+        elif self.is_torch(tensor):
+            return tensor.detach().cpu().numpy()
+        elif self.has_numpy and hasattr(tensor, '__array__'):
+            return self._np.array(tensor)
+        return None
+
 
 # Global singleton instance
 _backend: Optional[TensorBackend] = None
